@@ -79,6 +79,45 @@ clean:
 veryclean: clean
 	-rm -f dp
 
+# ---------------------------------------------------------------------
+# PIC build (Phase L-4) - opt-in target for libwrapi.so.
+#
+# `libdp_pic.a` mirrors libdp.a but uses -fPIC and a separate obj/pic +
+# mod_pic tree so the existing libdp.a/dp build is untouched. Per Bugbot
+# review, this uses `$(AR) rcs` instead of `$(LD)` (which is `ld -r -o`
+# and would emit a non-archive object file).
+#
+# libwrapi.so excludes all graphics; dpgsub/dpglib/dpcont/dpcont4/dproot
+# all call PAGES/PAGEE/GUCLIP so we drop them from libdp_pic.a. dpmenu /
+# dpmain / dpdkdt / dptest / dpfpin (MPI) are not reachable from the C
+# ABI happy path (wr_init -> wr_run). dpdispx is graphics-clean but
+# unused from wr; dpfpin is kept because dpdisp transitively USEs it.
+# ---------------------------------------------------------------------
+OBJDIR_PIC=obj/pic
+MODDIR_PIC=mod_pic
+PIC_FLAGS=-fPIC -J$(MODDIR_PIC) -I$(MODDIR_PIC)
+MODINCLUDE_PIC=-I$(MODDIR_PIC) -I../pl/mod_pic -I../lib/mod_pic -I../../bpsd/$(MOD) -I../mtxp/mod_pic
+
+SRCS_DP_NOGR = dpcomm.f90 dpinit.f90 dpfpin.f90 dpparm.f90 dpprep.f90 \
+               dpsub.f90 dphotf.f90 dphotr.f90 \
+               dptnsb1.f90 \
+               dptnsr1.f90 dptnsr2.f90 dptnsr3.f90 dptnsr4.f90 dptnsr0.f90 \
+               dpdisp.f90 dpdispx.f90 dppola.f90
+OBJS_DP_PIC = $(addprefix $(OBJDIR_PIC)/, $(SRCS_DP_NOGR:.f90=.o))
+
+$(OBJDIR_PIC)/%.o: %.f
+	@mkdir -p $(OBJDIR_PIC) $(MODDIR_PIC)
+	$(FCFIXED) $(FFLAGS) $(PIC_FLAGS) -c $< -o $@ $(MODINCLUDE_PIC)
+$(OBJDIR_PIC)/%.o: %.f90
+	@mkdir -p $(OBJDIR_PIC) $(MODDIR_PIC)
+	$(FCFREE) $(FFLAGS) $(PIC_FLAGS) -c $< -o $@ $(MODINCLUDE_PIC)
+
+libdp_pic.a: $(OBJS_DP_PIC)
+	$(AR) rcs libdp_pic.a $(OBJS_DP_PIC)
+
+clean_pic:
+	-rm -rf $(OBJDIR_PIC) $(MODDIR_PIC) libdp_pic.a
+
 DPCOMM=dpcomm.f90
 PLPROF=../pl/plprof.f90 ../pl/plprofw.f90
 
