@@ -55,6 +55,33 @@ clean:
 veryclean: clean
 	-rm -f conv-adf11 test-adf11
 
+# ---------------------------------------------------------------------
+# PIC build (Phase L-4) - opt-in target for libtiapi.so.
+#
+# lib-adf11_pic.a contains the same xxdata_11.for/...for + lib-adf11.f90
+# objects as lib-adf11.a but compiled with -fPIC. Sources are unchanged;
+# only the build flags differ.
+# ---------------------------------------------------------------------
+OBJDIR_PIC=obj/pic
+MODDIR_PIC=mod_pic
+PIC_FLAGS=-fPIC -J$(MODDIR_PIC) -I$(MODDIR_PIC)
+MODINCLUDE_PIC=-I$(MODDIR_PIC) -I../../../mtxp/mod_pic -I../../../lib/mod_pic
+
+OBJS_PIC = $(addprefix $(OBJDIR_PIC)/, $(SRCS:.for=.o) $(SRCX:.f90=.o))
+
+$(OBJDIR_PIC)/%.o: %.for
+	@mkdir -p $(OBJDIR_PIC) $(MODDIR_PIC)
+	$(FCFIXED) $(FFLAGS) $(PIC_FLAGS) -c $< -o $@ $(MODINCLUDE_PIC)
+$(OBJDIR_PIC)/%.o: %.f90
+	@mkdir -p $(OBJDIR_PIC) $(MODDIR_PIC)
+	$(FCFREE) $(FFLAGS) $(PIC_FLAGS) -c $< -o $@ $(MODINCLUDE_PIC)
+
+lib-adf11_pic.a: $(OBJS_PIC)
+	$(AR) rcs lib-adf11_pic.a $(OBJS_PIC)
+
+clean_pic:
+	-rm -rf $(OBJDIR_PIC) $(MODDIR_PIC) lib-adf11_pic.a
+
 xxdata_11.o: xxdata_11.for
 xxrptn.o: xxrptn.for
 i4unit.o: i4unit.for

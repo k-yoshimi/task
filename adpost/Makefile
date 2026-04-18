@@ -56,5 +56,25 @@ clean:
 veryclean: clean
 	-rm -f test-adpost
 
+# ---------------------------------------------------------------------
+# PIC build (Phase L-4) - opt-in target for libtiapi.so.
+# ---------------------------------------------------------------------
+OBJDIR_PIC=obj/pic
+MODDIR_PIC=mod_pic
+PIC_FLAGS=-fPIC -J$(MODDIR_PIC) -I$(MODDIR_PIC)
+MODINCLUDE_PIC=-I$(MODDIR_PIC) -I../../bpsd/$(MOD) -I../mtxp/mod_pic -I../lib/mod_pic
+
+OBJS_PIC = $(addprefix $(OBJDIR_PIC)/, $(SRCS:.f90=.o))
+
+$(OBJDIR_PIC)/%.o: %.f90
+	@mkdir -p $(OBJDIR_PIC) $(MODDIR_PIC)
+	$(FCFREE) $(FFLAGS) $(PIC_FLAGS) -c $< -o $@ $(MODINCLUDE_PIC)
+
+lib-adpost_pic.a: $(OBJS_PIC)
+	$(AR) rcs lib-adpost_pic.a $(OBJS_PIC)
+
+clean_pic:
+	-rm -rf $(OBJDIR_PIC) $(MODDIR_PIC) lib-adpost_pic.a
+
 lib-adpost.o: lib-adpost.f90
 test-adpost.o: test-adpost.f90 lib-adpost.f90
