@@ -1,42 +1,48 @@
 /*
- * Phase L-2 C ABI smoke test for TASK/WRX.
+ * Phase L-3 C ABI smoke test for TASK/WRX.
  *
- * Goal at L-2: verify that
- *   1. wrx_api.h is valid C (compiles cleanly with -Wall -Wextra),
- *   2. the BIND(C) symbols emitted by wrx_api.f90 link against the C
- *      prototypes in wrx_api.h, and
- *   3. each entry point returns WRX_ERR_NOT_IMPL (=4) as documented.
+ * Goal at L-3: verify that the four lifecycle entry points return
+ * WRX_OK (=0) when invoked in the documented order:
  *
- * Numerical correctness is out of scope until Phase L-3.
+ *   wrx_init -> wrx_set_param -> wrx_finalize
+ *
+ * wrx_get_state is NOT exercised here because it deliberately rejects
+ * pre-wrx_run access (the wrcomm power-deposition arrays are
+ * unallocated until wr_allocate runs inside wrx_run). End-to-end
+ * coverage of wrx_run + wrx_get_state lives in test_run.c.
  */
 #include <stdio.h>
 #include "wrx_api.h"
 
-static int expect_not_impl(const char *name, int rc) {
-    if (rc == WRX_ERR_NOT_IMPL) {
-        printf("OK  %-13s returned WRX_ERR_NOT_IMPL (=%d)\n", name, rc);
+static int expect_ok(const char *name, int rc) {
+    if (rc == WRX_OK) {
+        printf("OK  %-13s returned WRX_OK (=%d)\n", name, rc);
         return 0;
     }
     fprintf(stderr,
-            "FAIL %s returned %d, expected WRX_ERR_NOT_IMPL (=%d)\n",
-            name, rc, WRX_ERR_NOT_IMPL);
+            "FAIL %s returned %d, expected WRX_OK (=%d)\n",
+            name, rc, WRX_OK);
     return 1;
 }
 
 int main(void) {
     int failures = 0;
-    wrx_state_t st;
 
-    failures += expect_not_impl("wrx_init",      wrx_init());
-    failures += expect_not_impl("wrx_run",       wrx_run(0));
-    failures += expect_not_impl("wrx_set_param", wrx_set_param("RF", 170.0));
-    failures += expect_not_impl("wrx_get_state", wrx_get_state(&st));
-    failures += expect_not_impl("wrx_finalize",  wrx_finalize());
+    /* Line-buffer stdout so the Fortran runtime (which may share the
+     * FILE* with libgrf's GSOPEN prompt) cannot swallow our progress
+     * lines when the driver runs under `echo 0 | test_* > log`. */
+    setvbuf(stdout, NULL, _IOLBF, 0);
+
+    failures += expect_ok("wrx_init",      wrx_init());
+    failures += expect_ok("wrx_set_param", wrx_set_param("RR", 3.95));
+    failures += expect_ok("wrx_finalize",  wrx_finalize());
 
     if (failures != 0) {
-        fprintf(stderr, "%d stub(s) returned wrong code\n", failures);
+        fprintf(stderr, "%d entry point(s) returned a non-OK code\n",
+                failures);
         return 1;
     }
-    printf("Phase L-2 C ABI smoke OK: 5/5 stubs returned WRX_ERR_NOT_IMPL\n");
+    printf("Phase L-3 C ABI smoke OK: 3/3 lifecycle entry points returned WRX_OK\n");
+    fflush(stdout);
     return 0;
 }

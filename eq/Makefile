@@ -93,30 +93,30 @@ veryclean: clean
 	rm -f eq pl ak
 
 # ---------------------------------------------------------------------
-# PIC build (Phase L-4) - opt-in target for libtiapi.so / libtrapi.so.
+# PIC build (Phase L-4) - opt-in target for libtrapi.so.
 #
 # `libeq_pic.a` mirrors libeq.a but uses -fPIC and a separate
 # obj/pic + mod_pic tree so the existing libeq.a/eq build is untouched.
-# Uses `$(AR) rcs` (not $(LD) which is `ld -r -o` and would emit a
-# non-archive relocatable object).
+# Per Bugbot review, this uses `$(AR) rcs` instead of `$(LD)` (which is
+# `ld -r -o` and would emit a non-archive object file).
 # ---------------------------------------------------------------------
 OBJDIR_PIC=obj/pic
 MODDIR_PIC=mod_pic
 PIC_FLAGS=-fPIC -J$(MODDIR_PIC) -I$(MODDIR_PIC)
 MODINCLUDE_PIC=-I$(MODDIR_PIC) -I../../bpsd/$(MOD) -I../mtxp/mod_pic -I../pl/mod_pic -I../lib/mod_pic
 
-# libtiapi.so / libtrapi.so exclude all graphics, so libeq_pic.a drops:
+# libtrapi.so excludes all graphics, so libeq_pic.a drops:
 #   - eqgout / eqgsub / eqg2d : direct GSAF (PAGES/PAGEE/GRD1D/etc.)
 #   - equread                 : module with embedded gsaf calls (pagee)
 #
 # We KEEP eqfile/equnit/eq-eqdsk/eq-qst etc. even though they reference
 # equread::eqdsk; the resulting .so has those symbols undefined but they
-# are unreachable from the ti_init -> ti_run / tr_init -> tr_run happy
-# path (only invoked on explicit EQDSK file load, which the C ABI does
-# not expose). Linking the shared object with RTLD_LAZY lets it load
-# while still failing loudly if a graphics path is ever reached at
-# run-time.
-SRCS_EQ_NOGR = equcom.f90 equread.f90 eqlib.f90
+# are unreachable from the tr_init -> tr_run happy path (only invoked on
+# explicit EQDSK file load, which the C ABI does not expose). Linking the
+# shared object with -Wl,--unresolved-symbols=ignore-in-shared-libs lets
+# the .so load while still failing loudly if a graphics path is ever
+# reached at run-time.
+SRCS_EQ_NOGR = equcom.f90 eqlib.f90
 SRCS_EQ_NOGR += eqbpsd.f eqinit.f eqmenu.f eqcalc.f eqcalq.f eqcalv.f \
                 eqsub.f eqfunc.f eqintf.f eqsplf.f equintf.f \
                 eq-eqdsk.f eq-qst.f eqfile.f eqgetp.f \

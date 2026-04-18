@@ -210,6 +210,7 @@ clean :
 	-rm -f $(TR_API_SMOKE_O) $(TR_API_SMOKE_BIN)
 	-rm -f $(TR_API_PARAM_O) $(TR_API_PARAM_BIN)
 	-rm -f $(TR_API_RUN_O)   $(TR_API_RUN_BIN)
+	-rm -f $(TR_API_SO_O)    $(TR_API_SO_BIN)
 
 veryclean : clean
 	-rm -f tr2 tr3
@@ -218,6 +219,209 @@ distclean: clean
 	cd ../pl && make clean
 	cd ../eq && make clean
 	cd ../lib && make clean
+
+clean_pic:
+	-rm -rf $(OBJDIR_PIC) $(MODDIR_PIC) libtrapi.so
+	-rm -f $(TR_API_SO_O) $(TR_API_SO_BIN)
+
+# =====================================================================
+# Phase L-4: libtrapi.so shared library build
+#
+# Builds a position-independent shared object that exposes the 5 C ABI
+# entry points (tr_init, tr_run, tr_set_param, tr_get_state, tr_finalize)
+# and links in SRCS_CORE + SRCM + SRCS_API plus all non-graphics
+# supporting code (nclass, cytran, mmm95, mmm7_1, mbgb, itg, glf, trncls).
+#
+# The PIC build is a *separate* tree at obj/pic/ + mod_pic/ so the
+# existing non-PIC tr2 build is unaffected. Dependent libraries are
+# PIC-rebuilt via opt-in targets added in eq/pl/lib/mtxp Makefiles
+# (libeq_pic.a, libpl_pic.a, libtask_pic.a, libmds_pic.a, libgrf_pic.a,
+# libmtxnompi_pic.o, libmtxbnd_pic.o).
+#
+# The bpsd sources live in the parent ../../bpsd/ repo which is outside
+# our worktree; we PIC-rebuild bpsd objects in-tree (obj/pic/bpsd/) so
+# we don't need to modify bpsd/Makefile.
+# =====================================================================
+
+OBJDIR_PIC=obj/pic
+MODDIR_PIC=mod_pic
+PIC_FLAGS=-fPIC -J$(MODDIR_PIC) -I$(MODDIR_PIC)
+MODINCLUDE_PIC= -I./$(MODDIR_PIC) -I../pl/mod_pic -I../eq/mod_pic \
+                -I../lib/mod_pic -I../mtxp/mod_pic
+
+# Pattern rules for PIC compilation. Each rule creates its output dir
+# on demand so we don't need an explicit mkdir phase.
+$(OBJDIR_PIC)/%.o: %.f90
+	@mkdir -p $(@D) $(MODDIR_PIC)
+	$(FCFREE) $(FFLAGS) $(PIC_FLAGS) -c $< -o $@ $(MODINCLUDE_PIC)
+$(OBJDIR_PIC)/%.o: %.f
+	@mkdir -p $(@D) $(MODDIR_PIC)
+	$(FCFIXED) $(FFLAGS) $(PIC_FLAGS) -c $< -o $@ $(MODINCLUDE_PIC)
+
+# glf has a couple of fixed-form .F sources that need the same -Iglf
+# treatment as the non-PIC rules above.
+$(OBJDIR_PIC)/glf/callglf2d.o: glf/callglf2d.f glf/glf.m
+	@mkdir -p $(@D) $(MODDIR_PIC)
+	$(FCFIXED) $(FFLAGS) $(PIC_FLAGS) -c -o $@ -Iglf glf/callglf2d.f
+$(OBJDIR_PIC)/glf/glf2d.o: glf/glf2d.F glf/glf.m glf/f77_dcomplx.h
+	@mkdir -p $(@D) $(MODDIR_PIC)
+	$(FCFIXED) $(FFLAGS) $(PIC_FLAGS) -c -o $@ -Iglf glf/glf2d.F
+$(OBJDIR_PIC)/glf/r8tomsqz.o: glf/r8tomsqz.F glf/f77_dcomplx.h
+	@mkdir -p $(@D) $(MODDIR_PIC)
+	$(FCFIXED) $(FFLAGS) $(PIC_FLAGS) -c -o $@ glf/r8tomsqz.F
+
+# nclass sources use -Inclass for .inc files.
+$(OBJDIR_PIC)/nclass/nclass_mod.o: nclass/nclass_mod.f nclass/pamx_mi.inc nclass/pamx_ms.inc nclass/pamx_mz.inc
+	@mkdir -p $(@D) $(MODDIR_PIC)
+	$(FCFIXED) $(FFLAGS) $(PIC_FLAGS) -c -o $@ -Inclass nclass/nclass_mod.f $(MODINCLUDE_PIC)
+
+# BPSD PIC rebuild (out-of-tree source, in-tree object/mod).
+# We replicate bpsd/Makefile's build order here. The order matches the
+# non-PIC libbpsd.a layout (see bpsd/Makefile's SRCS).
+BPSD_SRC=../../bpsd
+OBJBPSD_PIC=$(OBJDIR_PIC)/bpsd/bpsd_kinds.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_constants.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_flags.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_libchar.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_libfio.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_libspl.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_types.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_types_internal.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_subs.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_shot.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_device.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_species.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_equ1D.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_metric1D.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_plasmaf.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_trmatrix.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_trsource.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_base.o
+
+$(OBJDIR_PIC)/bpsd/%.o: $(BPSD_SRC)/%.f90
+	@mkdir -p $(@D) $(MODDIR_PIC)
+	$(FCFREE) $(FFLAGS) $(PIC_FLAGS) -c $< -o $@ $(MODINCLUDE_PIC)
+
+# Enforce the dependency order so -j builds don't race.
+$(OBJDIR_PIC)/bpsd/bpsd_constants.o:       $(OBJDIR_PIC)/bpsd/bpsd_kinds.o
+$(OBJDIR_PIC)/bpsd/bpsd_flags.o:            $(OBJDIR_PIC)/bpsd/bpsd_kinds.o
+$(OBJDIR_PIC)/bpsd/bpsd_libchar.o:          $(OBJDIR_PIC)/bpsd/bpsd_kinds.o
+$(OBJDIR_PIC)/bpsd/bpsd_libfio.o:           $(OBJDIR_PIC)/bpsd/bpsd_kinds.o
+$(OBJDIR_PIC)/bpsd/bpsd_libspl.o:           $(OBJDIR_PIC)/bpsd/bpsd_kinds.o
+$(OBJDIR_PIC)/bpsd/bpsd_types.o:            $(OBJDIR_PIC)/bpsd/bpsd_kinds.o $(OBJDIR_PIC)/bpsd/bpsd_constants.o
+$(OBJDIR_PIC)/bpsd/bpsd_types_internal.o:   $(OBJDIR_PIC)/bpsd/bpsd_types.o
+$(OBJDIR_PIC)/bpsd/bpsd_subs.o:             $(OBJDIR_PIC)/bpsd/bpsd_types_internal.o $(OBJDIR_PIC)/bpsd/bpsd_libchar.o $(OBJDIR_PIC)/bpsd/bpsd_libfio.o $(OBJDIR_PIC)/bpsd/bpsd_libspl.o $(OBJDIR_PIC)/bpsd/bpsd_flags.o
+$(OBJDIR_PIC)/bpsd/bpsd_shot.o:             $(OBJDIR_PIC)/bpsd/bpsd_subs.o
+$(OBJDIR_PIC)/bpsd/bpsd_device.o:           $(OBJDIR_PIC)/bpsd/bpsd_subs.o
+$(OBJDIR_PIC)/bpsd/bpsd_species.o:          $(OBJDIR_PIC)/bpsd/bpsd_subs.o
+$(OBJDIR_PIC)/bpsd/bpsd_equ1D.o:            $(OBJDIR_PIC)/bpsd/bpsd_subs.o
+$(OBJDIR_PIC)/bpsd/bpsd_metric1D.o:         $(OBJDIR_PIC)/bpsd/bpsd_subs.o
+$(OBJDIR_PIC)/bpsd/bpsd_plasmaf.o:          $(OBJDIR_PIC)/bpsd/bpsd_subs.o
+$(OBJDIR_PIC)/bpsd/bpsd_trmatrix.o:         $(OBJDIR_PIC)/bpsd/bpsd_subs.o
+$(OBJDIR_PIC)/bpsd/bpsd_trsource.o:         $(OBJDIR_PIC)/bpsd/bpsd_subs.o
+$(OBJDIR_PIC)/bpsd/bpsd_base.o:             $(OBJDIR_PIC)/bpsd/bpsd_shot.o $(OBJDIR_PIC)/bpsd/bpsd_device.o $(OBJDIR_PIC)/bpsd/bpsd_species.o $(OBJDIR_PIC)/bpsd/bpsd_equ1D.o $(OBJDIR_PIC)/bpsd/bpsd_metric1D.o $(OBJDIR_PIC)/bpsd/bpsd_plasmaf.o $(OBJDIR_PIC)/bpsd/bpsd_trmatrix.o $(OBJDIR_PIC)/bpsd/bpsd_trsource.o
+
+.PHONY: bpsd_pic
+bpsd_pic: $(OBJBPSD_PIC)
+
+# Object sets for libtrapi.so. Mirror OBJTR (minus graphics/menu) plus
+# the API objects.
+OBJM_PIC=$(addprefix $(OBJDIR_PIC)/, $(SRCM:.f90=.o))
+OBJNC_PIC=$(addprefix $(OBJDIR_PIC)/, $(SRCNC:.f=.o))
+OBJCYT_PIC=$(addprefix $(OBJDIR_PIC)/, $(SRCCYT:.f90=.o))
+OBJMMM_PIC=$(addprefix $(OBJDIR_PIC)/, $(SRCMMM95:.f=.o) $(SRCMMM7:.f90=.o))
+OBJMBGB_PIC=$(addprefix $(OBJDIR_PIC)/, $(SRCMBGB:.f=.o))
+OBJITG_PIC=$(addprefix $(OBJDIR_PIC)/, $(SRCITG:.f=.o) $(SRCITGF:.F=.o))
+OBJ_CORE_PIC=$(addprefix $(OBJDIR_PIC)/, $(SRCS_CORE:.f90=.o))
+OBJ_API_PIC=$(addprefix $(OBJDIR_PIC)/, $(SRCS_API:.f90=.o))
+
+# Graphics stubs that satisfy TRGLOB / GUCLIP & friends without dragging
+# in non-PIC libgsp/libg3d. Built only as PIC so it is libtrapi.so-only.
+SRCS_GR_STUBS=tr_graphics_stubs.f90
+OBJ_GR_STUBS_PIC=$(addprefix $(OBJDIR_PIC)/, $(SRCS_GR_STUBS:.f90=.o))
+
+OBJ_LIBTRAPI= $(OBJM_PIC) $(OBJNC_PIC) $(OBJCYT_PIC) $(OBJMMM_PIC) \
+              $(OBJMBGB_PIC) $(OBJITG_PIC) $(OBJ_CORE_PIC) $(OBJ_API_PIC) \
+              $(OBJ_GR_STUBS_PIC)
+
+# Dependent PIC archives / objects (order: bpsd -> lib (mds/task) ->
+# mtxp -> pl -> eq, same as the non-PIC tr2 link order).
+LIBS_PIC=../eq/libeq_pic.a ../pl/libpl_pic.a \
+         ../lib/libmds_pic.a ../lib/libtask_pic.a
+LIBMTX_PIC=../mtxp/libmtxnompi_pic.o ../mtxp/libmtxbnd_pic.o
+
+# Build dependent PIC libs on demand (matches the libXX.a recipes above).
+../eq/libeq_pic.a:
+	(cd ../eq; make libeq_pic.a)
+../pl/libpl_pic.a:
+	(cd ../pl; make libpl_pic.a)
+../lib/libmds_pic.a:
+	(cd ../lib; make libmds_pic.a)
+../lib/libtask_pic.a:
+	(cd ../lib; make libtask_pic.a)
+../mtxp/libmtxnompi_pic.o:
+	(cd ../mtxp; make libmtxnompi_pic.o)
+../mtxp/libmtxbnd_pic.o:
+	(cd ../mtxp; make libmtxbnd_pic.o)
+
+# The shared library itself. gfortran drives the link so libgfortran is
+# pulled in automatically. --start-group/--end-group resolves the cyclic
+# references between eq / pl / bpsd that our non-PIC tr2 link only
+# avoids by listing archives in a careful order.
+#
+# We deliberately drop $(FLIBS) from the link: those pull in non-PIC
+# graphics archives (libg3d/libgsp/libgdp) via GFLIBS plus MDSLIB+LIBLA.
+# libtrapi.so excludes SRCS_GRAPHICS so none of the gsaf calls are
+# reachable; leaving GFLIBS in triggers R_X86_64_PC32 relocation errors
+# when ld tries to copy non-PIC .text from libg3d-gfc64.a into the .so.
+# MDSLIB/LIBLA are unused at our default config (MDSPLUS=nomdsplus.f,
+# LAPACK=nolapack.f) so dropping them is safe.
+libtrapi.so: $(OBJ_LIBTRAPI) $(OBJBPSD_PIC) $(LIBS_PIC) $(LIBMTX_PIC)
+	$(FCFREE) -shared -fPIC -Wl,-soname,libtrapi.so \
+	    $(OBJ_LIBTRAPI) $(OBJBPSD_PIC) $(LIBMTX_PIC) \
+	    -Wl,--start-group $(LIBS_PIC) -Wl,--end-group \
+	    -o libtrapi.so
+
+# ---------------------------------------------------------------------
+# Phase L-4: tr_api_check_so
+#
+# Dynamically loads libtrapi.so via dlopen(), resolves the 5 symbols,
+# runs the full init -> set_param -> run -> get_state -> finalize
+# cycle, and asserts each return is 0. This exercises the .so exactly
+# like a Python ctypes wrapper will at L-5 and is distinct from the
+# static tr_api_check binaries which link OBJ_API directly against
+# libtr2.a (same Fortran code, different link path).
+# ---------------------------------------------------------------------
+TR_API_SO_C=$(TR_API_SMOKE_DIR)/test_run_so.c
+TR_API_SO_O=$(TR_API_SMOKE_DIR)/test_run_so.o
+TR_API_SO_BIN=$(TR_API_SMOKE_DIR)/test_run_so
+
+$(TR_API_SO_O): $(TR_API_SO_C) tr_api.h
+	$(CC) $(CFLAGS_API) -I. -c -o $(TR_API_SO_O) $(TR_API_SO_C)
+
+$(TR_API_SO_BIN): $(TR_API_SO_O)
+	$(CC) -o $(TR_API_SO_BIN) $(TR_API_SO_O) -ldl
+
+.PHONY: libtrapi_inspect
+libtrapi_inspect: libtrapi.so
+	@echo "=== file ==="
+	@file libtrapi.so
+	@echo "=== ldd ==="
+	@ldd libtrapi.so
+	@echo "=== exported tr_* symbols ==="
+	@nm -D libtrapi.so | grep ' T tr_' || true
+	@echo "=== undefined symbols (count) ==="
+	@nm -D libtrapi.so | grep ' U ' | wc -l
+	@echo "=== first 40 undefined ==="
+	@nm -D libtrapi.so | grep ' U ' | head -40
+	@echo "=== non-libc/gfortran undefined (graphics / external) ==="
+	@nm -D libtrapi.so | grep ' U ' | grep -vE '@(GLIBC|GCC|GFORTRAN)' | head -40
+
+.PHONY: tr_api_check_so
+tr_api_check_so: libtrapi.so $(TR_API_SO_BIN)
+	@echo "Phase L-4 tr_api_check_so: dlopen libtrapi.so + full cycle ..."
+	@TRLIB_PATH=$(CURDIR)/libtrapi.so $(TR_API_SO_BIN)
+	@echo "Phase L-4 tr_api_check_so OK"
 
 $(OBJDIR)/trcomm_const.o   : trcomm_const.f90
 $(OBJDIR)/trcomm_param.o   : trcomm_param.f90 trcomm_const.f90 trcom0.f90

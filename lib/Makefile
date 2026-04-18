@@ -78,7 +78,7 @@ clean:
 veryclean: clean
 
 # ---------------------------------------------------------------------
-# PIC build (Phase L-4) - opt-in targets for libtiapi.so / libtrapi.so.
+# PIC build (Phase L-4) - opt-in targets for libtrapi.so.
 # ---------------------------------------------------------------------
 OBJDIR_PIC=obj/pic
 MODDIR_PIC=mod_pic
@@ -109,7 +109,7 @@ libmds_pic.a: $(OBJSMDS_PIC)
 clean_pic:
 	-rm -rf $(OBJDIR_PIC) $(MODDIR_PIC) libtask_pic.a libgrf_pic.a libmds_pic.a
 
-testfem: libtask.a libgrf.a $(OBJDIR)/libtestfem.o $(OBJDIR)/fem_calc.o $(OBJDIR)/fem_calc_15.o $(OBJDIR)/fem_calc_16.o $(OBJDIR)/testfem-sub.o $(OBJDIR)/testfem.o
+testfem: libtask.a libgrf.a $(OBJDIR)/libtestfem.o $(OBJDIR)/fem_calc.o $(OBJDIR)/fem_calc_15.o $(OBJDIR)/fem_calc_16.o $(OBJDIR)/testfem-sub.o $(OBJDIR)/testfem.o 
 	$(FCFREE) $(OBJDIR)/libtestfem.o $(OBJDIR)/fem_calc.o $(OBJDIR)/fem_calc_15.o $(OBJDIR)/fem_calc_16.o $(OBJDIR)/testfem-sub.o $(OBJDIR)/testfem.o libtask.a libgrf.a $(FFLAGS) -o $@ $(FLIBS) $(MODINCLUDE)
 
 $(OBJDIR)/testfem-sub.o: $(TASKCOMM) testfem-sub.f90

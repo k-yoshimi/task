@@ -80,10 +80,9 @@ veryclean : clean
 	-rm -f $(EXEC)
 
 # ---------------------------------------------------------------------
-# PIC build (Phase L-4) - opt-in objects for libtiapi.so / libtrapi.so.
-# Produces mtxp/libmtxnompi_pic.o + mtxp/libmtxbnd_pic.o that the ti/
-# and tr/ libtiapi.so / libtrapi.so rules pick up directly (no archive
-# needed for two objects).
+# PIC build (Phase L-4) - opt-in objects for libtrapi.so.
+# Produces mtxp/libmtxnompi_pic.o + mtxp/libmtxbnd_pic.o that the tr/
+# libtrapi.so rule picks up directly (no archive needed for two objects).
 # ---------------------------------------------------------------------
 MODDIR_PIC=mod_pic
 PIC_FLAGS=-fPIC -J$(MODDIR_PIC) -I$(MODDIR_PIC)

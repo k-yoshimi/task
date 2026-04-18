@@ -78,19 +78,27 @@ MODULE wrcomm
   REAL(rkind),ALLOCATABLE:: &
        pos_pwrmax_rl_nray(:),pwrmax_rl_nray(:)
   REAL(rkind):: pos_pwrmax_rl,pwrmax_rl
+
+  ! Module-scope SAVE state for the wr_allocate / wr_deallocate state
+  ! machine. These were previously declared local-SAVE inside
+  ! wr_allocate, which made them inaccessible from wr_deallocate or
+  ! wr_reset_alloc_state, leading to a finalize-then-reinit double-free
+  ! crash (Bugbot HIGH on PR #36): after wr_deallocate the INIT flag
+  ! stayed at 1, so the next wr_allocate hit the "ELSE" branch and
+  ! tried to deallocate already-stale arrays.
+  INTEGER,SAVE,PRIVATE:: WR_ALLOC_INIT=0
+  INTEGER,SAVE,PRIVATE:: WR_ALLOC_NRAYMAX_SAVE=0
+  INTEGER,SAVE,PRIVATE:: WR_ALLOC_NSTPMAX_SAVE=0
 CONTAINS
 
   SUBROUTINE wr_allocate
     IMPLICIT NONE
-    INTEGER,SAVE:: INIT=0
-    INTEGER,SAVE:: NRAYMAX_SAVE=0
-    INTEGER,SAVE:: NSTPMAX_SAVE=0
 
-    IF(INIT.EQ.0) THEN
-       INIT=1
+    IF(WR_ALLOC_INIT.EQ.0) THEN
+       WR_ALLOC_INIT=1
     ELSE
-       IF((NRAYMAX.EQ.NRAYMAX_SAVE).AND. &
-          (NSTPMAX.EQ.NSTPMAX_SAVE)) RETURN
+       IF((NRAYMAX.EQ.WR_ALLOC_NRAYMAX_SAVE).AND. &
+          (NSTPMAX.EQ.WR_ALLOC_NSTPMAX_SAVE)) RETURN
        CALL wr_deallocate
     END IF
 
@@ -119,19 +127,60 @@ CONTAINS
     ALLOCATE(RK1B(3,0:NSTPMAX),RP1B(3,0:NSTPMAX))
     ALLOCATE(RK2B(3,3,0:NSTPMAX),RP2B(3,3,0:NSTPMAX))
     ALLOCATE(RAMPB(0:NSTPMAX))
+
+    ! Remember the shapes we just allocated so a subsequent wr_allocate
+    ! call with identical NRAYMAX/NSTPMAX can short-circuit (RETURN).
+    WR_ALLOC_NRAYMAX_SAVE = NRAYMAX
+    WR_ALLOC_NSTPMAX_SAVE = NSTPMAX
   END SUBROUTINE wr_allocate
 
   SUBROUTINE wr_deallocate
     IMPLICIT NONE
 
-    DEALLOCATE(NSTPMAX_NRAY)
-    DEALLOCATE(RAYIN)
-    DEALLOCATE(RAYS)
-    DEALLOCATE(CEXS,CEYS,CEZS)
-    DEALLOCATE(RKXS,RKYS,RKZS,RXS,RYS,RZS,BNXS,BNYS,BNZS,BABSS)
-    DEALLOCATE(RAYB,RAYRB1,RAYRB2)
-    DEALLOCATE(CEXB,CEYB,CEZB)
-    DEALLOCATE(RK1B,RP1B)
-    DEALLOCATE(RK2B,RP2B,RAMPB)
+    ! Guard with ALLOCATED() so wr_deallocate is safe to call even if
+    ! wr_allocate was never run, or if it is called twice in a row.
+    IF (ALLOCATED(NSTPMAX_NRAY)) DEALLOCATE(NSTPMAX_NRAY)
+    IF (ALLOCATED(RAYIN))        DEALLOCATE(RAYIN)
+    IF (ALLOCATED(RAYS))         DEALLOCATE(RAYS)
+    IF (ALLOCATED(CEXS))         DEALLOCATE(CEXS)
+    IF (ALLOCATED(CEYS))         DEALLOCATE(CEYS)
+    IF (ALLOCATED(CEZS))         DEALLOCATE(CEZS)
+    IF (ALLOCATED(RKXS))         DEALLOCATE(RKXS)
+    IF (ALLOCATED(RKYS))         DEALLOCATE(RKYS)
+    IF (ALLOCATED(RKZS))         DEALLOCATE(RKZS)
+    IF (ALLOCATED(RXS))          DEALLOCATE(RXS)
+    IF (ALLOCATED(RYS))          DEALLOCATE(RYS)
+    IF (ALLOCATED(RZS))          DEALLOCATE(RZS)
+    IF (ALLOCATED(BNXS))         DEALLOCATE(BNXS)
+    IF (ALLOCATED(BNYS))         DEALLOCATE(BNYS)
+    IF (ALLOCATED(BNZS))         DEALLOCATE(BNZS)
+    IF (ALLOCATED(BABSS))        DEALLOCATE(BABSS)
+    IF (ALLOCATED(RAYB))         DEALLOCATE(RAYB)
+    IF (ALLOCATED(RAYRB1))       DEALLOCATE(RAYRB1)
+    IF (ALLOCATED(RAYRB2))       DEALLOCATE(RAYRB2)
+    IF (ALLOCATED(CEXB))         DEALLOCATE(CEXB)
+    IF (ALLOCATED(CEYB))         DEALLOCATE(CEYB)
+    IF (ALLOCATED(CEZB))         DEALLOCATE(CEZB)
+    IF (ALLOCATED(RK1B))         DEALLOCATE(RK1B)
+    IF (ALLOCATED(RP1B))         DEALLOCATE(RP1B)
+    IF (ALLOCATED(RK2B))         DEALLOCATE(RK2B)
+    IF (ALLOCATED(RP2B))         DEALLOCATE(RP2B)
+    IF (ALLOCATED(RAMPB))        DEALLOCATE(RAMPB)
   END SUBROUTINE wr_deallocate
+
+  !-------------------------------------------------------------------
+  ! wr_reset_alloc_state : clear the wr_allocate state machine.
+  !
+  ! Called from wr_api_finalize after wr_deallocate so that a subsequent
+  ! wr_init + wr_run cycle starts from a clean slate. Without this, the
+  ! INIT=1 flag persisted across finalize, and the next wr_allocate
+  ! would jump to the "ELSE" branch and try to deallocate already-freed
+  ! arrays (Bugbot HIGH on PR #36, double-free on reinit).
+  !-------------------------------------------------------------------
+  SUBROUTINE wr_reset_alloc_state
+    IMPLICIT NONE
+    WR_ALLOC_INIT         = 0
+    WR_ALLOC_NRAYMAX_SAVE = 0
+    WR_ALLOC_NSTPMAX_SAVE = 0
+  END SUBROUTINE wr_reset_alloc_state
 END MODULE wrcomm

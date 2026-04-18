@@ -8,11 +8,17 @@ extern "C" {
 /*
  * TASK/WRX library C ABI public header.
  *
- * Phase L-2 status: function symbols are present in libwrxapi (built
- * from wrx_api.f90); each entry point is a stub returning
- * WRX_ERR_NOT_IMPL (=4). Real bodies arrive in Phase L-3.
+ * Phase L-3 status: all five entry points wired to the real wrcomm
+ * stack (pl_init/EQINIT/dp_init/wr_init in wrx_init; ~70 namelist
+ * parameters dispatched via wrx_param_registry in wrx_set_param;
+ * wr_prep+wr_allocate+wr_setup+wr_exec in wrx_run; wrcomm scalars
+ * and 1-D/2-D power-deposition arrays copied into wrx_state_t in
+ * wrx_get_state; wr_deallocate guarded by g_run_called in
+ * wrx_finalize). WRX_ERR_NOT_IMPL is preserved for backward
+ * compatibility but is no longer returned by any entry point.
  *
- * See docs/superpowers/plans/2026-04-18-wrx-library-L2-c-abi-foundation.md.
+ * See docs/superpowers/plans/2026-04-18-wrx-library-L3-param-registry.md
+ * and docs/superpowers/plans/2026-04-18-wrx-library-L2-c-abi-foundation.md.
  *
  * Upper bounds for the fixed-size state struct:
  *   WRX_MAX_NRAYMAX = 100  (matches NRAYM in wrcomm_parm)

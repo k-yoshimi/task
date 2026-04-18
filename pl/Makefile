@@ -69,7 +69,7 @@ veryclean: clean
 	-rm -f pl
 
 # ---------------------------------------------------------------------
-# PIC build (Phase L-4) - opt-in target for libtiapi.so / libtrapi.so.
+# PIC build (Phase L-4) - opt-in target for libtrapi.so.
 # ---------------------------------------------------------------------
 OBJDIR_PIC=obj/pic
 MODDIR_PIC=mod_pic
@@ -77,9 +77,9 @@ PIC_FLAGS=-fPIC -J$(MODDIR_PIC) -I$(MODDIR_PIC)
 MODINCLUDE_PIC=-I$(MODDIR_PIC) -I../eq/mod_pic -I../mtxp/mod_pic -I../lib/mod_pic -I../../bpsd/$(MOD)
 
 OBJS_NOEQ_PIC=$(addprefix $(OBJDIR_PIC)/, $(SRCS_NOEQ:.f90=.o))
-# libtiapi.so / libtrapi.so exclude graphics; plgout/plmenu pull in
-# libgrf/gsaf calls so we drop them from libpl_pic.a. plprof/plprofw/
-# plprof2d only touch plcomm/plload, keeping those is safe.
+# libtrapi.so excludes graphics; plgout/plmenu pull in libgrf/gsaf calls
+# so we drop them from libpl_pic.a. plprof/plprofw/plprof2d only touch
+# plcomm/plload, keeping those is safe.
 SRCS_EQ_NOGR = plprof2d.f90 plprof.f90 plprofw.f90
 OBJS_EQ_PIC=$(addprefix $(OBJDIR_PIC)/, $(SRCS_EQ_NOGR:.f90=.o))
 
@@ -90,11 +90,10 @@ ${OBJDIR_PIC}/%.o:%.f90
 	@mkdir -p $(OBJDIR_PIC) $(MODDIR_PIC)
 	$(FCFREE) $(FFLAGS) $(PIC_FLAGS) -c $< -o $@ $(MODINCLUDE_PIC)
 
-# Note: libpl.a's recipe runs (cd ../eq && make clean; make libeq.a)
-# between the two ar steps to break a cyclic dependency. For the PIC
-# variant we expose the NOEQ half as a separate target so the caller
-# (ti/Makefile / tr/Makefile) can build it first, then build eq_pic,
-# then come back for libpl_pic.a.
+# Note: libpl.a's recipe runs (cd ../eq && make clean; make libeq.a) between
+# the two ar steps to break a cyclic dependency. For the PIC variant we
+# expose the NOEQ half as a separate target so the caller (tr/Makefile)
+# can build it first, then build eq_pic, then come back for libpl_pic.a.
 libpl_noeq_pic: $(OBJS_NOEQ_PIC)
 libpl_pic.a: $(OBJS_NOEQ_PIC) $(OBJS_EQ_PIC)
 	$(AR) rcs libpl_pic.a $(OBJS_NOEQ_PIC) $(OBJS_EQ_PIC)

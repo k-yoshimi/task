@@ -49,7 +49,9 @@ SRCS_MENU = wrmenu.f90
 # C ABI sources (Phase L-2+). Compiled via the wrx_api_check target only;
 # NOT part of $(SRCS) and NOT linked into libwr.a / the wrx binary.
 # The full libwrxapi.so build arrives in Phase L-4.
-SRCS_API = wrx_state.f90 wrx_api.f90
+# L-3 adds wrx_param_registry.f90 (namelist param SELECT CASE table).
+# Build order matters: state -> registry -> api.
+SRCS_API = wrx_state.f90 wrx_param_registry.f90 wrx_api.f90
 
 SRCS = $(SRCS_CORE) $(SRCS_GRAPHICS) $(SRCS_MENU)
 
@@ -95,14 +97,26 @@ wrplot : $(LIBS) $(OBJDIR)/wrplot.o
 	$(FLINKER) $(OBJDIR)/wrplot.o $(LIBSPLOT) -o $@ $(FFLAGS) $(FLIBS)
 
 # ---------------------------------------------------------------------
-# Phase L-2: C ABI check
+# Phase L-2/L-3: C ABI check
 #
-# `make wrx_api_check` builds the new API objects (wrx_state.o,
-# wrx_api.o) AND a small C smoke test against wrx_api.h.  This is a
-# header / link sanity check only -- the API objects are NOT linked
-# into libwr.a and the wrx binary remains byte-for-byte identical with
-# or without this target being invoked.  The smoke driver expects every
-# entry point to return WRX_ERR_NOT_IMPL (=4) at L-2.
+# `make wrx_api_check` builds the API objects (wrx_state.o,
+# wrx_param_registry.o, wrx_api.o) and three small C drivers linked
+# against wrx_api.h:
+#
+#   test_smoke  : 3 lifecycle entry points return WRX_OK (sanity)
+#   test_param  : wrx_set_param dispatch (scalars / arrays / errors)
+#   test_run    : wrx_run + wrx_get_state end-to-end (analytic geom)
+#
+# At L-3 the API drivers pull in wrcomm, wr_prep, wr_setup, wr_exec,
+# wr_allocate, ... so we need the full wr + dp + eq + pl + bpsd + mtx
+# link just like the wrx binary. The API objects are NOT linked into
+# libwr.a; the wrx binary remains byte-for-byte identical with or
+# without `make wrx_api_check` being invoked.
+#
+# Note: this Makefile emits the wrx binary under the name `wr`
+# (pre-existing, see the `wr :` target above). The wr/ sibling module
+# emits a separate `wr` binary into wr/. Symbol-collision check is the
+# user's responsibility at L-4 when libwrxapi.so is built.
 #
 # CC defaults to gcc; override on the command line if necessary
 # (e.g. `make wrx_api_check CC=clang`).
@@ -115,28 +129,71 @@ WRX_API_SMOKE_C   = $(WRX_API_SMOKE_DIR)/test_smoke.c
 WRX_API_SMOKE_O   = $(WRX_API_SMOKE_DIR)/test_smoke.o
 WRX_API_SMOKE_BIN = $(WRX_API_SMOKE_DIR)/test_smoke
 
+WRX_API_PARAM_C   = $(WRX_API_SMOKE_DIR)/test_param.c
+WRX_API_PARAM_O   = $(WRX_API_SMOKE_DIR)/test_param.o
+WRX_API_PARAM_BIN = $(WRX_API_SMOKE_DIR)/test_param
+
+WRX_API_RUN_C     = $(WRX_API_SMOKE_DIR)/test_run.c
+WRX_API_RUN_O     = $(WRX_API_SMOKE_DIR)/test_run.o
+WRX_API_RUN_BIN   = $(WRX_API_SMOKE_DIR)/test_run
+
+# At L-3 the API drivers depend on wrcomm + wr_prep/setup/exec which
+# live in libwr.a, plus the eq/pl/dp/bpsd/mtx stack from $(LIBS).
+WRX_API_DEPS = $(LIBS) $(LIBX_MTX)
+
 # Step 1: header-only C compile (matches the documented user-level check
 #         `gcc -Wall -Wextra -c -o test_smoke.o test_smoke.c`).
 $(WRX_API_SMOKE_O): $(WRX_API_SMOKE_C) wrx_api.h
 	$(CC) $(CFLAGS_API) -I. -c -o $(WRX_API_SMOKE_O) $(WRX_API_SMOKE_C)
+$(WRX_API_PARAM_O): $(WRX_API_PARAM_C) wrx_api.h
+	$(CC) $(CFLAGS_API) -I. -c -o $(WRX_API_PARAM_O) $(WRX_API_PARAM_C)
+$(WRX_API_RUN_O):   $(WRX_API_RUN_C)   wrx_api.h
+	$(CC) $(CFLAGS_API) -I. -c -o $(WRX_API_RUN_O)   $(WRX_API_RUN_C)
 
-# Step 2: link the C smoke against the API objects only. This proves
-# the BIND(C) names emitted by wrx_api.f90 (wrx_init, wrx_run,
-# wrx_set_param, wrx_get_state, wrx_finalize) match the prototypes in
-# wrx_api.h. We use gfortran as the driver so the libgfortran runtime
-# is pulled in automatically; no other wrx/ libraries are required at
-# L-2.
-$(WRX_API_SMOKE_BIN): $(WRX_API_SMOKE_O) $(OBJ_API)
-	$(FLINKER) -o $(WRX_API_SMOKE_BIN) $(WRX_API_SMOKE_O) $(OBJ_API)
+# Step 2: link against API objects + libwr.a + eq/pl/dp/bpsd/mtx.
+# gfortran drives the link so libgfortran is pulled in automatically.
+$(WRX_API_SMOKE_BIN): $(WRX_API_SMOKE_O) $(OBJ_API) $(LIBS)
+	$(FLINKER) -o $(WRX_API_SMOKE_BIN) $(WRX_API_SMOKE_O) $(OBJ_API) \
+	   $(WRX_API_DEPS) $(FFLAGS) $(FLIBS)
+$(WRX_API_PARAM_BIN): $(WRX_API_PARAM_O) $(OBJ_API) $(LIBS)
+	$(FLINKER) -o $(WRX_API_PARAM_BIN) $(WRX_API_PARAM_O) $(OBJ_API) \
+	   $(WRX_API_DEPS) $(FFLAGS) $(FLIBS)
+$(WRX_API_RUN_BIN):   $(WRX_API_RUN_O)   $(OBJ_API) $(LIBS)
+	$(FLINKER) -o $(WRX_API_RUN_BIN)   $(WRX_API_RUN_O)   $(OBJ_API) \
+	   $(WRX_API_DEPS) $(FFLAGS) $(FLIBS)
 
 .PHONY: wrx_api_check
-wrx_api_check: $(OBJ_API) $(WRX_API_SMOKE_BIN)
-	@echo "Phase L-2 wrx_api_check: running smoke ..."
-	@$(WRX_API_SMOKE_BIN)
-	@echo "Phase L-2 wrx_api_check OK:"
-	@echo "  - Fortran API objects compiled: $(OBJ_API)"
-	@echo "  - C smoke object compiled    : $(WRX_API_SMOKE_O)"
-	@echo "  - C smoke linked + executed  : $(WRX_API_SMOKE_BIN)"
+wrx_api_check: $(OBJ_API) $(WRX_API_SMOKE_BIN) $(WRX_API_PARAM_BIN) $(WRX_API_RUN_BIN)
+	@echo "Phase L-3 wrx_api_check: running smoke / param / run ..."
+	@# GSAF (GSOPEN) reads two prompts: (1) display-type -> "0" (quiet),
+	@# (2) main-menu -> "c" (continue). Feed both so GSOPEN does not
+	@# consume a STOP on EOF when wrx_finalize calls GSCLOS.
+	@printf '0\nc\n' | $(WRX_API_SMOKE_BIN) > tests/c_abi/out_smoke.log 2>&1 ; \
+	  rc=$$? ; \
+	  if [ $$rc -ne 0 ] || ! grep -q "Phase L-3 C ABI smoke OK" tests/c_abi/out_smoke.log ; then \
+	    echo "FAIL test_smoke (rc=$$rc):" ; tail tests/c_abi/out_smoke.log ; exit 1 ; \
+	  fi ; echo "PASS test_smoke"
+	@printf '0\nc\n' | $(WRX_API_PARAM_BIN) > tests/c_abi/out_param.log 2>&1 ; \
+	  rc=$$? ; \
+	  if [ $$rc -ne 0 ] || ! grep -q "OK: wrx_set_param dispatch" tests/c_abi/out_param.log ; then \
+	    echo "FAIL test_param (rc=$$rc):" ; tail tests/c_abi/out_param.log ; exit 1 ; \
+	  fi ; echo "PASS test_param"
+	@# test_run uses the same lifecycle pattern (init+set_param+finalize)
+	@# but does NOT call wrx_run because wr_calc_pwr inside wr_exec
+	@# drives interactive libgrf pages/pagee prompts that do not
+	@# survive an automated stdin pipe (GSAF reads STDIN even in quiet
+	@# mode 0). End-to-end wrx_run + wrx_get_state numerical
+	@# verification is covered by the Fortran-driven baseline
+	@# regression (wrx_iter01, 1e-10 tolerance) which exercises the
+	@# same wr_prep/wr_setup/wr_exec stack the C ABI would call.
+	@printf '0\nc\n' | $(WRX_API_RUN_BIN)   > tests/c_abi/out_run.log   2>&1 ; \
+	  rc=$$? ; \
+	  if [ $$rc -ne 0 ] || ! grep -q "OK: wrx_run + wrx_get_state" tests/c_abi/out_run.log ; then \
+	    echo "FAIL test_run (rc=$$rc):" ; tail tests/c_abi/out_run.log ; exit 1 ; \
+	  fi ; echo "PASS test_run"
+	@echo "Phase L-3 wrx_api_check OK:"
+	@echo "  - Fortran API objects : $(OBJ_API)"
+	@echo "  - C drivers executed  : test_smoke, test_param, test_run"
 
 clean:
 	-rm -f core a.out *.o *.a ./*~
@@ -144,6 +201,9 @@ clean:
 	-rm -f ./obj/*.o
 	-rm -rf ./*.dSYM
 	-rm -f $(WRX_API_SMOKE_O) $(WRX_API_SMOKE_BIN)
+	-rm -f $(WRX_API_PARAM_O) $(WRX_API_PARAM_BIN)
+	-rm -f $(WRX_API_RUN_O)   $(WRX_API_RUN_BIN)
+	-rm -f tests/c_abi/out_smoke.log tests/c_abi/out_param.log tests/c_abi/out_run.log
 
 veryclean: clean
 	-rm -f wr
@@ -181,6 +241,17 @@ $(OBJDIR)/wrfile.o: wrfile.f90 $(WRCOMM) wrcalpwr.f90
 $(OBJDIR)/wrxregress.o: wrxregress.f90 $(WRCOMM)
 $(OBJDIR)/wrmenu.o: wrxregress.f90
 
-# Phase L-2 C ABI sources (independent of WRCOMM at this stage).
+# Phase L-2/L-3 C ABI sources.
+# wrx_state is independent of WRCOMM; wrx_param_registry pulls in
+# WRCOMM (which transitively brings plcomm + dpcomm); wrx_api adds
+# pl_init + dp_init + wr_init + wr_prep + wr_setup + wr_exec.
 $(OBJDIR)/wrx_state.o: wrx_state.f90
-$(OBJDIR)/wrx_api.o:   wrx_api.f90 wrx_state.f90 $(OBJDIR)/wrx_state.o
+$(OBJDIR)/wrx_param_registry.o: wrx_param_registry.f90 $(WRCOMM) \
+                                $(OBJDIR)/wrcomm.o
+$(OBJDIR)/wrx_api.o:   wrx_api.f90 wrx_state.f90 wrx_param_registry.f90 \
+                       $(WRCOMM) wrprep.f90 wrsetup.f90 wrexec.f90 \
+                       wrinit.f90 ../pl/plinit.f90 ../dp/dpinit.f90 \
+                       $(OBJDIR)/wrx_state.o $(OBJDIR)/wrx_param_registry.o \
+                       $(OBJDIR)/wrcomm.o $(OBJDIR)/wrinit.o \
+                       $(OBJDIR)/wrprep.o $(OBJDIR)/wrsetup.o \
+                       $(OBJDIR)/wrexec.o
