@@ -180,6 +180,7 @@ clean :
 	rm -f $(TI_API_SMOKE_O) $(TI_API_SMOKE_BIN)
 	rm -f $(TI_API_PARAM_O) $(TI_API_PARAM_BIN)
 	rm -f $(TI_API_RUN_O)   $(TI_API_RUN_BIN)
+	-rm -f $(TI_API_SO_O)   $(TI_API_SO_BIN)
 
 veryclean : clean
 	rm -f ti
@@ -189,6 +190,199 @@ distclean: clean
 	cd ../pl && make clean
 	cd ../eq && make clean
 	cd ../lib && make clean
+
+clean_pic:
+	-rm -rf $(OBJDIR_PIC) $(MODDIR_PIC) libtiapi.so
+	-rm -f $(TI_API_SO_O) $(TI_API_SO_BIN)
+
+# =====================================================================
+# Phase L-4: libtiapi.so shared library build
+#
+# Builds a position-independent shared object that exposes the 5 C ABI
+# entry points (ti_init, ti_run, ti_set_param, ti_get_state, ti_finalize)
+# and links in SRCS_CORE + SRCS_API plus the (non-graphics) supporting
+# libraries (libpl_pic, libeq_pic, libtask_pic, libmds_pic, lib-adpost_pic,
+# lib-adf11_pic, libmtxnompi_pic, libmtxbnd_pic, bpsd PIC).
+#
+# The PIC build is a *separate* tree at obj/pic/ + mod_pic/ so the
+# existing non-PIC ti build is unaffected. Dependent libraries are
+# PIC-rebuilt via opt-in targets added in eq/pl/lib/mtxp/adpost/adf11
+# Makefiles (libeq_pic.a, libpl_pic.a, libtask_pic.a, libmds_pic.a,
+# lib-adpost_pic.a, lib-adf11_pic.a, libmtxnompi_pic.o, libmtxbnd_pic.o).
+#
+# The bpsd sources live in the parent ../../bpsd/ repo which is outside
+# our worktree; we PIC-rebuild bpsd objects in-tree (obj/pic/bpsd/) so
+# we don't need to modify bpsd/Makefile.
+#
+# Note: this Makefile selects LIB_MTX=LIB_MTX_MUMPS by default, but the
+# libtiapi.so link path uses libmtxnompi_pic.o + libmtxbnd_pic.o (BND
+# backend) because the MUMPS backend is not currently built as PIC and
+# is unreachable from the C ABI happy path.
+# =====================================================================
+
+OBJDIR_PIC=obj/pic
+MODDIR_PIC=mod_pic
+PIC_FLAGS=-fPIC -J$(MODDIR_PIC) -I$(MODDIR_PIC)
+MODINCLUDE_PIC= -I./$(MODDIR_PIC) \
+                -I../open-adas/adf11/adf11-lib/mod_pic \
+                -I../adpost/mod_pic \
+                -I../pl/mod_pic -I../eq/mod_pic \
+                -I../lib/mod_pic -I../mtxp/mod_pic
+
+# Pattern rules for PIC compilation. Each rule creates its output dir
+# on demand so we don't need an explicit mkdir phase.
+$(OBJDIR_PIC)/%.o: %.f90
+	@mkdir -p $(@D) $(MODDIR_PIC)
+	$(FCFREE) $(FFLAGS) $(PIC_FLAGS) -c $< -o $@ $(MODINCLUDE_PIC)
+$(OBJDIR_PIC)/%.o: %.f
+	@mkdir -p $(@D) $(MODDIR_PIC)
+	$(FCFIXED) $(FFLAGS) $(PIC_FLAGS) -c $< -o $@ $(MODINCLUDE_PIC)
+
+# BPSD PIC rebuild (out-of-tree source, in-tree object/mod).
+# We replicate bpsd/Makefile's build order here.
+BPSD_SRC=../../bpsd
+OBJBPSD_PIC=$(OBJDIR_PIC)/bpsd/bpsd_kinds.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_constants.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_flags.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_libchar.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_libfio.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_libspl.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_types.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_types_internal.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_subs.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_shot.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_device.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_species.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_equ1D.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_metric1D.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_plasmaf.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_trmatrix.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_trsource.o \
+            $(OBJDIR_PIC)/bpsd/bpsd_base.o
+
+$(OBJDIR_PIC)/bpsd/%.o: $(BPSD_SRC)/%.f90
+	@mkdir -p $(@D) $(MODDIR_PIC)
+	$(FCFREE) $(FFLAGS) $(PIC_FLAGS) -c $< -o $@ $(MODINCLUDE_PIC)
+
+# Enforce the dependency order so -j builds don't race.
+$(OBJDIR_PIC)/bpsd/bpsd_constants.o:     $(OBJDIR_PIC)/bpsd/bpsd_kinds.o
+$(OBJDIR_PIC)/bpsd/bpsd_flags.o:          $(OBJDIR_PIC)/bpsd/bpsd_kinds.o
+$(OBJDIR_PIC)/bpsd/bpsd_libchar.o:        $(OBJDIR_PIC)/bpsd/bpsd_kinds.o
+$(OBJDIR_PIC)/bpsd/bpsd_libfio.o:         $(OBJDIR_PIC)/bpsd/bpsd_kinds.o
+$(OBJDIR_PIC)/bpsd/bpsd_libspl.o:         $(OBJDIR_PIC)/bpsd/bpsd_kinds.o
+$(OBJDIR_PIC)/bpsd/bpsd_types.o:          $(OBJDIR_PIC)/bpsd/bpsd_kinds.o $(OBJDIR_PIC)/bpsd/bpsd_constants.o
+$(OBJDIR_PIC)/bpsd/bpsd_types_internal.o: $(OBJDIR_PIC)/bpsd/bpsd_types.o
+$(OBJDIR_PIC)/bpsd/bpsd_subs.o:           $(OBJDIR_PIC)/bpsd/bpsd_types_internal.o $(OBJDIR_PIC)/bpsd/bpsd_libchar.o $(OBJDIR_PIC)/bpsd/bpsd_libfio.o $(OBJDIR_PIC)/bpsd/bpsd_libspl.o $(OBJDIR_PIC)/bpsd/bpsd_flags.o
+$(OBJDIR_PIC)/bpsd/bpsd_shot.o:           $(OBJDIR_PIC)/bpsd/bpsd_subs.o
+$(OBJDIR_PIC)/bpsd/bpsd_device.o:         $(OBJDIR_PIC)/bpsd/bpsd_subs.o
+$(OBJDIR_PIC)/bpsd/bpsd_species.o:        $(OBJDIR_PIC)/bpsd/bpsd_subs.o
+$(OBJDIR_PIC)/bpsd/bpsd_equ1D.o:          $(OBJDIR_PIC)/bpsd/bpsd_subs.o
+$(OBJDIR_PIC)/bpsd/bpsd_metric1D.o:       $(OBJDIR_PIC)/bpsd/bpsd_subs.o
+$(OBJDIR_PIC)/bpsd/bpsd_plasmaf.o:        $(OBJDIR_PIC)/bpsd/bpsd_subs.o
+$(OBJDIR_PIC)/bpsd/bpsd_trmatrix.o:       $(OBJDIR_PIC)/bpsd/bpsd_subs.o
+$(OBJDIR_PIC)/bpsd/bpsd_trsource.o:       $(OBJDIR_PIC)/bpsd/bpsd_subs.o
+$(OBJDIR_PIC)/bpsd/bpsd_base.o:           $(OBJDIR_PIC)/bpsd/bpsd_shot.o $(OBJDIR_PIC)/bpsd/bpsd_device.o $(OBJDIR_PIC)/bpsd/bpsd_species.o $(OBJDIR_PIC)/bpsd/bpsd_equ1D.o $(OBJDIR_PIC)/bpsd/bpsd_metric1D.o $(OBJDIR_PIC)/bpsd/bpsd_plasmaf.o $(OBJDIR_PIC)/bpsd/bpsd_trmatrix.o $(OBJDIR_PIC)/bpsd/bpsd_trsource.o
+
+.PHONY: bpsd_pic
+bpsd_pic: $(OBJBPSD_PIC)
+
+# Object sets for libtiapi.so. Mirror ti SRCS_CORE + API sources.
+OBJ_CORE_PIC=$(addprefix $(OBJDIR_PIC)/, $(SRCS_CORE:.f90=.o))
+OBJ_API_PIC=$(addprefix $(OBJDIR_PIC)/, $(SRCS_API:.f90=.o))
+
+# Graphics stubs that satisfy any residual GUCLIP / PAGES / ... calls
+# coming from libpl_pic / libeq_pic without dragging in non-PIC
+# libgsp/libg3d. Built only as PIC so it is libtiapi.so-only.
+SRCS_GR_STUBS=ti_graphics_stubs.f90
+OBJ_GR_STUBS_PIC=$(addprefix $(OBJDIR_PIC)/, $(SRCS_GR_STUBS:.f90=.o))
+
+OBJ_LIBTIAPI= $(OBJ_CORE_PIC) $(OBJ_API_PIC) $(OBJ_GR_STUBS_PIC)
+
+# Dependent PIC archives / objects (order: bpsd -> lib (mds/task) ->
+# mtxp -> adpost -> adf11 -> pl -> eq, same logical order as the ti
+# non-PIC link).
+LIBS_PIC=../eq/libeq_pic.a ../pl/libpl_pic.a \
+         ../lib/libmds_pic.a ../lib/libtask_pic.a \
+         ../open-adas/adf11/adf11-lib/lib-adf11_pic.a \
+         ../adpost/lib-adpost_pic.a
+LIBMTX_PIC=../mtxp/libmtxnompi_pic.o ../mtxp/libmtxbnd_pic.o
+
+# Build dependent PIC libs on demand (matches the libXX.a recipes above).
+../eq/libeq_pic.a:
+	(cd ../eq; make libeq_pic.a)
+../pl/libpl_pic.a:
+	(cd ../pl; make libpl_pic.a)
+../lib/libmds_pic.a:
+	(cd ../lib; make libmds_pic.a)
+../lib/libtask_pic.a:
+	(cd ../lib; make libtask_pic.a)
+../mtxp/libmtxnompi_pic.o:
+	(cd ../mtxp; make libmtxnompi_pic.o)
+../mtxp/libmtxbnd_pic.o:
+	(cd ../mtxp; make libmtxbnd_pic.o)
+../adpost/lib-adpost_pic.a:
+	(cd ../adpost; make lib-adpost_pic.a)
+../open-adas/adf11/adf11-lib/lib-adf11_pic.a:
+	(cd ../open-adas/adf11/adf11-lib; make lib-adf11_pic.a)
+
+# The shared library itself. gfortran drives the link so libgfortran is
+# pulled in automatically. --start-group/--end-group resolves any cyclic
+# references between eq / pl / bpsd that our non-PIC ti link only avoids
+# by listing archives in a careful order.
+#
+# We deliberately drop $(FLIBS) from the link: those pull in non-PIC
+# graphics archives (libg3d/libgsp/libgdp) via GFLIBS. libtiapi.so
+# excludes SRCS_GRAPHICS so none of the gsaf calls are reachable;
+# leaving GFLIBS in triggers R_X86_64_PC32 relocation errors when ld
+# tries to copy non-PIC .text from libg3d-gfc64.a into the .so.
+# MDSLIB/LIBLA are unused at our default config (MDSPLUS=nomdsplus.f,
+# LAPACK=nolapack.f) so dropping them is safe.
+libtiapi.so: $(OBJ_LIBTIAPI) $(OBJBPSD_PIC) $(LIBS_PIC) $(LIBMTX_PIC)
+	$(FCFREE) -shared -fPIC -Wl,-soname,libtiapi.so \
+	    $(OBJ_LIBTIAPI) $(OBJBPSD_PIC) $(LIBMTX_PIC) \
+	    -Wl,--start-group $(LIBS_PIC) -Wl,--end-group \
+	    -o libtiapi.so
+
+# ---------------------------------------------------------------------
+# Phase L-4: ti_api_check_so
+#
+# Dynamically loads libtiapi.so via dlopen(), resolves the 5 symbols,
+# runs the full init -> set_param -> run -> get_state -> finalize
+# cycle, and asserts each return is 0. This exercises the .so exactly
+# like a Python ctypes wrapper will at L-5 and is distinct from the
+# static ti_api_check binaries which link OBJ_API directly against
+# libti.a (same Fortran code, different link path).
+# ---------------------------------------------------------------------
+TI_API_SO_C=$(TI_API_SMOKE_DIR)/test_run_so.c
+TI_API_SO_O=$(TI_API_SMOKE_DIR)/test_run_so.o
+TI_API_SO_BIN=$(TI_API_SMOKE_DIR)/test_run_so
+
+$(TI_API_SO_O): $(TI_API_SO_C) ti_api.h
+	$(CC) $(CFLAGS_API) -I. -c -o $(TI_API_SO_O) $(TI_API_SO_C)
+
+$(TI_API_SO_BIN): $(TI_API_SO_O)
+	$(CC) -o $(TI_API_SO_BIN) $(TI_API_SO_O) -ldl
+
+.PHONY: libtiapi_inspect
+libtiapi_inspect: libtiapi.so
+	@echo "=== file ==="
+	@file libtiapi.so
+	@echo "=== ldd ==="
+	@ldd libtiapi.so
+	@echo "=== exported ti_* symbols ==="
+	@nm -D libtiapi.so | grep ' T ti_' || true
+	@echo "=== undefined symbols (count) ==="
+	@nm -D libtiapi.so | grep ' U ' | wc -l
+	@echo "=== first 40 undefined ==="
+	@nm -D libtiapi.so | grep ' U ' | head -40
+	@echo "=== non-libc/gfortran undefined (graphics / external) ==="
+	@nm -D libtiapi.so | grep ' U ' | grep -vE '@(GLIBC|GCC|GFORTRAN)' | head -40
+
+.PHONY: tiapi_check_so ti_api_check_so
+ti_api_check_so: libtiapi.so $(TI_API_SO_BIN)
+	@echo "Phase L-4 ti_api_check_so: dlopen libtiapi.so + full cycle ..."
+	@TILIB_PATH=$(CURDIR)/libtiapi.so $(TI_API_SO_BIN)
+	@echo "Phase L-4 ti_api_check_so OK"
 
 ticomm.o : ticomm.f90
 timain.o : timain.f90 ticomm.f90  timenu.f90
