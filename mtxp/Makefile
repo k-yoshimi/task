@@ -78,3 +78,25 @@ clean :
 
 veryclean : clean
 	-rm -f $(EXEC)
+
+# ---------------------------------------------------------------------
+# PIC build (Phase L-4) - opt-in objects for libtiapi.so / libtrapi.so.
+# Produces mtxp/libmtxnompi_pic.o + mtxp/libmtxbnd_pic.o that the ti/
+# and tr/ libtiapi.so / libtrapi.so rules pick up directly (no archive
+# needed for two objects).
+# ---------------------------------------------------------------------
+MODDIR_PIC=mod_pic
+PIC_FLAGS=-fPIC -J$(MODDIR_PIC) -I$(MODDIR_PIC)
+MODINCLUDE_PIC=-I$(MODDIR_PIC) -I../lib/mod_pic
+
+libmtxnompi_pic.o: libmtxnompi.f90
+	@mkdir -p $(MODDIR_PIC)
+	$(FCFREE) $(FFLAGS) $(PIC_FLAGS) -c libmtxnompi.f90 -o libmtxnompi_pic.o $(MODINCLUDE_PIC)
+libmtxbnd_pic.o: libmtxbnd.f90 libmtxnompi_pic.o
+	@mkdir -p $(MODDIR_PIC)
+	$(FCFREE) $(FFLAGS) $(PIC_FLAGS) -c libmtxbnd.f90 -o libmtxbnd_pic.o $(MODINCLUDE_PIC)
+
+libmtx_pic: libmtxnompi_pic.o libmtxbnd_pic.o
+
+clean_pic:
+	-rm -rf $(MODDIR_PIC) libmtxnompi_pic.o libmtxbnd_pic.o

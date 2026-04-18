@@ -77,7 +77,39 @@ clean:
 
 veryclean: clean
 
-testfem: libtask.a libgrf.a $(OBJDIR)/libtestfem.o $(OBJDIR)/fem_calc.o $(OBJDIR)/fem_calc_15.o $(OBJDIR)/fem_calc_16.o $(OBJDIR)/testfem-sub.o $(OBJDIR)/testfem.o 
+# ---------------------------------------------------------------------
+# PIC build (Phase L-4) - opt-in targets for libtiapi.so / libtrapi.so.
+# ---------------------------------------------------------------------
+OBJDIR_PIC=obj/pic
+MODDIR_PIC=mod_pic
+PIC_FLAGS=-fPIC -J$(MODDIR_PIC) -I$(MODDIR_PIC)
+MODINCLUDE_PIC=-I$(MODDIR_PIC)
+
+OBJSFREE_PIC  = $(addprefix $(OBJDIR_PIC)/,$(SRCSFREE:.f90=.o))
+OBJSFIXED_PIC = $(addprefix $(OBJDIR_PIC)/,$(SRCSFIXED:.f=.o))
+OBJSGRF_PIC   = $(addprefix $(OBJDIR_PIC)/,$(SRCSGRF:.f90=.o))
+OBJSMDS_PIC   = $(addprefix $(OBJDIR_PIC)/,$(MDSPLUS:.f=.o))
+
+${OBJDIR_PIC}/%.o:%.f
+	@mkdir -p $(OBJDIR_PIC) $(MODDIR_PIC) $(OBJDIR_PIC)/libufile $(OBJDIR_PIC)/libgrf $(OBJDIR_PIC)/libpkf
+	$(FCFIXED) $(FFLAGS) $(PIC_FLAGS) -c $< -o $@ $(MODINCLUDE_PIC)
+${OBJDIR_PIC}/%.o:%.f90
+	@mkdir -p $(OBJDIR_PIC) $(MODDIR_PIC) $(OBJDIR_PIC)/libufile $(OBJDIR_PIC)/libgrf $(OBJDIR_PIC)/libpkf
+	$(FCFREE) $(FFLAGS) $(PIC_FLAGS) -c $< -o $@ $(MODINCLUDE_PIC)
+
+libtask_pic.a: $(OBJSFREE_PIC) $(OBJSFIXED_PIC)
+	$(AR) rcs libtask_pic.a $(OBJSFREE_PIC) $(OBJSFIXED_PIC)
+
+libgrf_pic.a: $(OBJSGRF_PIC)
+	$(AR) rcs libgrf_pic.a $(OBJSGRF_PIC)
+
+libmds_pic.a: $(OBJSMDS_PIC)
+	$(AR) rcs libmds_pic.a $(OBJSMDS_PIC)
+
+clean_pic:
+	-rm -rf $(OBJDIR_PIC) $(MODDIR_PIC) libtask_pic.a libgrf_pic.a libmds_pic.a
+
+testfem: libtask.a libgrf.a $(OBJDIR)/libtestfem.o $(OBJDIR)/fem_calc.o $(OBJDIR)/fem_calc_15.o $(OBJDIR)/fem_calc_16.o $(OBJDIR)/testfem-sub.o $(OBJDIR)/testfem.o
 	$(FCFREE) $(OBJDIR)/libtestfem.o $(OBJDIR)/fem_calc.o $(OBJDIR)/fem_calc_15.o $(OBJDIR)/fem_calc_16.o $(OBJDIR)/testfem-sub.o $(OBJDIR)/testfem.o libtask.a libgrf.a $(FFLAGS) -o $@ $(FLIBS) $(MODINCLUDE)
 
 $(OBJDIR)/testfem-sub.o: $(TASKCOMM) testfem-sub.f90
