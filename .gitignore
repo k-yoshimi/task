@@ -104,3 +104,8 @@ wr/tests/c_abi/test_run_so
 dp/obj/pic/
 dp/mod_pic/
 dp/libdp_pic.a
+
+# Python
+__pycache__/
+*.pyc
+
