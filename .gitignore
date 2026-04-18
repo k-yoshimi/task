@@ -104,3 +104,7 @@ wr/tests/c_abi/test_run_so
 dp/obj/pic/
 dp/mod_pic/
 dp/libdp_pic.a
+wrx/libwrxapi.so
+wrx/obj/pic/
+wrx/mod_pic/
+wrx/tests/c_abi/test_run_so

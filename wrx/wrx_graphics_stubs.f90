@@ -1,0 +1,384 @@
+! wrx_graphics_stubs.f90
+!
+! Phase L-4: minimal stand-ins for the GSAF / graphics entry points that
+! libwrxapi.so references at load-time even though it excludes all real
+! graphics output.
+!
+! Background: wrx has a richer graphics footprint than wr because
+! SRCS_CORE includes wrcalpwr.f90 (wr_calc_pwr) which runs at the tail of
+! wr_exec (via wrexecr.f90 / wrexecb.f90) and calls PAGES/GRD1D/PAGEE to
+! emit radial power-deposition plots. wrexecr / wrexecb also call GUTIME
+! for CPU timing. wrx_api itself calls GSOPEN/GSCLOS to mirror
+! wrmain.f90 startup/shutdown. None of these live in PIC archives
+! (libgsp/libg3d/libgdp are all non-PIC), so we cannot link them into a
+! shared object. Instead we provide no-op replacements in the .so itself.
+!
+! The supporting libraries we link in (libgrf_pic via plload, libeq_pic
+! via eqgout/eqfile, libpl_pic via plprof) contain additional CALL R2W2B
+! / CALL GMNMX1 / CALL PAGES etc. references that gfortran -fPIC compiles
+! into GOT indirections. With RTLD_LAZY the dynamic loader still resolves
+! GOT entries eagerly for GLOB_DAT relocations, so *all* external
+! graphics symbols must be present in the .so to let dlopen succeed.
+!
+! The stubs are safe: none of them is exercised by the
+! wrx_init -> wrx_set_param* -> wrx_run -> wrx_get_state -> wrx_finalize
+! happy path in a way that affects numerical results. GRD1D just writes
+! a graph; PAGES/PAGEE open/close a GSAF page; GUTIME returns elapsed
+! CPU time used only for a log message; GUCLIP is a REAL(8)->REAL(4)
+! cast used when building plot arrays.
+!
+! If a future caller needs real graphics output the right answer is to
+! add a libwrxgrf_pic.a (a PIC rebuild of libgrf/libgsp) rather than
+! extend these stubs.
+!
+! Mirrors wr/wr_graphics_stubs.f90 (Phase L-4, PR #42) with additional
+! GSOPEN/GSCLOS/GRD1D stubs (wrx calls these from SRCS_CORE; wr calls
+! them from excluded SRCS_GRAPHICS/MENU so stubs were unnecessary).
+
+REAL FUNCTION GUCLIP(X)
+  IMPLICIT NONE
+  DOUBLE PRECISION, INTENT(IN) :: X
+  GUCLIP = REAL(X)
+END FUNCTION GUCLIP
+
+SUBROUTINE GSOPEN
+  IMPLICIT NONE
+END SUBROUTINE GSOPEN
+
+SUBROUTINE GSCLOS
+  IMPLICIT NONE
+END SUBROUTINE GSCLOS
+
+SUBROUTINE PAGES
+  IMPLICIT NONE
+END SUBROUTINE PAGES
+
+SUBROUTINE PAGEE
+  IMPLICIT NONE
+END SUBROUTINE PAGEE
+
+SUBROUTINE GUDATE(KK)
+  IMPLICIT NONE
+  CHARACTER(LEN=*), INTENT(OUT) :: KK
+  KK = ' '
+END SUBROUTINE GUDATE
+
+SUBROUTINE GUTIME(T)
+  ! wrx uses GUTIME to sample CPU time (REAL output). Return 0.0 so
+  ! the informational "CPU TIME = ..." print stays consistent rather
+  ! than emitting an uninitialized value.
+  IMPLICIT NONE
+  REAL, INTENT(OUT) :: T
+  T = 0.0
+END SUBROUTINE GUTIME
+
+SUBROUTINE GUFLSH
+  IMPLICIT NONE
+END SUBROUTINE GUFLSH
+
+! grd1d in the real libgrf is a generic interface; from wrcalpwr.f90 it
+! is called with 8 scalar/array/string args. The stub body is a no-op so
+! argument types are only loosely matched; Fortran pass-by-reference
+! means the linker sees the symbol `grd1d_` and nothing about
+! signatures. Declaring the 8 dummies keeps strict-check callers happy.
+SUBROUTINE GRD1D(IPAT, X, Y, NXM, NXMAX, NGMAX, TITLE, MODE_XY)
+  IMPLICIT NONE
+  INTEGER :: IPAT, NXM, NXMAX, NGMAX, MODE_XY
+  REAL    :: X(*), Y(*)
+  CHARACTER(LEN=*) :: TITLE
+END SUBROUTINE GRD1D
+
+! --- libgrf call targets (PAINT_RGB conversion, plotter API) --------
+
+SUBROUTINE R2W2B(FACTOR, RGB)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: FACTOR
+  REAL, INTENT(OUT) :: RGB(3)
+  RGB = 0.0
+END SUBROUTINE R2W2B
+
+SUBROUTINE GMNMX1(A, N, M, XMIN, XMAX)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: N, M
+  REAL, INTENT(IN) :: A(*)
+  REAL, INTENT(OUT) :: XMIN, XMAX
+  XMIN = 0.0; XMAX = 0.0
+END SUBROUTINE GMNMX1
+
+SUBROUTINE GMNMX2(A, NX, NY, NXM, M1, M2, XMIN, XMAX)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: NX, NY, NXM, M1, M2
+  REAL, INTENT(IN) :: A(*)
+  REAL, INTENT(OUT) :: XMIN, XMAX
+  XMIN = 0.0; XMAX = 0.0
+END SUBROUTINE GMNMX2
+
+SUBROUTINE GQSCAL(XMIN, XMAX, GXMIN, GXMAX, GXSTEP)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: XMIN, XMAX
+  REAL, INTENT(OUT) :: GXMIN, GXMAX, GXSTEP
+  GXMIN = 0.0; GXMAX = 0.0; GXSTEP = 0.0
+END SUBROUTINE GQSCAL
+
+SUBROUTINE SETLIN(A, B, C)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: A, B, C
+END SUBROUTINE SETLIN
+
+SUBROUTINE SETCHS(A, B)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B
+END SUBROUTINE SETCHS
+
+SUBROUTINE SETFNT(A)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: A
+END SUBROUTINE SETFNT
+
+SUBROUTINE SETRGB(R, G, B)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: R, G, B
+END SUBROUTINE SETRGB
+
+SUBROUTINE GDEFIN(A, B, C, D, E, F, G, H)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B, C, D, E, F, G, H
+END SUBROUTINE GDEFIN
+
+SUBROUTINE GFRAME
+  IMPLICIT NONE
+END SUBROUTINE GFRAME
+
+SUBROUTINE GSCALE(A, B, C, D, E, F)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B, C, D, E
+  INTEGER, INTENT(IN) :: F
+END SUBROUTINE GSCALE
+
+SUBROUTINE GSCALL(A, B, C, D, E, F)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B, C, D
+  INTEGER, INTENT(IN) :: E, F
+END SUBROUTINE GSCALL
+
+SUBROUTINE GVALUE(A, B, C, D, E)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B, C, D
+  INTEGER, INTENT(IN) :: E
+END SUBROUTINE GVALUE
+
+SUBROUTINE GVALUL(A, B, C, D, E)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B, C, D
+  INTEGER, INTENT(IN) :: E
+END SUBROUTINE GVALUL
+
+SUBROUTINE GPLOTP(X, Y, N, A, B, C, D, E)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: N, A, B, C, D, E
+  REAL, INTENT(IN) :: X(*), Y(*)
+END SUBROUTINE GPLOTP
+
+SUBROUTINE MOVE(A, B)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B
+END SUBROUTINE MOVE
+
+SUBROUTINE MOVE2D(A, B)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B
+END SUBROUTINE MOVE2D
+
+SUBROUTINE DRAW2D(A, B)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B
+END SUBROUTINE DRAW2D
+
+SUBROUTINE OFFCLP(A)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: A
+END SUBROUTINE OFFCLP
+
+SUBROUTINE INQLNW(A)
+  IMPLICIT NONE
+  REAL, INTENT(OUT) :: A
+  A = 0.0
+END SUBROUTINE INQLNW
+
+SUBROUTINE INQTSZ(A)
+  IMPLICIT NONE
+  REAL, INTENT(OUT) :: A
+  A = 0.0
+END SUBROUTINE INQTSZ
+
+INTEGER FUNCTION NGULEN(X)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: X
+  NGULEN = 1
+END FUNCTION NGULEN
+
+! 3D plot symbols reachable via libgrf_pic through plload / plgout.
+
+SUBROUTINE GDEFIN3D(A, B, C, D, E, F, G)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B, C, D, E, F, G
+END SUBROUTINE GDEFIN3D
+
+SUBROUTINE GAXIS3D(A, B)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B
+END SUBROUTINE GAXIS3D
+
+SUBROUTINE GSCALE3DX(A, B, C, D, E)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B, C, D
+  INTEGER, INTENT(IN) :: E
+END SUBROUTINE GSCALE3DX
+
+SUBROUTINE GSCALE3DY(A, B, C, D, E)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B, C, D
+  INTEGER, INTENT(IN) :: E
+END SUBROUTINE GSCALE3DY
+
+SUBROUTINE GSCALE3DZ(A, B, C, D, E)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B, C, D
+  INTEGER, INTENT(IN) :: E
+END SUBROUTINE GSCALE3DZ
+
+SUBROUTINE GVALUE3DX(A, B, C, D, E)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B, C, D
+  INTEGER, INTENT(IN) :: E
+END SUBROUTINE GVALUE3DX
+
+SUBROUTINE GVALUE3DY(A, B, C, D, E)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B, C, D
+  INTEGER, INTENT(IN) :: E
+END SUBROUTINE GVALUE3DY
+
+SUBROUTINE GVALUE3DZ(A, B, C, D, E)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B, C, D
+  INTEGER, INTENT(IN) :: E
+END SUBROUTINE GVALUE3DZ
+
+SUBROUTINE GVIEW3D(A, B, C, D, E, F, G)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B, C, D, E, F, G
+END SUBROUTINE GVIEW3D
+
+SUBROUTINE CONTF2(A, B, C, D, E, F, G, H)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: B, C, D, E
+  REAL, INTENT(IN) :: A(*), F(*), G(*)
+  INTEGER, INTENT(IN) :: H
+END SUBROUTINE CONTF2
+
+SUBROUTINE CONTF3(A, B, C, D, E, F, G, H, I)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: B, C, D, E, I
+  REAL, INTENT(IN) :: A(*), F(*), G(*), H
+END SUBROUTINE CONTF3
+
+SUBROUTINE CONTF4(A, B, C, D, E, F, G, H, I, J)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: B, C, D, E, I, J
+  REAL, INTENT(IN) :: A(*), F(*), G(*), H
+END SUBROUTINE CONTF4
+
+SUBROUTINE CONTG2(A, B, C, D, E, F, G, H)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: B, C, D, E, H
+  REAL, INTENT(IN) :: A(*), F(*), G(*)
+END SUBROUTINE CONTG2
+
+SUBROUTINE CONTG3(A, B, C, D, E, F, G, H, I)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: B, C, D, E, I
+  REAL, INTENT(IN) :: A(*), F(*), G(*), H
+END SUBROUTINE CONTG3
+
+SUBROUTINE CONTG4(A, B, C, D, E, F, G, H, I, J)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: B, C, D, E, I, J
+  REAL, INTENT(IN) :: A(*), F(*), G(*), H
+END SUBROUTINE CONTG4
+
+SUBROUTINE CONTQ2(A, B, C, D, E, F, G, H)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: B, C, D, E, H
+  REAL, INTENT(IN) :: A(*), F(*), G(*)
+END SUBROUTINE CONTQ2
+
+SUBROUTINE CONTQ3(A, B, C, D, E, F, G, H, I)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: B, C, D, E, I
+  REAL, INTENT(IN) :: A(*), F(*), G(*), H
+END SUBROUTINE CONTQ3
+
+SUBROUTINE CONTQ3D1(A, B, C, D, E, F, G, H, I, J)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: B, C, D, E, I, J
+  REAL, INTENT(IN) :: A(*), F(*), G(*), H
+END SUBROUTINE CONTQ3D1
+
+SUBROUTINE CONTQ4(A, B, C, D, E, F, G, H, I, J)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: B, C, D, E, I, J
+  REAL, INTENT(IN) :: A(*), F(*), G(*), H
+END SUBROUTINE CONTQ4
+
+SUBROUTINE CPLOT3D1(A, B, C, D, E, F, G, H, I)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: B, C, D, E, I
+  REAL, INTENT(IN) :: A(*), F(*), G(*), H(*)
+END SUBROUTINE CPLOT3D1
+
+SUBROUTINE GDATA3D1(A, B, C, D, E, F, G, H, I)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: B, C, D, E, I
+  REAL, INTENT(IN) :: A(*), F(*), G(*), H(*)
+END SUBROUTINE GDATA3D1
+
+SUBROUTINE EQGOUT
+  IMPLICIT NONE
+END SUBROUTINE EQGOUT
+
+SUBROUTINE W2G2B(FACTOR, RGB)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: FACTOR
+  REAL, INTENT(OUT) :: RGB(3)
+  RGB = 0.0
+END SUBROUTINE W2G2B
+
+SUBROUTINE R2Y2W(FACTOR, RGB)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: FACTOR
+  REAL, INTENT(OUT) :: RGB(3)
+  RGB = 0.0
+END SUBROUTINE R2Y2W
+
+SUBROUTINE SETCLP(A, B, C, D)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A, B, C, D
+END SUBROUTINE SETCLP
+
+SUBROUTINE SETLNW(A)
+  IMPLICIT NONE
+  REAL, INTENT(IN) :: A
+END SUBROUTINE SETLNW
+
+SUBROUTINE SETMKS(A, B)
+  IMPLICIT NONE
+  INTEGER, INTENT(IN) :: A
+  REAL, INTENT(IN) :: B
+END SUBROUTINE SETMKS
+
+SUBROUTINE TEXT(A, N)
+  IMPLICIT NONE
+  CHARACTER(LEN=*), INTENT(IN) :: A
+  INTEGER, INTENT(IN) :: N
+END SUBROUTINE TEXT
