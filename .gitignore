@@ -111,3 +111,7 @@ fp/tests/c_abi/test_run_so
 ob/libob_pic.a
 ob/obj/pic/
 ob/mod_pic/
+
+# Python bytecode caches
+__pycache__/
+*.pyc
