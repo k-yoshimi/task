@@ -96,10 +96,15 @@ class TestStateSchema(unittest.TestCase):
 
     def test_scalars_include_ti_specific_fields(self) -> None:
         # TI surfaces diagnostic scalars that TR does not (loop/mat
-        # iteration counters).
+        # iteration counters). Int counters live under ``scalars_int``
+        # to mirror the Phase-0 baseline JSON grouping (tiregress.f90);
+        # real-valued scalars stay under ``scalars``.
         scalars = srv.STATE_SCHEMA["properties"]["scalars"]["properties"]
-        for k in ("T", "residual_loop_max", "icount_loop_max", "icount_mat_max"):
+        for k in ("T", "residual_loop_max"):
             self.assertIn(k, scalars)
+        scalars_int = srv.STATE_SCHEMA["properties"]["scalars_int"]["properties"]
+        for k in ("icount_loop_max", "icount_mat_max"):
+            self.assertIn(k, scalars_int)
 
 
 class TestDescribeParameters(unittest.TestCase):
