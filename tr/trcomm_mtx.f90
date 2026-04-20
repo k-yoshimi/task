@@ -30,6 +30,19 @@ CONTAINS
       IF(ierr /= 0) RETURN
     ALLOCATE(AX(6*NEQMAXM,NEQMAXM*NRMAX),X(NEQMAXM*NRMAX),STAT=ierr)
       IF(ierr /= 0) RETURN
+
+    ! Defensive zero-init (see PR #121/#123 pattern): libtrapi.so
+    ! finalize+reinit cycle can reuse heap chunks with stale values.
+    ! AX / X are built fresh each step by trexec (banded LU system), but
+    ! XV / YV / AY / Y / ZV / AZ / Z are stepwise variables that are
+    ! referenced before being fully overwritten on timestep edges (e.g.
+    ! YV is read in fusion-source history); a stale heap chunk from a
+    ! prior tr_run leaks into the next run's step-0 state.
+    XV(:,:) = 0.D0
+    YV(:,:) = 0.D0; AY(:,:) = 0.D0; Y(:,:)  = 0.D0
+    ZV(:,:) = 0.D0; AZ(:,:) = 0.D0; Z(:,:)  = 0.D0
+    AX(:,:) = 0.D0
+    X(:)    = 0.D0
   END SUBROUTINE allocate_trcomm_mtx
 
   SUBROUTINE deallocate_trcomm_mtx

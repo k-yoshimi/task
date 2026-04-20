@@ -37,6 +37,27 @@ CONTAINS
       IF(ierr /= 0) RETURN
     ALLOCATE(PLT(NSTM),SPET(NSTM),SLT(NSTM),PRFVT(NSTM,3),STAT=ierr)
       IF(ierr /= 0) RETURN
+
+    ! Defensive zero-init (see PR #121/#123 pattern): libtrapi.so
+    ! finalize+reinit cycle can reuse heap chunks with stale values.
+    ! Global-scalar *sum* arrays (SPSCT / ANS0 / TS0 / ...) are computed
+    ! via DO-loop reductions in trrslt_globals.f90; a reduction writing
+    ! only NSMAX<NSTM slots leaves the remaining slots at whatever the
+    ! prior run left on the heap, which tr_get_state then exposes.
+    SPSCT(:)   = 0.D0
+    ANS0(:)    = 0.D0
+    TS0(:)     = 0.D0
+    ANSAV(:)   = 0.D0
+    ANLAV(:)   = 0.D0
+    TSAV(:)    = 0.D0
+    WST(:)     = 0.D0
+    PRFT(:)    = 0.D0
+    PBCLT(:)   = 0.D0
+    PFCLT(:)   = 0.D0
+    PLT(:)     = 0.D0
+    SPET(:)    = 0.D0
+    SLT(:)     = 0.D0
+    PRFVT(:,:) = 0.D0
   END SUBROUTINE allocate_trcomm_globals
 
   SUBROUTINE deallocate_trcomm_globals

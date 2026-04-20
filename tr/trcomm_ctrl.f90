@@ -73,6 +73,21 @@ CONTAINS
       IF(ierr /= 0) RETURN
     ALLOCATE(NEA(0:NSTM,0:3),STAT=ierr)
       IF(ierr /= 0) RETURN
+
+    ! Defensive zero-init (see PR #119/#121/#123 pattern): libtrapi.so
+    ! finalize+reinit cycle can reuse heap chunks with stale values.
+    ! TR_EQS_SELECT (trprep.f90:196-199) writes NSS/NSV(1:NEQMAXM)=-1
+    ! and NNS/NST(1:NEQMAXM)=0, and NEA(0:NSTM,0:3)=0 on every call, so
+    ! zero-init here is strictly redundant for the binary path — but
+    ! TR_EQS_SELECT runs after ALLOCATE_TRCOMM, and the integer fields
+    ! are inspected by intermediate code paths (MDDIAG conditionals in
+    ! tr_prep that walk the indices). Defensive zero-init guarantees
+    ! the ALLOCATED->read window holds a consistent state.
+    NSS(:) = 0
+    NSV(:) = 0
+    NNS(:) = 0
+    NST(:) = 0
+    NEA(:,:) = 0
   END SUBROUTINE allocate_trcomm_ctrl
 
   SUBROUTINE deallocate_trcomm_ctrl

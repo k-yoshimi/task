@@ -45,6 +45,30 @@ MODULE TRCOM1
       IF(IERR.NE.0) GOTO 900
     ALLOCATE(PPC(NEQMAXM,NRMAX), GRE(NRUM,2),STAT=IERR)
       IF(IERR.NE.0) GOTO 900
+
+    ! Defensive zero-init (see PR #121/#123 pattern): libtrapi.so
+    ! finalize+reinit cycle can reuse heap chunks with stale values.
+    ! A/B/C/D/RD/PPA/PPB/PPC are banded-system scratch arrays rebuilt
+    ! each step by trexec, but the reinit-without-trprep path reads
+    ! them before they are fully overwritten; the RTE/RTI/RNE* UFILE
+    ! scratch arrays are only partially written when MDLUF<=0, so the
+    ! unused slots would carry prior-run values. GRE is partially
+    ! populated by trufile (NREMAX-dependent).
+    RTEXU(:,:)  = 0.D0
+    RTIXU(:,:)  = 0.D0
+    RNEXU(:,:)  = 0.D0
+    RTEXEU(:,:) = 0.D0
+    RTIXEU(:,:) = 0.D0
+    RNEXEU(:,:) = 0.D0
+    A(:,:,:)    = 0.D0
+    B(:,:,:)    = 0.D0
+    C(:,:,:)    = 0.D0
+    D(:,:)      = 0.D0
+    RD(:,:)     = 0.D0
+    PPA(:,:)    = 0.D0
+    PPB(:,:)    = 0.D0
+    PPC(:,:)    = 0.D0
+    GRE(:,:)    = 0.0
     RETURN
  900 CONTINUE
     WRITE(6,*) "XX TRCOM1 ALLOCATION ERROR IERR=",IERR

@@ -404,6 +404,60 @@ CONTAINS
     ADLP(:,:,:) = 0.D0; ADLD(:,:,:) = 0.D0
     RGFLS(:,:,:) = 0.D0; RQFLS(:,:,:) = 0.D0
     PTSA(:) = 0.D0  ! redundant with line above but kept for clarity
+
+    ! Defensive zero-init (see PR #121/#123 pattern): libtrapi.so
+    ! finalize+reinit cycle can reuse heap chunks with stale values.
+    ! Extends the PR #121 sweep to: (a) REAL(single) graphics arrays
+    ! GRM/GRG/GJB/GAD/GET/GAK/GYR/GER/GVR/GVRT (written one-slice-per-
+    ! step by trg*/trgrsl, so earlier time slots carry junk until
+    ! filled); and (b) UFILE scratch arrays QPU/AJU/.../SWLU, PTSU/PNSU/
+    ! PTSUA/PNSUA, RNU/RTU/PNBU/PICU/SNBU/RNU_ORG — only populated when
+    ! MDLUF!=0, leaving every slot stale when MDLUF=0 but still exposed
+    ! via trcomm symbols to downstream code / state dumps.
+    GRM(:)      = 0.0
+    GRG(:)      = 0.0
+    GJB(:,:)    = 0.0
+    GAD(:,:)    = 0.0
+    GET(:,:)    = 0.0
+    GAK(:,:)    = 0.0
+    GYR(:,:)    = 0.0
+    GER(:,:)    = 0.0
+    GVR(:,:,:)  = 0.0
+    GVRT(:,:,:) = 0.0
+
+    QPU(:,:)       = 0.D0
+    AJU(:,:)       = 0.D0
+    AJNBU(:,:)     = 0.D0
+    BPU(:,:)       = 0.D0
+    PRLU(:,:)      = 0.D0
+    PECU(:,:)      = 0.D0
+    POHU(:,:)      = 0.D0
+    DVRHOU(:,:)    = 0.D0
+    AJBSU(:,:)     = 0.D0
+    ZEFFU(:,:)     = 0.D0
+    PBMU(:,:)      = 0.D0
+    RNFU(:,:)      = 0.D0
+    WROTU(:,:)     = 0.D0
+    ZEFFU_ORG(:,:) = 0.D0
+    RKPRHOU(:,:)   = 0.D0
+    RMJRHOU(:,:)   = 0.D0
+    RMNRHOU(:,:)   = 0.D0
+    ARRHOU(:,:)    = 0.D0
+    AR1RHOU(:,:)   = 0.D0
+    AR2RHOU(:,:)   = 0.D0
+    ABRHOU(:,:)    = 0.D0
+    TTRHOU(:,:)    = 0.D0
+    SWLU(:,:)      = 0.D0
+    PTSU(:,:)      = 0.D0
+    PNSU(:,:)      = 0.D0
+    PTSUA(:,:)     = 0.D0
+    PNSUA(:,:)     = 0.D0
+    RNU(:,:,:)     = 0.D0
+    RTU(:,:,:)     = 0.D0
+    PNBU(:,:,:)    = 0.D0
+    PICU(:,:,:)    = 0.D0
+    SNBU(:,:,:)    = 0.D0
+    RNU_ORG(:,:,:) = 0.D0
   END SUBROUTINE allocate_trcomm_profile
 
   SUBROUTINE deallocate_trcomm_profile
