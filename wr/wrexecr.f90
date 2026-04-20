@@ -295,10 +295,14 @@ CONTAINS
        rkx=rk_x1
        rky=rk_y1
        rkz=rk_z1
+       rk_R=rk_R1
+       rk_phi=rk_phi1
     CASE(2)
        rkx=rk_x2
        rky=rk_y2
        rkz=rk_z2
+       rk_R=rk_R2
+       rk_phi=rk_phi2
     CASE DEFAULT
        WRITE(6,'(A,I4)') 'XX wr_exec_single_ray: MODEW is not 1 nor 2:', MODEW
        STOP
