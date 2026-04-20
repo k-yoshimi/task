@@ -28,22 +28,184 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install test dependencies
+      - name: Install Fortran/C build deps
+        # gfortran + gcc + make are needed to build the libXapi.so
+        # shared libraries that the Layer 1 equivalence and FFI tests
+        # dlopen at runtime. Without these the tests SKIP and CI gives a
+        # false pass — which previously masked real fp/eq drift.
+        # X11 is intentionally NOT installed: each lib*api.so excludes
+        # graphics archives (see fp/Makefile:318), so X11 is never
+        # linked into the .so files we build here.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gfortran gcc make
+
+      - name: Clone BPSD (sibling repo expected at ../bpsd)
+        # All module Makefiles reference BPSD_SRC=../../bpsd; the BPSD
+        # source lives at https://github.com/ats-fukuyama/bpsd and is
+        # not vendored into this repo.
+        #
+        # We apply docs/external-patches/bpsd/bpsd-species-kid-oob-fix.patch
+        # to the freshly-cloned BPSD because upstream still has a
+        # heap-corruption bug at bpsd_species.f90:38 (off-by-one OOB write
+        # in the kid array). Without the patch the libtrapi.so test
+        # process SIGABRTs as soon as it tries to free the smashed chunk.
+        # Once upstream merges the fix, this `git apply` step can be
+        # dropped (and the docs/external-patches/bpsd/ directory cleaned).
+        run: |
+          git clone --depth 1 https://github.com/ats-fukuyama/bpsd.git \
+            "$GITHUB_WORKSPACE/../bpsd"
+          if [[ -f docs/external-patches/bpsd/bpsd-species-kid-oob-fix.patch ]]; then
+            git -C "$GITHUB_WORKSPACE/../bpsd" apply \
+              "$GITHUB_WORKSPACE/docs/external-patches/bpsd/bpsd-species-kid-oob-fix.patch"
+            echo "BPSD species kid OOB patch applied."
+          fi
+          ls -la "$GITHUB_WORKSPACE/../bpsd" | head -5
+
+      - name: Provision mtxp/make.mtxp from nompi template
+        # mtxp/make.mtxp is gitignored (per-system config). The nompi
+        # template builds bnd/pcg backends without MPI / MUMPS / PETSc,
+        # which is what every libXapi.so PIC build path uses.
+        run: |
+          cp mtxp/make.mtxp.nompi mtxp/make.mtxp
+          head -5 mtxp/make.mtxp
+
+      - name: Provision make.header for Linux gfortran (no graphics)
+        # make.header is gitignored (per-system config). Generate the
+        # minimal gfortran setup needed by every module's Makefile.
+        # GFLIBS is left empty because libXapi.so excludes graphics
+        # (the actual `make X` binary builds need GFLIBS but those are
+        # not built in CI).
+        run: |
+          cat > make.header <<'HEADER_EOF'
+          ### CI-generated make.header (Linux gfortran, no graphics, no MPI)
+          LAPACK = nolapack.f
+          LIBLA =
+          MODLA95 =
+          MDSPLUS = nomdsplus.f
+          MDSLIB =
+          MF77 = mpif77
+          MF90 = mpif90
+          MF95 = mpif90
+          MFC  = $(MF90)
+
+          ## linux gfortran (64bit), no graphics linkage (libXapi.so path)
+          GFLIBS=
+          OFLAGS = -g -O3 -m64 -std=legacy
+          DFLAGS = -g -m64 -fbounds-check -ffpe-trap=invalid,zero,overflow -fbacktrace -fcheck=all -std=legacy
+          FCFIXED = gfortran -ffixed-form
+          FCFREE = gfortran -ffree-form
+          MOD = mod
+          MODDIR = -Jmod
+          LD=ld
+          LDFLAGS=-r -o
+          FPP=
+          HEADER_EOF
+          head -10 make.header
+
+      - name: Install Python test dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pytest pytest-mock pytest-subtests
           # tomli is needed only on <3.11; keep installed for safety on 3.11 too.
           pip install tomli
 
-      - name: Run pytest
+      - name: Build PIC support libraries (bpsd, lib, mtxp, pl, eq, dp, ob)
+        # Pre-build all shared support libraries so each module Makefile
+        # finds the .mod files it needs (bpsd, libitp, equnit, plcomm,
+        # etc.) before compiling module sources. Order matters: bpsd
+        # first because pl/plvmec USEs bpsd; pl needs lib first; eq
+        # needs pl; dp+ob need pl/eq.
+        #
+        # BPSD's static `make libbpsd.a` populates ../../bpsd/mod/ which
+        # PL's PIC build (MODINCLUDE_PIC includes ../../bpsd/mod) needs.
+        run: |
+          set -e
+          make -C "$GITHUB_WORKSPACE/../bpsd" libbpsd.a
+          make -C lib libtask_pic.a libgrf_pic.a libmds_pic.a
+          make -C mtxp libmtxnompi_pic.o libmtxbnd_pic.o
+          # bpsd_pic must run from a module dir (the rule lives in each
+          # module's Makefile, generates obj/pic/bpsd/*.o + mod_pic/bpsd*.mod
+          # local to that module). Use tr as the canonical builder.
+          make -C tr bpsd_pic
+          make -C pl libpl_noeq_pic
+          make -C eq libeq_pic.a
+          make -C pl libpl_pic.a
+          make -C dp libdp_pic.a
+          make -C ob libob_pic.a
+          # adf11 + adpost are needed by ti (USEs adf11 in tiadas.f90)
+          make -C open-adas/adf11/adf11-lib lib-adf11_pic.a
+          make -C adpost lib-adpost_pic.a
+
+      - name: Build module shared libraries (.so)
+        # Each libXapi.so excludes graphics so X11 is not linked. Build
+        # order is enforced by each Makefile's libs_pic prerequisite
+        # chain (lib_pic -> mtxp_pic -> pl_pic -> eq_pic -> dp_pic /
+        # ob_pic -> module .so).
+        #
+        # We invoke `bpsd_pic` BEFORE the .so target on each module
+        # because individual objects like obj/pic/trcom0.o use
+        # bpsd_kinds.mod but don't explicitly depend on it; without an
+        # explicit prior bpsd_pic step, sequential make fails with
+        # "Cannot open module file 'bpsd_kinds.mod'".
+        #
+        # IMPORTANT: tot MUST come last in this loop. tot/Makefile:378
+        # links libtotapi.so against ../eq/libeqapi.so + ../tr/libtrapi.so
+        # + ../fp/libfpapi.so, so those .so files must already exist.
+        #
+        # If any .so fails to build we want the job to FAIL (not skip
+        # the dependent pytest cases). `set -e` (also default in GH
+        # Actions bash) ensures that.
+        run: |
+          set -e
+          for mod in tr fp ti wr wrx eq tot; do
+            echo "::group::Building $mod/lib${mod}api.so"
+            # tot has no bpsd_pic target (it links against the other
+            # modules' .so directly, not per-module bpsd PIC objs).
+            if [[ "$mod" != "tot" ]]; then
+              make -C "$mod" bpsd_pic
+            fi
+            make -C "$mod" "lib${mod}api.so"
+            echo "::endgroup::"
+          done
+
+      - name: Run pytest (Layer 1 equivalence + FFI now enabled)
         env:
           PYTHONDONTWRITEBYTECODE: "1"
           PYTHONPATH: python
+          # Open env-gates that previously guarded against wrx reinit
+          # SEGVs. PRs #123 / #128 / #129 / #130 / #131 / #132 / #133 /
+          # #134 closed the heap-reuse and stack-overflow classes, so
+          # these gates are now safe to default ON in CI.
+          WRX_RUN_OK: "1"
+          WRX_REINIT_OK: "1"
         run: |
           python -m pytest python/ \
             --tb=short \
             -ra \
             --maxfail=20
+
+      - name: Run C ABI check drivers (per-module integration)
+        # Each module has a Layer-2/L-6 `<mod>_api_check_all` Makefile
+        # target that builds and runs test_smoke/test_param/test_run/
+        # test_reinit/test_run_so/test_negative C drivers directly
+        # against lib<mod>api.so. These exercise the C ABI path
+        # independently of the Python wrapper, so a regression in the
+        # Fortran side shows up here even if the Python tests happen to
+        # skip or pass. Scope: wr only for now — other modules have
+        # partial coverage (no test_reinit) which will be added per
+        # follow-up.
+        run: |
+          set -e
+          for mod in wr; do
+            echo "::group::$mod C ABI drivers"
+            make -C "$mod" "${mod}_api_check_all" || {
+              echo "::error::$mod C ABI check_all failed"
+              exit 1
+            }
+            echo "::endgroup::"
+          done
 
       - name: Show collected vs skipped summary
         if: always()
