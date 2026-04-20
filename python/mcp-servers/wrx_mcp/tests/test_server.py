@@ -480,10 +480,9 @@ class TestIntegration(unittest.TestCase):
                 "isolated PASS, suite SEGV — task #110 follow-up). "
                 "Set WRX_REINIT_OK=1 to force-exercise."
             )
-        # pytest.fail() is used below for readable divergence output;
+        # self.fail() is used below for readable divergence output;
         # import lazily so the rest of the module (run via unittest
         # discover or without pytest installed) keeps working.
-        import pytest  # type: ignore[import-not-found]
 
         # wrx_run is gated behind WRX_RUN_OK=1 (see server.py:358).
         # Open the gate just for this test via mock.patch.dict so we
@@ -509,7 +508,7 @@ class TestIntegration(unittest.TestCase):
         if s1 != s2:
             diffs = {k: (s1.get(k), s2.get(k)) for k in set(s1) | set(s2)
                      if s1.get(k) != s2.get(k)}
-            pytest.fail(
+            self.fail(
                 "wrx reinit cycle produced divergent state (possible "
                 f"heap-reuse leak): differing keys = {sorted(diffs)}"
             )

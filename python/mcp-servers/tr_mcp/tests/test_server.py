@@ -314,7 +314,6 @@ class TestIntegration(unittest.TestCase):
         init will see residual state from the first cycle and this
         test will trip.
         """
-        import pytest  # type: ignore[import-not-found]
 
         # First cycle: default init, no params needed.
         srv.handle_init()
@@ -335,7 +334,7 @@ class TestIntegration(unittest.TestCase):
             # Enumerate divergence for a readable failure.
             diffs = {k: (s1.get(k), s2.get(k)) for k in set(s1) | set(s2)
                      if s1.get(k) != s2.get(k)}
-            pytest.fail(
+            self.fail(
                 "tr reinit cycle produced divergent state (possible "
                 f"heap-reuse leak): differing keys = {sorted(diffs)}"
             )

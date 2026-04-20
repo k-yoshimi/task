@@ -397,7 +397,6 @@ class TestIntegration(unittest.TestCase):
         If this SEGVs or produces NaN the test will fail loudly rather
         than be masked; that is the intent.
         """
-        import pytest  # type: ignore[import-not-found]
 
         # First cycle: init, apply wr_test001 fixture, run.
         srv.handle_init()
@@ -417,7 +416,7 @@ class TestIntegration(unittest.TestCase):
         if s1 != s2:
             diffs = {k: (s1.get(k), s2.get(k)) for k in set(s1) | set(s2)
                      if s1.get(k) != s2.get(k)}
-            pytest.fail(
+            self.fail(
                 "wr reinit cycle produced divergent state (possible "
                 f"heap-reuse leak): differing keys = {sorted(diffs)}"
             )
