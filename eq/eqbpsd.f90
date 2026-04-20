@@ -51,6 +51,11 @@
          equ1D%nrmax=NRMAX
          allocate(equ1D%rho(NRMAX))
          allocate(equ1D%data(NRMAX))
+         ! Defensive zero-init (see PR #123 pattern): libeqapi.so
+         ! finalize+reinit cycle can reuse heap chunks with stale values.
+         ! %data is a derived-type array; %psit etc. are populated in the
+         ! eq_bpsd_put loop but the rho axis is an independent hazard.
+         equ1D%rho(:) = 0.D0
       endif
 
       metric1D%time=0.D0
@@ -60,6 +65,8 @@
          metric1D%nrmax=NRMAX
          allocate(metric1D%rho(NRMAX))
          allocate(metric1D%data(NRMAX))
+         ! Same hazard; see comment above.
+         metric1D%rho(:) = 0.D0
       endif
 
       return
