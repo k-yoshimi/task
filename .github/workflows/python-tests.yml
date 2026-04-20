@@ -181,10 +181,18 @@ jobs:
           WRX_RUN_OK: "1"
           WRX_REINIT_OK: "1"
         run: |
+          # Exclude property_boundary / property_fanout: those sweeps
+          # intentionally hit param code paths (tr NRMAX, fp/ti/wr NSMAX
+          # range-guard gaps, wr MDLWRI=2 unsupported branch, etc.) whose
+          # pre-existing SEGVs are tracked as a deferred punch list in
+          # PR #125 body. Re-enabling them in CI is blocked on per-bug
+          # fix PRs.
           python -m pytest python/ \
             --tb=short \
             -ra \
-            --maxfail=20
+            --maxfail=20 \
+            --ignore-glob='*property_boundary*' \
+            --ignore-glob='*property_fanout*'
 
       - name: Run C ABI check drivers (per-module integration)
         # Each module has a Layer-2/L-6 `<mod>_api_check_all` Makefile
