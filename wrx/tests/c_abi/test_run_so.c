@@ -90,7 +90,10 @@ int main(void) {
     }
 
     int rc;
-    wrx_state_t s;
+    /* wrx_state_t is ~70KB; stack-allocating risks overflow on threads
+     * or under valgrind's main-stack tracker. BSS (static) is pre-zeroed
+     * and size-independent. */
+    static wrx_state_t s;
     setvbuf(stdout, NULL, _IOLBF, 0);
 
     rc = f_init();
