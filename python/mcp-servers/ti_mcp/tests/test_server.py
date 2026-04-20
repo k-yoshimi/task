@@ -418,17 +418,19 @@ class TestIntegration(unittest.TestCase):
         """
         import pytest  # type: ignore[import-not-found]
 
-        # First cycle. Mirror the existing TestIntegration setUp pattern:
-        # cwd is already in _DATA_CWD via setUp.
-        self._set_min_params()
+        # First cycle. Mirror the existing TestIntegration ordering
+        # (init first, then set_min_params) so the docstring's
+        # ``init -> set_min_params -> run(0)`` sequence matches the code
+        # and matches ``test_init_run_state_finalize``.
         srv.handle_init()
+        self._set_min_params()
         srv.handle_run(0)
         s1 = srv.handle_get_state()
         srv.handle_finalize()
 
         # Second cycle with identical params.
-        self._set_min_params()
         srv.handle_init()
+        self._set_min_params()
         srv.handle_run(0)
         s2 = srv.handle_get_state()
         srv.handle_finalize()
