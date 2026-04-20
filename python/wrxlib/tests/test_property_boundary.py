@@ -9,13 +9,10 @@ Mutates selected parameters from the ``wrx_demo`` fixture and asserts
 
 Scope: widen Layer-3 coverage beyond the single canonical fixture; this
 is complementary to ``test_equivalence.py`` and ``test_sweep.py``. We
-intentionally do NOT call :py:meth:`wrxlib.Wrxlib.get_state` because
-the WRX state-extraction path is gated on ``WRX_EQUIV_OK=1`` (see
-``test_sweep.py`` for the rationale: per-ray RAYS / pwr_nrs_nsa /
-pwr_nrl_nsa shapes still SEGV on the current build).
-
-Even with ``WRX_EQUIV_OK`` open, this test stays run-only: the goal is
-crash-safety on parameter perturbation, not numerical regression.
+intentionally do NOT call :py:meth:`wrxlib.Wrxlib.get_state` here: the
+goal is crash-safety on parameter perturbation, not numerical
+regression -- coverage of the state-extraction path lives in
+``test_equivalence.py`` / ``test_sweep.py``.
 
 Skipped when ``libwrxapi.so`` is not built or when ``WRX_RUN_OK=0``.
 """
