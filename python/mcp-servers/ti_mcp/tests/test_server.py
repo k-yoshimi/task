@@ -366,8 +366,12 @@ class TestIntegration(unittest.TestCase):
         # Reset server state between tests.
         srv.STATE.close()
         self._prev_cwd = os.getcwd()
-        if self._DATA_CWD.exists():
-            os.chdir(self._DATA_CWD)
+        if not self._DATA_CWD.exists():
+            self.skipTest(
+                f"ti_mcp data fixture not found at {self._DATA_CWD}; "
+                "run `bash test_run/run_tests.sh` to generate it."
+            )
+        os.chdir(self._DATA_CWD)
 
     def tearDown(self) -> None:
         srv.STATE.close()

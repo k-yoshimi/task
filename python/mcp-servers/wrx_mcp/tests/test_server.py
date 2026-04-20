@@ -480,9 +480,7 @@ class TestIntegration(unittest.TestCase):
                 "isolated PASS, suite SEGV — task #110 follow-up). "
                 "Set WRX_REINIT_OK=1 to force-exercise."
             )
-        # self.fail() is used below for readable divergence output;
-        # import lazily so the rest of the module (run via unittest
-        # discover or without pytest installed) keeps working.
+        # self.fail() is used below for readable divergence output.
 
         # wrx_run is gated behind WRX_RUN_OK=1 (see server.py:358).
         # Open the gate just for this test via mock.patch.dict so we
