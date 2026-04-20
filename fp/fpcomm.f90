@@ -369,7 +369,11 @@ module fpcomm
                 (NSBMAX.eq.NSBMAX_save).and. &
                 ALLOCATED(F)) return
 
-             call fp_deallocate
+             ! Same heap-reuse hazard on the deallocate side: when
+             ! fp_finalize has already run, F (and all sister arrays) are
+             ! unallocated, so an unconditional fp_deallocate would
+             ! double-free. Mirror the pattern in tr/trcomm.f90.
+             if(ALLOCATED(F)) call fp_deallocate
           endif
 
           allocate( F(NTHMAX,NPSTARTW:NPENDWM,NRSTART:NREND))
@@ -772,6 +776,7 @@ module fpcomm
           RJESL(:,:) = 0.D0
           RNSL_DELF(:,:) = 0.D0
           RWSL_PARA(:,:) = 0.D0; RWSL_PERP(:,:) = 0.D0
+          RFPL(:) = 0.D0
           RJSRL(:,:) = 0.D0
           RWSL(:,:) = 0.D0; RWS123L(:,:) = 0.D0
           RSPBL(:,:) = 0.D0; RSPFL(:,:) = 0.D0
