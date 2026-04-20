@@ -168,6 +168,25 @@ PARAMETER_REGISTRY: Dict[str, Dict[str, Any]] = {
     "MODEL_SYNC": {"type": "int", "group": "transport", "description": "synchrotron-radiation model"},
     "MODEL_PEL":  {"type": "int", "group": "transport", "description": "pellet-injection model"},
     "MODEL_PSC":  {"type": "int", "group": "transport", "description": "particle-source model"},
+    # --- transport-coefficient scalars (ticomm_parm) --------------------
+    # Registered in ti/ti_param_registry.f90; required for ti_ar / ti_min /
+    # ti_w fixtures to reproduce their Phase-0 baselines (without these the
+    # libtiapi.so run uses tiinit defaults and drifts ~2% from the baseline).
+    "DN0":  {"type": "float", "group": "transport", "description": "particle diffusivity coefficient (default scalar)"},
+    "DT0":  {"type": "float", "group": "transport", "description": "thermal diffusivity coefficient (default scalar)"},
+    "DU0":  {"type": "float", "group": "transport", "description": "velocity diffusivity coefficient (default scalar)"},
+    "VDN0": {"type": "float", "group": "transport", "description": "particle convection velocity (default scalar)"},
+    "VDT0": {"type": "float", "group": "transport", "description": "thermal convection velocity (default scalar)"},
+    "VDU0": {"type": "float", "group": "transport", "description": "velocity convection velocity (default scalar)"},
+    "DR0":  {"type": "float", "group": "transport", "description": "radial-coefficient inner exponent"},
+    "DRS":  {"type": "float", "group": "transport", "description": "radial-coefficient edge exponent"},
+    # --- per-species transport-coefficient overrides --------------------
+    "DN0_NS":  {"type": "float[NSM]", "group": "transport", "description": "per-species particle diffusivity override (1-origin)"},
+    "DT0_NS":  {"type": "float[NSM]", "group": "transport", "description": "per-species thermal diffusivity override (1-origin)"},
+    "DU0_NS":  {"type": "float[NSM]", "group": "transport", "description": "per-species velocity diffusivity override (1-origin)"},
+    "VDN0_NS": {"type": "float[NSM]", "group": "transport", "description": "per-species particle convection override (1-origin)"},
+    "VDT0_NS": {"type": "float[NSM]", "group": "transport", "description": "per-species thermal convection override (1-origin)"},
+    "VDU0_NS": {"type": "float[NSM]", "group": "transport", "description": "per-species velocity convection override (1-origin)"},
 }
 
 
@@ -177,19 +196,29 @@ STATE_SCHEMA: Dict[str, Any] = {
     "properties": {
         "NT":      {"type": "integer", "description": "current time-step index"},
         "NRMAX":   {"type": "integer", "description": "radial points in use"},
-        "NSA_MAX": {"type": "integer", "description": "active species in use"},
+        "NSA_MAX": {"type": "integer", "description": "active species in use (uppercase canonical)"},
+        # The Phase-0 baseline (tiregress.f90) uses lowercase; emit both so
+        # compare_metrics and any LLM consumer relying on the .in regression
+        # naming both find the key.
+        "nsa_max": {"type": "integer", "description": "alias of NSA_MAX (Phase-0 baseline naming)"},
         "NSMAX":   {"type": "integer", "description": "species in TICOMM"},
         "scalars": {
             "type": "object",
-            "description": (
-                "physical/diagnostic scalars: T (simulation time), "
-                "residual_loop_max, icount_loop_max, icount_mat_max"
-            ),
+            "description": "physical/diagnostic scalars (real)",
             "properties": {
-                "T":                 {"type": "number"},
-                "residual_loop_max": {"type": "number"},
-                "icount_loop_max":   {"type": "integer"},
-                "icount_mat_max":    {"type": "integer"},
+                "T":                 {"type": "number", "description": "simulation time [s]"},
+                "residual_loop_max": {"type": "number", "description": "max inner-loop residual"},
+            },
+        },
+        # Iteration counters live in their own group to mirror the Phase-0
+        # baseline JSON shape (separate so JSON-Schema readers can keep an
+        # int-only group distinct from the float group above).
+        "scalars_int": {
+            "type": "object",
+            "description": "iteration counters (int)",
+            "properties": {
+                "icount_loop_max":   {"type": "integer", "description": "max inner-loop iteration count"},
+                "icount_mat_max":    {"type": "integer", "description": "max matrix-solve iteration count"},
             },
         },
         "profile": {
@@ -212,7 +241,7 @@ STATE_SCHEMA: Dict[str, Any] = {
             },
         },
     },
-    "required": ["NT", "NRMAX", "NSA_MAX", "NSMAX", "scalars", "profile"],
+    "required": ["NT", "NRMAX", "NSA_MAX", "nsa_max", "NSMAX", "scalars", "scalars_int", "profile"],
 }
 
 

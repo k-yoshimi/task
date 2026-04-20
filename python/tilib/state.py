@@ -114,10 +114,20 @@ class TiState:
             "NT": self.nt,
             "NRMAX": self.nrmax,
             "NSA_MAX": self.nsa_max,
+            # Phase-0 regression dump (tiregress.f90 -> baselines/.../metrics.json)
+            # uses lowercase ``nsa_max``; compare_metrics.py expects this exact
+            # key alongside the dimension set. Emit both spellings so Layer 1
+            # equivalence and other downstream consumers stay in sync.
+            "nsa_max": self.nsa_max,
             "NSMAX": self.nsmax,
             "scalars": {
                 "T": self.T,
                 "residual_loop_max": self.residual_loop_max,
+            },
+            # Phase-0 baseline (tiregress.f90) splits int counters into a
+            # separate ``scalars_int`` group; mirror that grouping so
+            # compare_metrics finds the keys at the expected paths.
+            "scalars_int": {
                 "icount_loop_max": self.icount_loop_max,
                 "icount_mat_max": self.icount_mat_max,
             },

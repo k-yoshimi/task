@@ -225,9 +225,13 @@ interactive menu — those live in `ti/ti` only.
   character-valued namelist keys). See `docs/superpowers/specs/
   2026-04-17-tr-library-design.md` §4.3 and the `tilib` fixtures'
   `UNREGISTERED_KEYS` tuples for the current gap list.
-- **Per-species diffusion scalars** `DN0`, `DT0`, `DR0`, `DRS`,
-  `DN0_NS[i]` are not yet registered; `ti_ar.in`-style setups will
-  fall back to `ti_init` defaults for those.
+- *(2026-04-20: previously the diffusion-coefficient scalars
+  `DN0`, `DT0`, `DU0`, `VDN0`, `VDT0`, `VDU0`, `DR0`, `DRS` and the
+  per-species overrides `DN0_NS[i]` / `DT0_NS[i]` / etc. were not
+  registered. They are now wired through `ti/ti_param_registry.f90`,
+  exposed in `ti_mcp/server.py:PARAMETER_REGISTRY`, and the
+  `ti_ar` / `ti_min` Layer 1 equivalence tests pass at 1e-10. No
+  fallback to `ti_init` defaults is needed any more.)*
 - **NRMAX ceiling.** `TI_MAX_NRMAX=200` and `TI_MAX_NSA_MAX=20` bound
   the shared-state struct; exceeding either is reported as ierr=4 by
   `ti_get_state`.

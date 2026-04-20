@@ -35,7 +35,9 @@ MODULE ti_param_registry
                          MODEL_KAI, MODEL_DRR, MODEL_VR, MODEL_NC, &
                          MODEL_NF, MODEL_NB, MODEL_EC, MODEL_LH, MODEL_IC, &
                          MODEL_CD, MODEL_SYNC, MODEL_PEL, MODEL_PSC, &
-                         PROFJ1, PROFJ2
+                         PROFJ1, PROFJ2, &
+                         DN0, DT0, DU0, VDN0, VDT0, VDU0, DR0, DRS, &
+                         DN0_NS, DT0_NS, DU0_NS, VDN0_NS, VDT0_NS, VDU0_NS
   IMPLICIT NONE
   PRIVATE
   PUBLIC :: ti_param_set
@@ -132,6 +134,27 @@ CONTAINS
     CASE ("MATTYPE");      MATTYPE  = INT(value)
     CASE ("PROFJ1");       PROFJ1   = value
     CASE ("PROFJ2");       PROFJ2   = value
+
+    ! ---- transport-coefficient scalars (ticomm_parm) ----
+    ! These appear in the ti_ar / ti_min / ti_w namelists; without them
+    ! the libtiapi.so run uses tiinit defaults and drifts ~2% from the
+    ! Phase-0 baseline at every species/radius.
+    CASE ("DN0");          DN0      = value
+    CASE ("DT0");          DT0      = value
+    CASE ("DU0");          DU0      = value
+    CASE ("VDN0");         VDN0     = value
+    CASE ("VDT0");         VDT0     = value
+    CASE ("VDU0");         VDU0     = value
+    CASE ("DR0");          DR0      = value
+    CASE ("DRS");          DRS      = value
+
+    ! ---- per-species transport-coefficient arrays ----
+    CASE ("DN0_NS");  IF (i1 < 1 .OR. i1 > SIZE(DN0_NS))  THEN; ierr=ERR_BAD_INDEX; ELSE; DN0_NS(i1)  = value; END IF
+    CASE ("DT0_NS");  IF (i1 < 1 .OR. i1 > SIZE(DT0_NS))  THEN; ierr=ERR_BAD_INDEX; ELSE; DT0_NS(i1)  = value; END IF
+    CASE ("DU0_NS");  IF (i1 < 1 .OR. i1 > SIZE(DU0_NS))  THEN; ierr=ERR_BAD_INDEX; ELSE; DU0_NS(i1)  = value; END IF
+    CASE ("VDN0_NS"); IF (i1 < 1 .OR. i1 > SIZE(VDN0_NS)) THEN; ierr=ERR_BAD_INDEX; ELSE; VDN0_NS(i1) = value; END IF
+    CASE ("VDT0_NS"); IF (i1 < 1 .OR. i1 > SIZE(VDT0_NS)) THEN; ierr=ERR_BAD_INDEX; ELSE; VDT0_NS(i1) = value; END IF
+    CASE ("VDU0_NS"); IF (i1 < 1 .OR. i1 > SIZE(VDU0_NS)) THEN; ierr=ERR_BAD_INDEX; ELSE; VDU0_NS(i1) = value; END IF
 
     ! ---- transport / source switches ----
     CASE ("MODEL_EQB");    MODEL_EQB    = INT(value)

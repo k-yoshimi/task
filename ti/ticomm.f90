@@ -196,8 +196,18 @@ CONTAINS
     INTEGER:: id
     ierr = 0
 
+    ! Skip re-allocation only when dims unchanged AND arrays still
+    ! allocated. The pure dim check (the original two-line guard) is
+    ! broken for finalize+reinit cycles inside libtiapi.so: after
+    ! deallocate_ticomm has freed every array, ID_NSA et al. are
+    ! UNALLOCATED but nrmax_save still holds the previous nrmax, so
+    ! the unguarded check would early-return and the next access of
+    ! ID_NSA / RNA / RTA segfaults (use-after-free). The ALLOCATED
+    ! probe is the minimum-diff fix; binary tiX runs once per process
+    ! so it never hits this path either way.
     IF(nrmax.EQ.nrmax_save .AND. &
-       nsa_max.EQ.nsa_max_save) RETURN
+       nsa_max.EQ.nsa_max_save .AND. &
+       ALLOCATED(ID_NSA)) RETURN
 
     IF(ALLOCATED(ID_NSA)) CALL deallocate_ticomm
 
@@ -515,8 +525,12 @@ CONTAINS
     INTEGER,SAVE:: neqmax_save=0
     ierr = 0
 
+    ! Same finalize+reinit guard as allocate_ticomm above: the pure
+    ! dim check breaks when deallocate_neqmax has just freed the
+    ! arrays but the SAVE counters still hold the previous values.
     IF(nrmax_save==nrmax .AND. &
-       neqmax_save==neqmax) RETURN
+       neqmax_save==neqmax .AND. &
+       ALLOCATED(MAT_LOCAL)) RETURN
 
     IF(ALLOCATED(MAT_LOCAL)) CALL deallocate_neqmax
 

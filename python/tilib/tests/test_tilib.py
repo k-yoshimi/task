@@ -136,9 +136,15 @@ class TestTiStateFromC(unittest.TestCase):
         self.assertEqual(d["NSMAX"], 3)
         self.assertIn("scalars", d)
         self.assertEqual(
-            set(d["scalars"]).issuperset(
-                {"T", "residual_loop_max", "icount_loop_max", "icount_mat_max"}
-            ),
+            set(d["scalars"]).issuperset({"T", "residual_loop_max"}),
+            True,
+        )
+        # icount_*_max moved to scalars_int (matches Phase-0 baseline
+        # tiregress.f90 grouping) so compare_metrics finds them at the
+        # same JSON path the baselines use.
+        self.assertIn("scalars_int", d)
+        self.assertEqual(
+            set(d["scalars_int"]).issuperset({"icount_loop_max", "icount_mat_max"}),
             True,
         )
         self.assertEqual(len(d["profile"]), 2)

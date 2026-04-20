@@ -57,11 +57,6 @@ ARRAYS = {
 UNREGISTERED_KEYS = (
     "KID_NS",
     "PM",  # namelist alias for PA; value is applied via PA in ARRAYS.
-    "DN0",
-    "DN0_NS",
-    "DT0",
-    "DR0",
-    "DRS",
 )
 
 SOURCE_INPUT = "test_run/inputs/ti_ar.in"
