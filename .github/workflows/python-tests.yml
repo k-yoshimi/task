@@ -28,18 +28,29 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install Fortran/C build deps
+      - name: Install Fortran/C build deps (gfortran-14 via toolchain PPA)
         # gfortran + gcc + make are needed to build the libXapi.so
         # shared libraries that the Layer 1 equivalence and FFI tests
         # dlopen at runtime. Without these the tests SKIP and CI gives a
         # false pass — which previously masked real fp/eq drift.
+        #
+        # Ubuntu 24.04 ships gfortran 13.2.0 by default; we pull
+        # gfortran-14 from the `ubuntu-toolchain-r/test` PPA because
+        # several Layer-1 tests SIGABRT on 13.2.0 but not on 13.3+ /
+        # 14.x. Explicitly point the Fortran driver at gfortran-14 via
+        # update-alternatives so the Makefiles pick it up.
+        #
         # X11 is intentionally NOT installed: each lib*api.so excludes
         # graphics archives (see fp/Makefile:318), so X11 is never
         # linked into the .so files we build here.
         run: |
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gfortran gcc make
+            gcc gfortran-14 make
+          sudo update-alternatives --install /usr/bin/gfortran gfortran \
+            /usr/bin/gfortran-14 140
+          gfortran --version | head -1
 
       - name: Clone BPSD (sibling repo expected at ../bpsd)
         # All module Makefiles reference BPSD_SRC=../../bpsd; the BPSD
