@@ -33,11 +33,15 @@
 
 MODULE wrx_api
   USE, INTRINSIC :: ISO_C_BINDING
-  USE wrx_state, ONLY: wrx_state_c, WRX_MAX_NRAYMAX, WRX_MAX_NSAMAX
+  USE wrx_state, ONLY: wrx_state_c, WRX_MAX_NRAYMAX, WRX_MAX_NSAMAX, &
+                       WRX_MAX_NRSMAX, WRX_MAX_NRLMAX
   USE wrcomm,    ONLY: rkind, &
-       NRAYMAX, NSTPMAX, NSAMAX_WR, NSMAX, MODELG, MDLWRQ, &
-       NSTPMAX_NRAY, &
+       NRAYMAX, NSTPMAX, NSAMAX_WR, NSMAX, NRSMAX, NRLMAX, &
+       MODELG, MDLWRQ, NSTPMAX_NRAY, &
        pwr_tot, pwr_nray, pwr_nsa, pwr_nsa_nray, &
+       pos_nrs, pos_nrl, pwr_nrs_nsa, pwr_nrl_nsa, &
+       pos_pwrmax_rs_nsa_nray, pos_pwrmax_rl_nsa_nray, &
+       pwrmax_rs_nsa_nray, pwrmax_rl_nsa_nray, &
        pos_pwrmax_rs_nsa, pwrmax_rs_nsa, &
        pos_pwrmax_rl_nsa, pwrmax_rl_nsa, &
        wr_allocate, wr_deallocate
@@ -219,24 +223,34 @@ CONTAINS
   FUNCTION wrx_api_get_state(state) RESULT(ierr) BIND(C, NAME="wrx_get_state")
     TYPE(wrx_state_c), INTENT(OUT) :: state
     INTEGER(C_INT) :: ierr
-    INTEGER :: nray, nsa, n_r, n_s
+    INTEGER :: nray, nsa, n_r, n_s, nrs_c, nrl_c, irs, irl
 
     ! Always zero the struct so callers never see uninitialized memory.
-    state%nraymax           = 0
-    state%nstpmax           = 0
-    state%nsamax            = 0
-    state%nsmax             = 0
-    state%modelg            = 0
-    state%mdlwrq            = 0
-    state%pwr_tot           = 0.0_C_DOUBLE
-    state%nstpmax_nray      = 0
-    state%pwr_nray          = 0.0_C_DOUBLE
-    state%pwr_nsa           = 0.0_C_DOUBLE
-    state%pwr_nsa_nray      = 0.0_C_DOUBLE
-    state%pos_pwrmax_rs_nsa = 0.0_C_DOUBLE
-    state%pwrmax_rs_nsa     = 0.0_C_DOUBLE
-    state%pos_pwrmax_rl_nsa = 0.0_C_DOUBLE
-    state%pwrmax_rl_nsa     = 0.0_C_DOUBLE
+    state%nraymax                = 0
+    state%nstpmax                = 0
+    state%nsamax                 = 0
+    state%nsmax                  = 0
+    state%nrsmax                 = 0
+    state%nrlmax                 = 0
+    state%modelg                 = 0
+    state%mdlwrq                 = 0
+    state%pwr_tot                = 0.0_C_DOUBLE
+    state%nstpmax_nray           = 0
+    state%pwr_nray               = 0.0_C_DOUBLE
+    state%pwr_nsa                = 0.0_C_DOUBLE
+    state%pos_nrs                = 0.0_C_DOUBLE
+    state%pos_nrl                = 0.0_C_DOUBLE
+    state%pwr_nsa_nray           = 0.0_C_DOUBLE
+    state%pwr_nrs_nsa            = 0.0_C_DOUBLE
+    state%pwr_nrl_nsa            = 0.0_C_DOUBLE
+    state%pos_pwrmax_rs_nsa_nray = 0.0_C_DOUBLE
+    state%pos_pwrmax_rl_nsa_nray = 0.0_C_DOUBLE
+    state%pwrmax_rs_nsa_nray     = 0.0_C_DOUBLE
+    state%pwrmax_rl_nsa_nray     = 0.0_C_DOUBLE
+    state%pos_pwrmax_rs_nsa      = 0.0_C_DOUBLE
+    state%pwrmax_rs_nsa          = 0.0_C_DOUBLE
+    state%pos_pwrmax_rl_nsa      = 0.0_C_DOUBLE
+    state%pwrmax_rl_nsa          = 0.0_C_DOUBLE
 
     IF (.NOT. g_initialized) THEN
        ierr = WRX_ERR_NOT_INIT
@@ -253,24 +267,30 @@ CONTAINS
        RETURN
     END IF
 
-    IF (NRAYMAX > WRX_MAX_NRAYMAX .OR. NSAMAX_WR > WRX_MAX_NSAMAX) THEN
+    IF (NRAYMAX > WRX_MAX_NRAYMAX .OR. NSAMAX_WR > WRX_MAX_NSAMAX .OR. &
+        NRSMAX > WRX_MAX_NRSMAX .OR. NRLMAX > WRX_MAX_NRLMAX) THEN
        ! Static layout cannot hold the requested grid; caller needs to
        ! rebuild libwrxapi with larger WRX_MAX_* constants.
        ierr = WRX_ERR_CALC_FAILED
        RETURN
     END IF
 
-    n_r = MIN(NRAYMAX, WRX_MAX_NRAYMAX)
-    n_s = MIN(NSAMAX_WR, WRX_MAX_NSAMAX)
+    n_r   = MIN(NRAYMAX,   WRX_MAX_NRAYMAX)
+    n_s   = MIN(NSAMAX_WR, WRX_MAX_NSAMAX)
+    nrs_c = MIN(NRSMAX,    WRX_MAX_NRSMAX)
+    nrl_c = MIN(NRLMAX,    WRX_MAX_NRLMAX)
 
     state%nraymax = NRAYMAX
     state%nstpmax = NSTPMAX
     state%nsamax  = NSAMAX_WR
     state%nsmax   = NSMAX
+    state%nrsmax  = NRSMAX
+    state%nrlmax  = NRLMAX
     state%modelg  = MODELG
     state%mdlwrq  = MDLWRQ
     state%pwr_tot = pwr_tot
 
+    ! --- 1D arrays (baseline "arrays" group) ---
     DO nray = 1, n_r
        state%nstpmax_nray(nray) = NSTPMAX_NRAY(nray)
        state%pwr_nray(nray)     = pwr_nray(nray)
@@ -282,9 +302,35 @@ CONTAINS
        state%pos_pwrmax_rl_nsa(nsa)  = pos_pwrmax_rl_nsa(nsa)
        state%pwrmax_rl_nsa(nsa)      = pwrmax_rl_nsa(nsa)
     END DO
+    DO irs = 1, nrs_c
+       state%pos_nrs(irs) = pos_nrs(irs)
+    END DO
+    DO irl = 1, nrl_c
+       state%pos_nrl(irl) = pos_nrl(irl)
+    END DO
+
+    ! --- 2D arrays (baseline "arrays2" group) ---
     DO nray = 1, n_r
        DO nsa = 1, n_s
-          state%pwr_nsa_nray(nsa, nray) = pwr_nsa_nray(nsa, nray)
+          state%pwr_nsa_nray(nsa, nray)           = pwr_nsa_nray(nsa, nray)
+          state%pos_pwrmax_rs_nsa_nray(nsa, nray) = pos_pwrmax_rs_nsa_nray(nsa, nray)
+          state%pos_pwrmax_rl_nsa_nray(nsa, nray) = pos_pwrmax_rl_nsa_nray(nsa, nray)
+          state%pwrmax_rs_nsa_nray(nsa, nray)     = pwrmax_rs_nsa_nray(nsa, nray)
+          state%pwrmax_rl_nsa_nray(nsa, nray)     = pwrmax_rl_nsa_nray(nsa, nray)
+       END DO
+    END DO
+    ! wrcomm pwr_nrs_nsa is (nrsmax, nsamax_wr); struct is
+    ! (WRX_MAX_NSAMAX, WRX_MAX_NRSMAX). Transpose into the struct layout
+    ! so the C-side {NSAMAX,NRSMAX} ordering matches pwr_nsa_nray's
+    ! {NSAMAX,NRAYMAX} convention. Same logic for pwr_nrl_nsa.
+    DO irs = 1, nrs_c
+       DO nsa = 1, n_s
+          state%pwr_nrs_nsa(nsa, irs) = pwr_nrs_nsa(irs, nsa)
+       END DO
+    END DO
+    DO irl = 1, nrl_c
+       DO nsa = 1, n_s
+          state%pwr_nrl_nsa(nsa, irl) = pwr_nrl_nsa(irl, nsa)
        END DO
     END DO
 

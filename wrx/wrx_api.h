@@ -22,18 +22,29 @@ extern "C" {
  *
  * Upper bounds for the fixed-size state struct:
  *   WRX_MAX_NRAYMAX = 100  (matches NRAYM in wrcomm_parm)
- *   WRX_MAX_NSAMAX  = 8    (matches NSM in pl/plcomm)
- * Actual runtime nraymax/nsamax must be <= these.
+ *   WRX_MAX_NSAMAX  =   8  (matches NSM in pl/plcomm)
+ *   WRX_MAX_NRSMAX  = 256  (>= wrinit default 100; 2x head-room)
+ *   WRX_MAX_NRLMAX  = 256  (>= wrinit default 200)
+ * Actual runtime nraymax/nsamax/nrsmax/nrlmax must be <= these.
+ *
+ * 2026-04-20: schema extended to surface the radial-bin power arrays
+ * (pos_nrs, pos_nrl, pwr_nrs_nsa, pwr_nrl_nsa) and the per-ray pwrmax
+ * arrays that the Phase-0 baseline (wrx_regress.dat) dumps. The
+ * 1-D-by-species fields (pos_pwrmax_rs_nsa, etc.) are retained as a
+ * legacy group for existing callers.
  *
  * Memory note: in C, pwr_nsa_nray[NRAYMAX][NSAMAX] is row-major; in
  * Fortran the matching declaration is pwr_nsa_nray(NSAMAX, NRAYMAX)
  * (column-major). The two layouts agree byte-for-byte, but only
  * [0..nraymax-1][0..nsamax-1] carry valid runtime values (the rest is
- * padding up to WRX_MAX_*).
+ * padding up to WRX_MAX_*). Same convention applies to the other 2-D
+ * arrays.
  */
 
 #define WRX_MAX_NRAYMAX 100
-#define WRX_MAX_NSAMAX  8
+#define WRX_MAX_NSAMAX    8
+#define WRX_MAX_NRSMAX  256
+#define WRX_MAX_NRLMAX  256
 
 /* Error codes returned by every wrx_* entry point. */
 enum wrx_error {
@@ -45,17 +56,32 @@ enum wrx_error {
 };
 
 typedef struct {
+    /* runtime dims */
     int    nraymax;
     int    nstpmax;
     int    nsamax;
     int    nsmax;
+    int    nrsmax;
+    int    nrlmax;
     int    modelg;
     int    mdlwrq;
+    /* scalars */
     double pwr_tot;
+    /* 1D arrays (baseline "arrays" group) */
     int    nstpmax_nray[WRX_MAX_NRAYMAX];
     double pwr_nray[WRX_MAX_NRAYMAX];
     double pwr_nsa[WRX_MAX_NSAMAX];
+    double pos_nrs[WRX_MAX_NRSMAX];
+    double pos_nrl[WRX_MAX_NRLMAX];
+    /* 2D arrays (baseline "arrays2" group) */
     double pwr_nsa_nray[WRX_MAX_NRAYMAX][WRX_MAX_NSAMAX];
+    double pwr_nrs_nsa[WRX_MAX_NRSMAX][WRX_MAX_NSAMAX];
+    double pwr_nrl_nsa[WRX_MAX_NRLMAX][WRX_MAX_NSAMAX];
+    double pos_pwrmax_rs_nsa_nray[WRX_MAX_NRAYMAX][WRX_MAX_NSAMAX];
+    double pos_pwrmax_rl_nsa_nray[WRX_MAX_NRAYMAX][WRX_MAX_NSAMAX];
+    double pwrmax_rs_nsa_nray[WRX_MAX_NRAYMAX][WRX_MAX_NSAMAX];
+    double pwrmax_rl_nsa_nray[WRX_MAX_NRAYMAX][WRX_MAX_NSAMAX];
+    /* legacy 1D-by-species (kept for BC) */
     double pos_pwrmax_rs_nsa[WRX_MAX_NSAMAX];
     double pwrmax_rs_nsa[WRX_MAX_NSAMAX];
     double pos_pwrmax_rl_nsa[WRX_MAX_NSAMAX];

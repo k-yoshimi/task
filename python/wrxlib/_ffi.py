@@ -34,6 +34,8 @@ except ImportError:  # pragma: no cover - numpy is optional
 # ---------------------------------------------------------------------
 WRX_MAX_NRAYMAX = 100
 WRX_MAX_NSAMAX = 8
+WRX_MAX_NRSMAX = 256
+WRX_MAX_NRLMAX = 256
 
 
 # ---------------------------------------------------------------------
@@ -57,19 +59,34 @@ WRX_ERR_NOT_IMPL = 4
 # ---------------------------------------------------------------------
 class WrxStateC(ctypes.Structure):
     _fields_ = [
+        # runtime dims
         ("nraymax", ctypes.c_int),
         ("nstpmax", ctypes.c_int),
         ("nsamax", ctypes.c_int),
         ("nsmax", ctypes.c_int),
+        ("nrsmax", ctypes.c_int),
+        ("nrlmax", ctypes.c_int),
         ("modelg", ctypes.c_int),
         ("mdlwrq", ctypes.c_int),
+        # scalars
         ("pwr_tot", ctypes.c_double),
+        # 1D arrays (baseline "arrays" group)
         ("nstpmax_nray", ctypes.c_int * WRX_MAX_NRAYMAX),
         ("pwr_nray", ctypes.c_double * WRX_MAX_NRAYMAX),
         ("pwr_nsa", ctypes.c_double * WRX_MAX_NSAMAX),
-        # Fortran (NSAMAX, NRAYMAX) == C [NRAYMAX][NSAMAX] under
-        # column-major-to-row-major bit equivalence (see wrx_api.h note).
+        ("pos_nrs", ctypes.c_double * WRX_MAX_NRSMAX),
+        ("pos_nrl", ctypes.c_double * WRX_MAX_NRLMAX),
+        # 2D arrays (baseline "arrays2" group). Fortran (NSAMAX, <outer>)
+        # == C [<outer>][NSAMAX] under column-major-to-row-major bit
+        # equivalence (see wrx_api.h note).
         ("pwr_nsa_nray", (ctypes.c_double * WRX_MAX_NSAMAX) * WRX_MAX_NRAYMAX),
+        ("pwr_nrs_nsa", (ctypes.c_double * WRX_MAX_NSAMAX) * WRX_MAX_NRSMAX),
+        ("pwr_nrl_nsa", (ctypes.c_double * WRX_MAX_NSAMAX) * WRX_MAX_NRLMAX),
+        ("pos_pwrmax_rs_nsa_nray", (ctypes.c_double * WRX_MAX_NSAMAX) * WRX_MAX_NRAYMAX),
+        ("pos_pwrmax_rl_nsa_nray", (ctypes.c_double * WRX_MAX_NSAMAX) * WRX_MAX_NRAYMAX),
+        ("pwrmax_rs_nsa_nray", (ctypes.c_double * WRX_MAX_NSAMAX) * WRX_MAX_NRAYMAX),
+        ("pwrmax_rl_nsa_nray", (ctypes.c_double * WRX_MAX_NSAMAX) * WRX_MAX_NRAYMAX),
+        # legacy 1D-by-species (kept for BC)
         ("pos_pwrmax_rs_nsa", ctypes.c_double * WRX_MAX_NSAMAX),
         ("pwrmax_rs_nsa", ctypes.c_double * WRX_MAX_NSAMAX),
         ("pos_pwrmax_rl_nsa", ctypes.c_double * WRX_MAX_NSAMAX),
