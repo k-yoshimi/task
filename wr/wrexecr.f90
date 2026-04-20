@@ -1160,6 +1160,18 @@ CONTAINS
        ALLOCATE(pos_pwrmax_rs_nray(nraymax),pwrmax_rs_nray(nraymax))
        ALLOCATE(pos_pwrmax_rl_nray(nraymax),pwrmax_rl_nray(nraymax))
     END IF
+    ! Defensive zero-init (see PR #123 pattern): libwrapi.so finalize+reinit
+    ! cycle can reuse heap chunks with stale values. pwrmax_rs_nray is only
+    ! written in the middle-locmax branch of wr_calc_pwr (locmax<=1 /
+    ! locmax>=nrsmax leave it untouched), and pwrmax_rl_nray / pos_pwrmax_rl_nray
+    ! are never written anywhere (see wrregress.f90 comment). Without this
+    ! sweep wr_get_state can leak stale bytes into the state struct.
+    rs_nstp_nray = 0.D0
+    rl_nstp_nray = 0.D0
+    pos_nrs = 0.D0; pwr_nrs = 0.D0; pwr_nrs_nray = 0.D0
+    pos_nrl = 0.D0; pwr_nrl = 0.D0; pwr_nrl_nray = 0.D0
+    pos_pwrmax_rs_nray = 0.D0; pwrmax_rs_nray = 0.D0
+    pos_pwrmax_rl_nray = 0.D0; pwrmax_rl_nray = 0.D0
     nrsmax_save=nrsmax
     nrlmax_save=nrlmax
     nraymax_save=nraymax

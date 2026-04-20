@@ -128,6 +128,22 @@ CONTAINS
     ALLOCATE(RK2B(3,3,0:NSTPMAX),RP2B(3,3,0:NSTPMAX))
     ALLOCATE(RAMPB(0:NSTPMAX))
 
+    ! Defensive zero-init (see PR #123 pattern): libwrapi.so finalize+reinit
+    ! cycle can reuse heap chunks with stale values.
+    RAYIN = 0.D0
+    NSTPMAX_NRAY = 0
+    RAYS  = 0.D0
+    CEXS = (0.D0, 0.D0); CEYS = (0.D0, 0.D0); CEZS = (0.D0, 0.D0)
+    RKXS = 0.D0; RKYS = 0.D0; RKZS = 0.D0
+    RXS  = 0.D0; RYS  = 0.D0; RZS  = 0.D0
+    BNXS = 0.D0; BNYS = 0.D0; BNZS = 0.D0
+    BABSS = 0.D0
+    RAYB = 0.D0; RAYRB1 = 0.D0; RAYRB2 = 0.D0
+    CEXB = (0.D0, 0.D0); CEYB = (0.D0, 0.D0); CEZB = (0.D0, 0.D0)
+    RK1B = 0.D0; RP1B = 0.D0
+    RK2B = 0.D0; RP2B = 0.D0
+    RAMPB = 0.D0
+
     ! Remember the shapes we just allocated so a subsequent wr_allocate
     ! call with identical NRAYMAX/NSTPMAX can short-circuit (RETURN).
     WR_ALLOC_NRAYMAX_SAVE = NRAYMAX
