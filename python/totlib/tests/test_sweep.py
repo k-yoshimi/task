@@ -20,14 +20,15 @@ A change in ``nrmax`` / ``nsmax`` across cells signals that one of the
 per-module ``*COMM`` / module variables leaked across cycles, so we fail
 loudly. Nine successful cycles -> PASS.
 
-Triple-skip gates (all must pass for the class to run):
+Skip gates (all must pass for the class to run):
 
 * libtotapi.so is importable via :func:`totlib._ffi._candidate_paths`,
-* totlib package is importable,
-* ``TOT_RUN_OK=1`` is set in the environment (mirrors test_equivalence
-  -- ``tot.run`` and ``tot.get_state`` are L-3/L-4/L-5 stubs returning
-  ``TOT_ERR_NOT_IMPL``; the sweep can only run once L-6 fan-out has
-  wired the orchestrator into the .so).
+* totlib package is importable.
+
+L-6 status: the ``TOT_RUN_OK`` opt-in gate has been retired now that
+the orchestrator fan-out (tr + ti + fp + wrx) is wired inside
+``libtotapi.so``. This mirrors what was done for ``EQ_RUN_OK`` once
+the eq L-6 work landed.
 """
 from __future__ import annotations
 
@@ -45,9 +46,6 @@ if str(PYTHON_ROOT) not in sys.path:
     sys.path.insert(0, str(PYTHON_ROOT))
 
 from totlib import _ffi  # noqa: E402
-
-
-RUN_OK = os.environ.get("TOT_RUN_OK") == "1"
 
 
 def _any_so_exists() -> bool:
@@ -73,12 +71,6 @@ def _totlib_importable() -> bool:
     "run `make -C tot libtotapi.so`",
 )
 @unittest.skipUnless(_totlib_importable(), "python/totlib not importable")
-@unittest.skipUnless(
-    RUN_OK,
-    "TOT_RUN_OK=1 required: tot.run / tot.get_state are L-3/L-4/L-5 "
-    "stubs returning TOT_ERR_NOT_IMPL; set TOT_RUN_OK=1 once L-6 fan-out "
-    "lands inside libtotapi.so.",
-)
 class TestSweep(unittest.TestCase):
     """3x3 ``eq:RR`` x ``eq:BB`` grid; smoke-only (no numerical regression)."""
 

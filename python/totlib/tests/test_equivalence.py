@@ -13,30 +13,28 @@ For each case (``tot_demo2014_short``, ``tot_ht6m_short``):
 5. compare against ``test_run/baselines/<case>/metrics.json`` using
    ``test_run/scripts/compare_metrics.py`` with tolerance ``1e-10``.
 
-Triple-skip gates (all must pass for the class to run):
+Skip gates (all must pass for the class to run):
 
 * ``libtotapi.so`` is importable via :func:`totlib._ffi._candidate_paths`
   (covers both ``tot/libtotapi.so`` and ``lib/libtotapi.so`` and an
   explicit ``TOTLIB_PATH`` override),
-* the baseline JSON exists under ``test_run/baselines/``,
-* ``TOT_RUN_OK=1`` is set in the environment.
+* the baseline JSON exists under ``test_run/baselines/``.
 
-The ``TOT_RUN_OK`` gate is required because L-3 / L-4 / L-5 leave
-``tot_init`` / ``tot_run`` / ``tot_get_state`` / ``tot_finalize`` as
-stubs that all return ``TOT_ERR_NOT_IMPL`` (rc=4). Until L-6 fan-out
-lands inside ``libtotapi.so`` itself, the equivalence test cannot run
-end-to-end. We keep the test fully wired so the moment the .so starts
-returning real data, simply setting ``TOT_RUN_OK=1`` enables the diff
-without any further code change. This mirrors the ``EQ_RUN_OK`` gate
-used by ``python/eqlib/tests/test_equivalence.py``.
+L-6 status: ``tot_init`` / ``tot_run`` / ``tot_get_state`` /
+``tot_finalize`` are now wired to the per-module ``*_api_*`` fan-out
+(tr + ti + fp + wrx), so the equivalence diff runs end-to-end. The
+``TOT_RUN_OK`` opt-in gate that previously guarded these tests has
+been retired (mirrors what was done for ``EQ_RUN_OK`` earlier).
 
 See ``docs/superpowers/plans/2026-04-18-tot-library-L6-test-4layers.md``
 Task 4 for the iteration protocol when the 1e-10 match is not yet met.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -55,12 +53,6 @@ if str(PYTHON_ROOT) not in sys.path:
     sys.path.insert(0, str(PYTHON_ROOT))
 
 from totlib import _ffi  # noqa: E402
-
-
-# Opt-in gate: tot_init / tot_run / tot_get_state / tot_finalize are
-# L-3/L-4/L-5 stubs returning TOT_ERR_NOT_IMPL. CI runs the diff only
-# when the orchestrator fan-out is actually wired (TOT_RUN_OK=1).
-RUN_OK = os.environ.get("TOT_RUN_OK") == "1"
 
 
 def _any_so_exists() -> bool:
@@ -85,7 +77,35 @@ def _totlib_importable() -> bool:
     return True
 
 
-def _run_case(apply_fn, ntmax: int) -> dict:
+@contextlib.contextmanager
+def _isolated_cwd_with_eqdata(case_name: str):
+    """chdir into a temp dir; pre-populate it with the case's eqdata.
+
+    Some fixtures (e.g. tot_ht6m_short) load an eqdata file from cwd
+    via KNAMEQ. When the equivalence test runs from the repo root that
+    file is absent. We mirror what the run_tests.sh framework does for
+    the standalone binary: stage a temp cwd and seed it with any
+    eqdata-* / eqdata.* file the Phase 0 baseline run produced under
+    ``test_run/test_output/<case>/``. Cases that need no eqdata
+    (e.g. tot_demo2014_short which generates its own via the eq prep
+    path) still benefit from the isolated cwd because totregress's
+    dump file does not pollute the repo root.
+    """
+    src = REPO / "test_run" / "test_output" / case_name
+    prev_cwd = Path.cwd()
+    with tempfile.TemporaryDirectory(prefix=f"totlib_eq_{case_name}_") as tmpd:
+        if src.is_dir():
+            for pat in ("eqdata-*", "eqdata.*"):
+                for f in src.glob(pat):
+                    shutil.copy2(f, Path(tmpd) / f.name)
+        try:
+            os.chdir(tmpd)
+            yield Path(tmpd)
+        finally:
+            os.chdir(prev_cwd)
+
+
+def _run_case(apply_fn, ntmax: int, case_name: str = "default") -> dict:
     """Drive a single libtotapi.so cycle and return the to_dict payload.
 
     Keeping this outside ``TestEquivalence`` lets Layer 4 reuse the
@@ -93,10 +113,11 @@ def _run_case(apply_fn, ntmax: int) -> dict:
     """
     from totlib import Tot  # noqa: WPS433 (intentional local import)
 
-    with Tot() as tot:
-        apply_fn(tot)
-        tot.run(int(ntmax))
-        state = tot.get_state()
+    with _isolated_cwd_with_eqdata(case_name):
+        with Tot() as tot:
+            apply_fn(tot)
+            tot.run(int(ntmax))
+            state = tot.get_state()
     return state.to_dict()
 
 
@@ -148,12 +169,6 @@ def _compare_with_baseline(actual: dict, case_name: str, tol: str = "1e-10") -> 
 )
 @unittest.skipUnless(_totlib_importable(), "python/totlib not importable")
 @unittest.skipUnless(COMPARE_SCRIPT.exists(), f"{COMPARE_SCRIPT} missing")
-@unittest.skipUnless(
-    RUN_OK,
-    "TOT_RUN_OK=1 required: tot_init / tot_run / tot_get_state / "
-    "tot_finalize are L-3/L-4/L-5 stubs returning TOT_ERR_NOT_IMPL. "
-    "Set TOT_RUN_OK=1 once L-6 fan-out lands inside libtotapi.so.",
-)
 class TestEquivalence(unittest.TestCase):
     """Layer 1: match Phase 0 Fortran baseline at 1e-10."""
 
@@ -171,6 +186,7 @@ class TestEquivalence(unittest.TestCase):
         actual = _run_case(
             fixture_module.apply,
             ntmax=fixture_module.NTMAX,
+            case_name=fixture_module.BASELINE_NAME,
         )
         _compare_with_baseline(
             actual, fixture_module.BASELINE_NAME, self.TOLERANCE,

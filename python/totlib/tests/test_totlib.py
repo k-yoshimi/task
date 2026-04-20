@@ -311,23 +311,33 @@ class TestTotSetParam(unittest.TestCase):
     f"libtotapi.so not built at {_resolved_so()}; "
     "run `make -C tot libtotapi.so`",
 )
-class TestTotRunGetStateStubs(unittest.TestCase):
-    """At L-3 / L-4 ``run`` and ``get_state`` are stubs (rc=4).
+class TestTotRunGetState(unittest.TestCase):
+    """L-6 fan-out: ``run`` and ``get_state`` are functional.
 
-    The wrapper surfaces this as ``TotlibNotImplementedError``. Once
-    L-6 wires up the per-module fan-out these tests will need to be
-    relaxed or split, but for now they pin the documented contract.
+    Replaces the L-3/L-4/L-5 ``TestTotRunGetStateStubs`` class which
+    pinned the ``TotlibNotImplementedError`` contract. The orchestrator
+    now drives the TR transport solver internally; ti / fp / wr are
+    init'd but their state is not yet aggregated into ``tot_state_c``
+    (follow-up).
     """
 
-    def test_run_raises_not_implemented(self):
+    def test_run_zero_steps_is_ok(self):
+        # ntmax=0 is a valid no-op (proves the fan-out is wired without
+        # touching the inner loop body).
         with Tot() as tot:
-            with self.assertRaises(TotlibNotImplementedError):
-                tot.run(0)
+            tot.run(0)
 
-    def test_get_state_raises_not_implemented(self):
+    def test_get_state_returns_tr_authoritative_block(self):
+        # After init the TR-authoritative slots must be populated:
+        # NRMAX defaults to 50 and NSMAX defaults to 2 (see
+        # tr/trinit.f90). Doing this without a prior run still gives a
+        # valid state because tr_api_init pre-populates default sizes.
         with Tot() as tot:
-            with self.assertRaises(TotlibNotImplementedError):
-                tot.get_state()
+            tot.run(0)
+            state = tot.get_state()
+        self.assertEqual(state.tr_present, 1)
+        self.assertGreater(state.nrmax, 0)
+        self.assertGreater(state.nsmax, 0)
 
 
 if __name__ == "__main__":

@@ -71,6 +71,23 @@ TOT_L3_DEPS_OBJ = \
     ../wrx/obj/wrx_param_registry.o \
     ../eq/eq_param_registry.o
 
+# Phase L-6: per-module API .o files. tot_api.f90 now USEs tr_api /
+# ti_api / fp_api / wrx_api so the orchestrator lifecycle can fan out
+# to each per-module *_api_init / *_api_run / *_api_finalize. Each
+# per-module SRCS_API objects are built by the owning Makefile via
+# the same delegated sub-makes used for the param_registry .o above.
+# Ordering matters: state before param_registry before api (tr_api
+# USEs tr_state; similarly for ti/fp/wrx).
+TOT_L6_API_OBJ = \
+    ../tr/obj/tr_state.o \
+    ../tr/obj/tr_api.o \
+    ../ti/ti_state.o \
+    ../ti/ti_api.o \
+    ../fp/obj/fp_state.o \
+    ../fp/obj/fp_api.o \
+    ../wrx/obj/wrx_state.o \
+    ../wrx/obj/wrx_api.o
+
 LIBS = ../lib/libmds.a ../lib/libgrf.a ../lib/libtask.a ../../bpsd/libbpsd.a \
        ../adpost/lib-adpost.a ../open-adas/adf11/adf11-lib/lib-adf11.a \
        ../pl/libpl.a \
@@ -195,18 +212,19 @@ $(TOT_API_PARAM_O): $(TOT_API_PARAM_C) tot_api.h
 	$(CC) $(CFLAGS_API) -I. -c -o $(TOT_API_PARAM_O) $(TOT_API_PARAM_C)
 
 # Step 2: link each C driver against the API objects + per-module
-# param_registry .o + backing libs. gfortran drives the link so the
-# libgfortran runtime is pulled in automatically.
-$(TOT_API_SMOKE_BIN): $(TOT_API_SMOKE_O) $(OBJ_API) $(TOT_L3_DEPS_OBJ) $(TOT_L3_DEPS_LIB)
+# param_registry + per-module api/state .o files + backing libs.
+# gfortran drives the link so the libgfortran runtime is pulled in
+# automatically.
+$(TOT_API_SMOKE_BIN): $(TOT_API_SMOKE_O) $(OBJ_API) $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB)
 	$(FLINKER) -o $(TOT_API_SMOKE_BIN) $(TOT_API_SMOKE_O) $(OBJ_API) \
-	    $(TOT_L3_DEPS_OBJ) $(TOT_L3_DEPS_LIB) $(FFLAGS) $(FLIBS) $(LIBX_MTX)
-$(TOT_API_PARAM_BIN): $(TOT_API_PARAM_O) $(OBJ_API) $(TOT_L3_DEPS_OBJ) $(TOT_L3_DEPS_LIB)
+	    $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB) $(FFLAGS) $(FLIBS) $(LIBX_MTX)
+$(TOT_API_PARAM_BIN): $(TOT_API_PARAM_O) $(OBJ_API) $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB)
 	$(FLINKER) -o $(TOT_API_PARAM_BIN) $(TOT_API_PARAM_O) $(OBJ_API) \
-	    $(TOT_L3_DEPS_OBJ) $(TOT_L3_DEPS_LIB) $(FFLAGS) $(FLIBS) $(LIBX_MTX)
+	    $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB) $(FFLAGS) $(FLIBS) $(LIBX_MTX)
 
-# Each per-module registry .o is built by the owning module's Makefile
-# (part of its SRCS_API target). Delegate so that `make tot_api_check`
-# from a clean tree is self-bootstrapping.
+# Each per-module registry .o / api .o / state .o is built by the
+# owning module's Makefile (part of its SRCS_API target). Delegate so
+# that `make tot_api_check` from a clean tree is self-bootstrapping.
 ../tr/obj/tr_param_registry.o:
 	(cd ../tr; make obj/tr_param_registry.o)
 ../fp/obj/fp_param_registry.o:
@@ -217,6 +235,24 @@ $(TOT_API_PARAM_BIN): $(TOT_API_PARAM_O) $(OBJ_API) $(TOT_L3_DEPS_OBJ) $(TOT_L3_
 	(cd ../wrx; make obj/wrx_param_registry.o)
 ../eq/eq_param_registry.o:
 	(cd ../eq; make eq_param_registry.o)
+
+# L-6: per-module api/state .o files.
+../tr/obj/tr_state.o:
+	(cd ../tr; make obj/tr_state.o)
+../tr/obj/tr_api.o:
+	(cd ../tr; make obj/tr_api.o)
+../ti/ti_state.o:
+	(cd ../ti; make ti_state.o)
+../ti/ti_api.o:
+	(cd ../ti; make ti_api.o)
+../fp/obj/fp_state.o:
+	(cd ../fp; make obj/fp_state.o)
+../fp/obj/fp_api.o:
+	(cd ../fp; make obj/fp_api.o)
+../wrx/obj/wrx_state.o:
+	(cd ../wrx; make obj/wrx_state.o)
+../wrx/obj/wrx_api.o:
+	(cd ../wrx; make obj/wrx_api.o)
 
 .PHONY: tot_api_check tot_api_compile_check
 # A cheaper target that only proves the Fortran side compiles (no
@@ -239,6 +275,7 @@ clean:
 	-rm -f $(TOT_API_PARAM_O) $(TOT_API_PARAM_BIN)
 	-rm -f $(TOT_API_SO_O) $(TOT_API_SO_BIN)
 	-rm -f $(TOT_API_NEG_O) $(TOT_API_NEG_BIN)
+	-rm -f $(TOT_API_FULL_O) $(TOT_API_FULL_BIN)
 
 clean_pic:
 	-rm -rf $(OBJDIR_PIC) $(MODDIR_PIC) libtotapi.so
@@ -262,7 +299,14 @@ tot_state.o : tot_state.f90
 tot_param_registry.o : tot_param_registry.f90 \
                        ../tr/libtr2.a ../fp/libfp.a ../ti/libti.a \
                        ../wrx/libwr.a ../eq/libeq.a
-tot_api.o   : tot_api.f90 tot_state.f90 tot_state.o tot_param_registry.o
+# tot_api.o USEs tr_api / ti_api / fp_api / wrx_api (in addition to
+# tot_state + tot_param_registry). Those .mod files are emitted by
+# each per-module Makefile's SRCS_API target into ../<mod>/mod/ — the
+# same tree MODINCLUDE already pulls in. Depending on each owner's
+# static archive is the cheapest way to force the .mod files to be
+# present before this compile step.
+tot_api.o   : tot_api.f90 tot_state.f90 tot_state.o tot_param_registry.o \
+              ../tr/libtr2.a ../ti/libti.a ../fp/libfp.a ../wrx/libwr.a
 
 # =====================================================================
 # Phase L-4: libtotapi.so composite shared library build
@@ -332,7 +376,9 @@ $(OBJDIR_PIC)/tot_param_registry.o : tot_param_registry.f90 \
                                      ../wrx/libwrxapi.so
 $(OBJDIR_PIC)/tot_api.o            : tot_api.f90 \
                                      $(OBJDIR_PIC)/tot_state.o \
-                                     $(OBJDIR_PIC)/tot_param_registry.o
+                                     $(OBJDIR_PIC)/tot_param_registry.o \
+                                     ../tr/libtrapi.so ../ti/libtiapi.so \
+                                     ../fp/libfpapi.so ../wrx/libwrxapi.so
 $(OBJDIR_PIC)/totregress.o         : totregress.f90
 $(OBJDIR_PIC)/tot_graphics_stubs.o : tot_graphics_stubs.f90
 
@@ -404,6 +450,7 @@ $(OBJS_PIC): | $(LIBS_PIC_SO)
 libtotapi.so: $(OBJS_PIC) $(LIBS_PIC_SO)
 	$(FCFREE) -shared -fPIC -Wl,-soname,libtotapi.so \
 	    -Wl,--unresolved-symbols=ignore-all \
+	    -Wl,-rpath,'$$ORIGIN/../tr:$$ORIGIN/../fp:$$ORIGIN/../ti:$$ORIGIN/../wr:$$ORIGIN/../wrx:$$ORIGIN/../eq' \
 	    $(OBJS_PIC) \
 	    -Wl,--start-group $(LIBS_PIC_SO) -Wl,--end-group \
 	    -o libtotapi.so
@@ -476,22 +523,43 @@ TOT_API_NEG_BIN = $(TOT_API_SMOKE_DIR)/test_negative
 $(TOT_API_NEG_O): $(TOT_API_NEG_C) tot_api.h
 	$(CC) $(CFLAGS_API) -I. -c -o $(TOT_API_NEG_O) $(TOT_API_NEG_C)
 
-# The negative driver shares the smoke link path -- it talks to the
-# L-3 dispatcher directly via OBJ_API + per-module *_param_registry.o
-# + backing libs. No dlopen, no libdl.
-$(TOT_API_NEG_BIN): $(TOT_API_NEG_O) $(OBJ_API) $(TOT_L3_DEPS_OBJ) $(TOT_L3_DEPS_LIB)
+# The negative driver shares the smoke link path — it talks to the
+# L-3 dispatcher (for set_param/set_param_str) and the L-6 fan-out
+# (for init/run/get_state/finalize) directly via OBJ_API + per-module
+# *_param_registry.o + per-module api/state .o + backing libs. No
+# dlopen, no libdl.
+$(TOT_API_NEG_BIN): $(TOT_API_NEG_O) $(OBJ_API) $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB)
 	$(FLINKER) -o $(TOT_API_NEG_BIN) $(TOT_API_NEG_O) $(OBJ_API) \
-	    $(TOT_L3_DEPS_OBJ) $(TOT_L3_DEPS_LIB) $(FFLAGS) $(FLIBS) $(LIBX_MTX)
+	    $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB) $(FFLAGS) $(FLIBS) $(LIBX_MTX)
+
+# Phase L-6: full-cycle C driver that exercises the new init -> run ->
+# get_state -> finalize fan-out via libtotapi.so (static link path, not
+# dlopen). Proves the whole orchestrator happy path before we expose it
+# to the Python wrappers.
+TOT_API_FULL_C   = $(TOT_API_SMOKE_DIR)/test_full_cycle.c
+TOT_API_FULL_O   = $(TOT_API_SMOKE_DIR)/test_full_cycle.o
+TOT_API_FULL_BIN = $(TOT_API_SMOKE_DIR)/test_full_cycle
+
+$(TOT_API_FULL_O): $(TOT_API_FULL_C) tot_api.h
+	$(CC) $(CFLAGS_API) -I. -c -o $(TOT_API_FULL_O) $(TOT_API_FULL_C)
+
+$(TOT_API_FULL_BIN): $(TOT_API_FULL_O) $(OBJ_API) $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB)
+	$(FLINKER) -o $(TOT_API_FULL_BIN) $(TOT_API_FULL_O) $(OBJ_API) \
+	    $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB) $(FFLAGS) $(FLIBS) $(LIBX_MTX)
 
 .PHONY: tot_api_check_all
 # Composite Layer 2 entry point used by test_run/run_tests.sh. Builds
 # and runs every C ABI driver in topological order:
 #   tot_api_check    -> test_smoke + test_param  (L-3)
 #   tot_api_check_so -> test_run_so via dlopen   (L-4)
-#   <new>            -> test_negative            (L-6)
-tot_api_check_all: tot_api_check tot_api_check_so $(TOT_API_NEG_BIN)
+#   test_negative                                (L-6)
+#   test_full_cycle                              (L-6)
+tot_api_check_all: tot_api_check tot_api_check_so $(TOT_API_NEG_BIN) $(TOT_API_FULL_BIN)
 	@echo "Phase L-6 tot_api_check_all: running negative tests ..."
 	@LD_LIBRARY_PATH=$(TOT_LD_LIBRARY_PATH):$${LD_LIBRARY_PATH} \
 	    $(TOT_API_NEG_BIN)
-	@echo "Phase L-6 tot_api_check_all OK: smoke / param / run_so / negative"
+	@echo "Phase L-6 tot_api_check_all: running full-cycle test ..."
+	@LD_LIBRARY_PATH=$(TOT_LD_LIBRARY_PATH):$${LD_LIBRARY_PATH} \
+	    $(TOT_API_FULL_BIN)
+	@echo "Phase L-6 tot_api_check_all OK: smoke / param / run_so / negative / full_cycle"
 

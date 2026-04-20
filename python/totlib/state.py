@@ -92,13 +92,25 @@ class TotState:
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialisable dict matching the trlib baseline layout.
+        """Serialisable dict matching the Phase 0 baseline layout.
 
-        Adds the four ``*_present`` presence flags as a top-level
-        ``presence`` sub-dict so callers can quickly tell which
-        sub-modules contributed to the snapshot.
+        The L-0 baseline (``test_run/baselines/tot_*/metrics.json``)
+        produced by ``totregress.f90`` exposes presence flags under a
+        ``modules`` sub-dict with upper-case keys
+        (``TR_PRESENT`` / ``TI_PRESENT`` / ``FP_PRESENT`` /
+        ``WR_PRESENT``). We surface BOTH the baseline-shape ``modules``
+        key AND a sibling ``presence`` block (lower-case keys) so
+        compare_metrics.py can diff against the baseline without a
+        bespoke schema translator while existing callers that read
+        ``presence`` keep working.
         """
         return {
+            "modules": {
+                "TR_PRESENT": self.tr_present,
+                "TI_PRESENT": self.ti_present,
+                "FP_PRESENT": self.fp_present,
+                "WR_PRESENT": self.wr_present,
+            },
             "presence": {
                 "tr": self.tr_present,
                 "ti": self.ti_present,
