@@ -45,6 +45,8 @@ class TestFfiImport(unittest.TestCase):
         # Must match wrx/wrx_api.h exactly.
         self.assertEqual(_ffi.WRX_MAX_NRAYMAX, 100)
         self.assertEqual(_ffi.WRX_MAX_NSAMAX, 8)
+        self.assertEqual(_ffi.WRX_MAX_NRSMAX, 256)
+        self.assertEqual(_ffi.WRX_MAX_NRLMAX, 256)
         self.assertEqual(_ffi.WRX_OK, 0)
         self.assertEqual(_ffi.WRX_ERR_INVALID, 1)
         self.assertEqual(_ffi.WRX_ERR_NOT_INIT, 2)
@@ -59,9 +61,15 @@ class TestWrxStateCLayout(unittest.TestCase):
         names = [f[0] for f in _ffi.WrxStateC._fields_]
         for n in (
             "nraymax", "nstpmax", "nsamax", "nsmax",
+            "nrsmax", "nrlmax",
             "modelg", "mdlwrq", "pwr_tot",
             "nstpmax_nray", "pwr_nray",
-            "pwr_nsa", "pwr_nsa_nray",
+            "pwr_nsa",
+            "pos_nrs", "pos_nrl",
+            "pwr_nsa_nray",
+            "pwr_nrs_nsa", "pwr_nrl_nsa",
+            "pos_pwrmax_rs_nsa_nray", "pos_pwrmax_rl_nsa_nray",
+            "pwrmax_rs_nsa_nray", "pwrmax_rl_nsa_nray",
             "pos_pwrmax_rs_nsa", "pwrmax_rs_nsa",
             "pos_pwrmax_rl_nsa", "pwrmax_rl_nsa",
         ):
@@ -70,11 +78,21 @@ class TestWrxStateCLayout(unittest.TestCase):
     def test_field_order_matches_header(self):
         # Must match wrx_api.h declaration order verbatim so the
         # ctypes layout is bit-for-bit equivalent to the C struct.
+        # Extended 2026-04-20: nrsmax/nrlmax dims, pos_nrs/pos_nrl 1D,
+        # and 7 new 2D arrays (pwr_nrs_nsa, pwr_nrl_nsa, and the four
+        # pos_pwrmax_* / pwrmax_* per-ray matrices) sit before the
+        # legacy 1D-by-species tail.
         expected = [
             "nraymax", "nstpmax", "nsamax", "nsmax",
+            "nrsmax", "nrlmax",
             "modelg", "mdlwrq", "pwr_tot",
             "nstpmax_nray", "pwr_nray",
-            "pwr_nsa", "pwr_nsa_nray",
+            "pwr_nsa",
+            "pos_nrs", "pos_nrl",
+            "pwr_nsa_nray",
+            "pwr_nrs_nsa", "pwr_nrl_nsa",
+            "pos_pwrmax_rs_nsa_nray", "pos_pwrmax_rl_nsa_nray",
+            "pwrmax_rs_nsa_nray", "pwrmax_rl_nsa_nray",
             "pos_pwrmax_rs_nsa", "pwrmax_rs_nsa",
             "pos_pwrmax_rl_nsa", "pwrmax_rl_nsa",
         ]
@@ -82,32 +100,44 @@ class TestWrxStateCLayout(unittest.TestCase):
         self.assertEqual(actual, expected)
 
     def test_size_matches_header_math(self):
-        # 6 ints (header scalars) + 1 double (pwr_tot)
+        # 8 ints (nraymax, nstpmax, nsamax, nsmax, nrsmax, nrlmax,
+        #         modelg, mdlwrq) + 1 double (pwr_tot)
         # + NRAYMAX ints (nstpmax_nray)
         # + NRAYMAX doubles (pwr_nray)
         # + NSAMAX doubles (pwr_nsa)
+        # + NRSMAX doubles (pos_nrs)
+        # + NRLMAX doubles (pos_nrl)
         # + NRAYMAX * NSAMAX doubles (pwr_nsa_nray)
-        # + 4 * NSAMAX doubles (pos/pwrmax for rs and rl)
+        # + NRSMAX * NSAMAX doubles (pwr_nrs_nsa)
+        # + NRLMAX * NSAMAX doubles (pwr_nrl_nsa)
+        # + 4 * NRAYMAX * NSAMAX doubles (pos_pwrmax_rs/rl_nsa_nray,
+        #                                 pwrmax_rs/rl_nsa_nray)
+        # + 4 * NSAMAX doubles (legacy pos/pwrmax for rs and rl)
         #
-        # Compilers may pad the 6 ints to 32 bytes (to align the
-        # following double on an 8-byte boundary), so we accept
-        # either exact layout or the padded one. The NRAYMAX int block
-        # (400 bytes) stays 8-byte aligned already.
+        # 8 ints = 32 bytes, already 8-byte aligned, so pwr_tot needs
+        # no padding in front of it. We still accept 4-byte tail pad
+        # candidates in case a future struct addition shifts alignment.
         nray = _ffi.WRX_MAX_NRAYMAX
         nsa = _ffi.WRX_MAX_NSAMAX
+        nrs = _ffi.WRX_MAX_NRSMAX
+        nrl = _ffi.WRX_MAX_NRLMAX
         core = (
             1 * 8                    # pwr_tot
             + nray * 4               # nstpmax_nray
             + nray * 8               # pwr_nray
             + nsa * 8                # pwr_nsa
+            + nrs * 8                # pos_nrs
+            + nrl * 8                # pos_nrl
             + nray * nsa * 8         # pwr_nsa_nray
-            + 4 * nsa * 8            # rs/rl pwrmax
+            + nrs * nsa * 8          # pwr_nrs_nsa
+            + nrl * nsa * 8          # pwr_nrl_nsa
+            + 4 * nray * nsa * 8     # rs/rl pwrmax 2D (pos + pwrmax)
+            + 4 * nsa * 8            # legacy rs/rl pwrmax 1D
         )
         sz = ctypes.sizeof(_ffi.WrxStateC)
         candidates = (
-            6 * 4 + core,            # packed ints
-            6 * 4 + 4 + core,        # packed + tail pad
-            6 * 4 + 8 + core,        # padded to 8-byte before pwr_tot
+            8 * 4 + core,            # packed ints (expected: 70424)
+            8 * 4 + 4 + core,        # packed + tail pad
         )
         self.assertIn(
             sz,
@@ -117,11 +147,28 @@ class TestWrxStateCLayout(unittest.TestCase):
 
     def test_array_dimensions(self):
         s = _ffi.WrxStateC()
+        # 1D arrays
         self.assertEqual(len(s.nstpmax_nray), _ffi.WRX_MAX_NRAYMAX)
         self.assertEqual(len(s.pwr_nray), _ffi.WRX_MAX_NRAYMAX)
         self.assertEqual(len(s.pwr_nsa), _ffi.WRX_MAX_NSAMAX)
+        self.assertEqual(len(s.pos_nrs), _ffi.WRX_MAX_NRSMAX)
+        self.assertEqual(len(s.pos_nrl), _ffi.WRX_MAX_NRLMAX)
+        # 2D arrays: C layout [<outer>][NSAMAX]
         self.assertEqual(len(s.pwr_nsa_nray), _ffi.WRX_MAX_NRAYMAX)
         self.assertEqual(len(s.pwr_nsa_nray[0]), _ffi.WRX_MAX_NSAMAX)
+        self.assertEqual(len(s.pwr_nrs_nsa), _ffi.WRX_MAX_NRSMAX)
+        self.assertEqual(len(s.pwr_nrs_nsa[0]), _ffi.WRX_MAX_NSAMAX)
+        self.assertEqual(len(s.pwr_nrl_nsa), _ffi.WRX_MAX_NRLMAX)
+        self.assertEqual(len(s.pwr_nrl_nsa[0]), _ffi.WRX_MAX_NSAMAX)
+        self.assertEqual(len(s.pos_pwrmax_rs_nsa_nray), _ffi.WRX_MAX_NRAYMAX)
+        self.assertEqual(len(s.pos_pwrmax_rs_nsa_nray[0]), _ffi.WRX_MAX_NSAMAX)
+        self.assertEqual(len(s.pos_pwrmax_rl_nsa_nray), _ffi.WRX_MAX_NRAYMAX)
+        self.assertEqual(len(s.pos_pwrmax_rl_nsa_nray[0]), _ffi.WRX_MAX_NSAMAX)
+        self.assertEqual(len(s.pwrmax_rs_nsa_nray), _ffi.WRX_MAX_NRAYMAX)
+        self.assertEqual(len(s.pwrmax_rs_nsa_nray[0]), _ffi.WRX_MAX_NSAMAX)
+        self.assertEqual(len(s.pwrmax_rl_nsa_nray), _ffi.WRX_MAX_NRAYMAX)
+        self.assertEqual(len(s.pwrmax_rl_nsa_nray[0]), _ffi.WRX_MAX_NSAMAX)
+        # legacy 1D-by-species
         self.assertEqual(len(s.pos_pwrmax_rs_nsa), _ffi.WRX_MAX_NSAMAX)
         self.assertEqual(len(s.pwrmax_rs_nsa), _ffi.WRX_MAX_NSAMAX)
         self.assertEqual(len(s.pos_pwrmax_rl_nsa), _ffi.WRX_MAX_NSAMAX)

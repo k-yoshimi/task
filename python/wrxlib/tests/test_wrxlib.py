@@ -88,12 +88,15 @@ class TestWrxStateFromC(unittest.TestCase):
 
     def _populated_state(
         self, nray: int = 3, nsa: int = 2,
+        nrs: int = 4, nrl: int = 5,
     ) -> _ffi.WrxStateC:
         s = _ffi.WrxStateC()
         s.nraymax = nray
         s.nstpmax = 2000
         s.nsamax = nsa
         s.nsmax = nsa
+        s.nrsmax = nrs
+        s.nrlmax = nrl
         s.modelg = 2
         s.mdlwrq = 1
         s.pwr_tot = 0.75
@@ -102,20 +105,34 @@ class TestWrxStateFromC(unittest.TestCase):
             s.pwr_nray[i] = 0.1 * (i + 1)
             for j in range(nsa):
                 s.pwr_nsa_nray[i][j] = 100.0 * (i + 1) + (j + 1)
+                s.pos_pwrmax_rs_nsa_nray[i][j] = 0.01 * (i + 1) + 0.001 * (j + 1)
+                s.pos_pwrmax_rl_nsa_nray[i][j] = 0.02 * (i + 1) + 0.001 * (j + 1)
+                s.pwrmax_rs_nsa_nray[i][j] = 1000.0 * (i + 1) + (j + 1)
+                s.pwrmax_rl_nsa_nray[i][j] = 2000.0 * (i + 1) + (j + 1)
         for j in range(nsa):
             s.pwr_nsa[j] = float(j) + 1.0
             s.pos_pwrmax_rs_nsa[j] = 0.2 * (j + 1)
             s.pwrmax_rs_nsa[j] = 10.0 + j
             s.pos_pwrmax_rl_nsa[j] = 0.3 * (j + 1)
             s.pwrmax_rl_nsa[j] = 20.0 + j
+        for i in range(nrs):
+            s.pos_nrs[i] = 0.1 * (i + 1)
+            for j in range(nsa):
+                s.pwr_nrs_nsa[i][j] = 5.0 * (i + 1) + 0.1 * (j + 1)
+        for i in range(nrl):
+            s.pos_nrl[i] = 0.2 * (i + 1)
+            for j in range(nsa):
+                s.pwr_nrl_nsa[i][j] = 7.0 * (i + 1) + 0.1 * (j + 1)
         return s
 
     def test_from_c_slices_correctly(self):
-        c = self._populated_state(nray=3, nsa=2)
+        c = self._populated_state(nray=3, nsa=2, nrs=4, nrl=5)
         st = WrxState.from_c(c)
         self.assertEqual(st.nraymax, 3)
         self.assertEqual(st.nsamax, 2)
         self.assertEqual(st.nsmax, 2)
+        self.assertEqual(st.nrsmax, 4)
+        self.assertEqual(st.nrlmax, 5)
         self.assertEqual(st.modelg, 2)
         self.assertEqual(st.mdlwrq, 1)
         self.assertAlmostEqual(st.scalars["pwr_tot"], 0.75)
@@ -132,46 +149,111 @@ class TestWrxStateFromC(unittest.TestCase):
         self.assertAlmostEqual(st.pwr_nsa[1], 2.0)
         self.assertAlmostEqual(st.pos_pwrmax_rs_nsa[0], 0.2)
         self.assertAlmostEqual(st.pwrmax_rl_nsa[1], 21.0)
+        # new per-bin arrays (pos/pwr for rs and rl)
+        self.assertEqual(len(st.pos_nrs), 4)
+        self.assertEqual(len(st.pos_nrl), 5)
+        self.assertEqual(len(st.pwr_nrs_nsa), 4)
+        self.assertEqual(len(st.pwr_nrs_nsa[0]), 2)
+        self.assertEqual(len(st.pwr_nrl_nsa), 5)
+        self.assertEqual(len(st.pwr_nrl_nsa[0]), 2)
+        # new per-ray pwrmax 2D arrays
+        self.assertEqual(len(st.pos_pwrmax_rs_nsa_nray), 3)
+        self.assertEqual(len(st.pos_pwrmax_rs_nsa_nray[0]), 2)
+        self.assertEqual(len(st.pwrmax_rs_nsa_nray), 3)
+        self.assertEqual(len(st.pwrmax_rs_nsa_nray[0]), 2)
 
     def test_from_c_does_not_leak_padding(self):
-        # Only the [0:nraymax] / [0:nsamax] slices should appear; the
-        # fixed-size struct is zero-padded up to WRX_MAX_*.
-        c = self._populated_state(nray=1, nsa=1)
+        # Only the [0:nraymax] / [0:nsamax] / [0:nrsmax] / [0:nrlmax]
+        # slices should appear; the fixed-size struct is zero-padded up
+        # to WRX_MAX_*.
+        c = self._populated_state(nray=1, nsa=1, nrs=1, nrl=1)
         st = WrxState.from_c(c)
         self.assertEqual(len(st.pwr_nray), 1)
         self.assertEqual(len(st.pwr_nsa), 1)
         self.assertEqual(len(st.pwr_nsa_nray), 1)
         self.assertEqual(len(st.pwr_nsa_nray[0]), 1)
+        self.assertEqual(len(st.pos_nrs), 1)
+        self.assertEqual(len(st.pos_nrl), 1)
+        self.assertEqual(len(st.pwr_nrs_nsa), 1)
+        self.assertEqual(len(st.pwr_nrl_nsa), 1)
 
     def test_to_dict_shape(self):
-        c = self._populated_state(nray=2, nsa=3)
+        # to_dict() follows the Phase-0 baseline JSON shape:
+        # {MDLWRQ, MODELG, NRAYMAX, NRLMAX, NRSMAX, NSAMAX_WR, NSMAX,
+        #  NSTPMAX, arrays, arrays2, scalars}.
+        c = self._populated_state(nray=2, nsa=3, nrs=4, nrl=5)
         d = WrxState.from_c(c).to_dict()
+        # Dimension header (upper-case; NSAMAX_WR not NSAMAX).
         self.assertEqual(d["NRAYMAX"], 2)
-        self.assertEqual(d["NSAMAX"], 3)
+        self.assertEqual(d["NSAMAX_WR"], 3)
         self.assertEqual(d["NSMAX"], 3)
+        self.assertEqual(d["NRSMAX"], 4)
+        self.assertEqual(d["NRLMAX"], 5)
+        self.assertEqual(d["MODELG"], 2)
+        self.assertEqual(d["MDLWRQ"], 1)
+        self.assertEqual(d["NSTPMAX"], 2000)
+        # scalars group
         self.assertIn("scalars", d)
         self.assertIn("pwr_tot", d["scalars"])
-        self.assertEqual(len(d["rays"]), 2)
-        r0 = d["rays"][0]
-        self.assertEqual(r0["NRAY"], 1)
-        self.assertIn("nstp_end", r0)
-        self.assertIn("pwr", r0)
-        self.assertIn("pwr_nsa", r0)
-        self.assertEqual(len(r0["pwr_nsa"]), 3)
-        # profile_rs / profile_rl axis is species (NSA), not radius.
-        self.assertEqual(len(d["profile_rs"]), 3)
-        self.assertEqual(len(d["profile_rl"]), 3)
-        self.assertEqual(d["profile_rs"][0]["NSA"], 1)
-        self.assertEqual(d["profile_rl"][2]["NSA"], 3)
+        self.assertAlmostEqual(d["scalars"]["pwr_tot"], 0.75)
+        # arrays group: 1D per-ray / per-species / per-bin.
+        self.assertIn("arrays", d)
+        arrays = d["arrays"]
+        self.assertEqual(
+            set(arrays.keys()),
+            {"NSTPMAX_NRAY", "pos_nrl", "pos_nrs", "pwr_nray", "pwr_nsa"},
+        )
+        self.assertEqual(len(arrays["NSTPMAX_NRAY"]), 2)
+        self.assertEqual(len(arrays["pwr_nray"]), 2)
+        # pwr_nsa length == nsa (= NSAMAX_WR)
+        self.assertEqual(len(arrays["pwr_nsa"]), 3)
+        self.assertEqual(len(arrays["pos_nrs"]), 4)
+        self.assertEqual(len(arrays["pos_nrl"]), 5)
+        # arrays2 group: 2D shapes [outer][nsa].
+        self.assertIn("arrays2", d)
+        arrays2 = d["arrays2"]
+        self.assertEqual(
+            set(arrays2.keys()),
+            {
+                "pwr_nsa_nray",
+                "pwr_nrs_nsa", "pwr_nrl_nsa",
+                "pos_pwrmax_rs_nsa_nray", "pos_pwrmax_rl_nsa_nray",
+                "pwrmax_rs_nsa_nray", "pwrmax_rl_nsa_nray",
+            },
+        )
+        # pwr_nsa_nray: [nray][nsa]
+        self.assertEqual(len(arrays2["pwr_nsa_nray"]), 2)
+        self.assertEqual(len(arrays2["pwr_nsa_nray"][0]), 3)
+        # pwr_nrs_nsa: [nrs][nsa]
+        self.assertEqual(len(arrays2["pwr_nrs_nsa"]), 4)
+        self.assertEqual(len(arrays2["pwr_nrs_nsa"][0]), 3)
+        # pwr_nrl_nsa: [nrl][nsa]
+        self.assertEqual(len(arrays2["pwr_nrl_nsa"]), 5)
+        self.assertEqual(len(arrays2["pwr_nrl_nsa"][0]), 3)
+        # pos_pwrmax_*_nsa_nray / pwrmax_*_nsa_nray: [nray][nsa]
+        for key in (
+            "pos_pwrmax_rs_nsa_nray",
+            "pos_pwrmax_rl_nsa_nray",
+            "pwrmax_rs_nsa_nray",
+            "pwrmax_rl_nsa_nray",
+        ):
+            self.assertEqual(len(arrays2[key]), 2, key)
+            self.assertEqual(len(arrays2[key][0]), 3, key)
 
     def test_to_dict_json_serialisable(self):
         import json
-        c = self._populated_state(nray=2, nsa=2)
+        c = self._populated_state(nray=2, nsa=2, nrs=3, nrl=3)
         d = WrxState.from_c(c).to_dict()
         s = json.dumps(d)
         d2 = json.loads(s)
         self.assertEqual(d2["NRAYMAX"], 2)
-        self.assertEqual(d2["NSAMAX"], 2)
+        self.assertEqual(d2["NSAMAX_WR"], 2)
+        self.assertEqual(d2["NRSMAX"], 3)
+        self.assertEqual(d2["NRLMAX"], 3)
+        # arrays / arrays2 / scalars round-trip intact
+        self.assertIn("arrays", d2)
+        self.assertIn("arrays2", d2)
+        self.assertIn("scalars", d2)
 
 
 # =====================================================================
