@@ -181,6 +181,8 @@ def load_library(path: Optional[str] = None) -> ctypes.CDLL:
 __all__ = [
     "WRX_MAX_NRAYMAX",
     "WRX_MAX_NSAMAX",
+    "WRX_MAX_NRSMAX",
+    "WRX_MAX_NRLMAX",
     "WRX_OK",
     "WRX_ERR_INVALID",
     "WRX_ERR_NOT_INIT",

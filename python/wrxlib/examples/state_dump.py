@@ -88,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
         args.out.write_text(text + "\n", encoding="utf-8")
         print(f"wrote {args.out}  "
               f"(NRAYMAX={payload['NRAYMAX']}, "
-              f"NSAMAX={payload['NSAMAX']}, "
+              f"NSAMAX_WR={payload['NSAMAX_WR']}, "
               f"{len(payload['scalars'])} scalars)")
     return 0
 
