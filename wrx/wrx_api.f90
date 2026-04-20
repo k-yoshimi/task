@@ -99,6 +99,29 @@ CONTAINS
     ! without a caller needing to pre-open the graphics subsystem.
     CALL GSOPEN
 
+    ! Suppress wrcalpwr's interactive PAGES/GRD1D/PAGEE block under the
+    ! .so build path. wrx_graphics_stubs.f90 supplies no-ops for the
+    ! flat-namespace symbols (PAGES, PAGEE, etc.), but `USE libgrf` in
+    ! wrcalpwr binds GRD1D to the real libgrf module symbol. The real
+    ! GRD1D walks an uninitialized grf_attr_type past the stub boundary
+    ! and SEGVs. The binary wrx links the full libgsp/libg3d stack so
+    ! this is .so-only. Setting WRX_NO_GRAPHICS=1 here lets wrcalpwr.f90
+    ! gate the entire graphics block; the binary path leaves the var
+    ! unset so behaviour is unchanged.
+    BLOCK
+       INTERFACE
+          INTEGER(C_INT) FUNCTION c_setenv(name, value, overwrite) &
+               BIND(C, NAME="setenv")
+            IMPORT :: C_CHAR, C_INT
+            CHARACTER(KIND=C_CHAR), DIMENSION(*), INTENT(IN) :: name, value
+            INTEGER(C_INT), VALUE, INTENT(IN) :: overwrite
+          END FUNCTION c_setenv
+       END INTERFACE
+       INTEGER(C_INT) :: setenv_rc
+       setenv_rc = c_setenv('WRX_NO_GRAPHICS' // C_NULL_CHAR, &
+                            '1' // C_NULL_CHAR, 1_C_INT)
+    END BLOCK
+
     CALL pl_init
     CALL EQINIT
     CALL dp_init

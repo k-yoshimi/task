@@ -17,6 +17,7 @@ CONTAINS
 
     USE wrcomm
     USE wrcalpwr
+    USE wrx_dump_state_mod, ONLY: wrx_dump_state_if_requested
     IMPLICIT NONE
     INTEGER,INTENT(OUT):: ierr
     REAL:: time1,time2
@@ -52,6 +53,7 @@ CONTAINS
             '    NRAY=',NRAY,'  RK=  ',RK,  '  PABS/PIN=', PABSN
     ENDDO
 
+    CALL wrx_dump_state_if_requested('pre_wr_calc_pwr')
     CALL wr_calc_pwr
 
     CALL GUTIME(TIME2)

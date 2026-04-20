@@ -112,12 +112,22 @@ CONTAINS
     IF(INIT.EQ.0) THEN
        INIT=1
     ELSE
+       ! Skip re-allocation only when dims unchanged AND arrays still
+       ! allocated. The pure dim check (original) is broken for
+       ! finalize+reinit cycles inside libwrxapi.so: after wr_deallocate
+       ! has freed every array, NSTPMAX_NRAY et al. are UNALLOCATED but
+       ! the *_SAVE scalars still hold the previous values, so the
+       ! unguarded check early-returns and the next access of
+       ! pwr_nsa_nstp_nray / pwr_nrl_nsa_nray segfaults
+       ! (use-after-free). ALLOCATED(NSTPMAX_NRAY) is the canary; binary
+       ! wrx runs once per process so never hits this path.
        IF((NRAYMAX.EQ.NRAYMAX_SAVE).AND. &
           (NSTPMAX.EQ.NSTPMAX_SAVE).AND. &
           (nrsmax.EQ.nrsmax_save).AND. &
           (nrlmax.EQ.nrlmax_save).AND. &
-          (nsamax_wr.EQ.nsamax_save)) RETURN
-       CALL wr_deallocate
+          (nsamax_wr.EQ.nsamax_save).AND. &
+          ALLOCATED(NSTPMAX_NRAY)) RETURN
+       IF(ALLOCATED(NSTPMAX_NRAY)) CALL wr_deallocate
     END IF
 
     ALLOCATE(RAYIN(NEQ,NRAYMAX))
@@ -159,6 +169,14 @@ CONTAINS
     ALLOCATE(pwrmax_rs_nsa_nray(nsamax_wr,nraymax))
     ALLOCATE(pos_pwrmax_rl_nsa_nray(nsamax_wr,nraymax))
     ALLOCATE(pwrmax_rl_nsa_nray(nsamax_wr,nraymax))
+    ! Per-species summaries used only by wrx_get_state. Declared in
+    ! wrcomm but never allocated by the historic binary path; reading
+    ! them via the .so SEGVs (use of unallocated allocatable). Allocate
+    ! and zero-init alongside the corresponding _nsa_nray pair.
+    ALLOCATE(pos_pwrmax_rs_nsa(nsamax_wr))
+    ALLOCATE(pwrmax_rs_nsa(nsamax_wr))
+    ALLOCATE(pos_pwrmax_rl_nsa(nsamax_wr))
+    ALLOCATE(pwrmax_rl_nsa(nsamax_wr))
 
     ! Initialize regression-dump-relevant arrays to 0.0 so that any element
     ! not subsequently written by the solver does not leak uninitialized
@@ -180,6 +198,35 @@ CONTAINS
     pwrmax_rs_nsa_nray = 0.D0
     pos_pwrmax_rl_nsa_nray = 0.D0
     pwrmax_rl_nsa_nray = 0.D0
+    pos_pwrmax_rs_nsa = 0.D0
+    pwrmax_rs_nsa = 0.D0
+    pos_pwrmax_rl_nsa = 0.D0
+    pwrmax_rl_nsa = 0.D0
+
+    ! Defensive zero-init of every remaining allocatable array.
+    ! Mirrors the tr/trcomm_profile.f90 sweep landed 2026-04-20: a fresh
+    ! `wrx` binary launch starts with a kernel-zeroed heap (effectively
+    ! zero), but `libwrxapi.so` re-init after `wrx_finalize` goes through
+    ! glibc malloc, which may return a chunk that still holds the
+    ! previous run's values. Without this sweep, the second wrx_run in
+    ! one process either SIGSEGVs in libgrf::grd1d (called from
+    ! wrcalpwr.f90) or produces a divergent get_state. See task #110 and
+    ! the WRX_REINIT_OK gate retired by this commit.
+    RAYIN = 0.D0
+    RAYS  = 0.D0
+    pwr_nsa_nstp       = 0.D0
+    pwr_nsa_nstp_nray  = 0.D0
+    CEXS = (0.D0, 0.D0); CEYS = (0.D0, 0.D0); CEZS = (0.D0, 0.D0)
+    RKXS = 0.D0; RKYS = 0.D0; RKZS = 0.D0
+    RXS  = 0.D0; RYS  = 0.D0; RZS  = 0.D0
+    BNXS = 0.D0; BNYS = 0.D0; BNZS = 0.D0
+    BABSS = 0.D0
+    RAYB = 0.D0; RAYRB1 = 0.D0; RAYRB2 = 0.D0
+    CEXB = (0.D0, 0.D0); CEYB = (0.D0, 0.D0); CEZB = (0.D0, 0.D0)
+    RK1B = 0.D0; RP1B = 0.D0
+    RK2B = 0.D0; RP2B = 0.D0
+    RAMPB = 0.D0
+    rs_nstp_nray = 0.D0; rl_nstp_nray = 0.D0
 
   END SUBROUTINE wr_allocate
 
@@ -204,6 +251,8 @@ CONTAINS
     DEALLOCATE(pwrmax_rs_nsa_nray)
     DEALLOCATE(pos_pwrmax_rl_nsa_nray)
     DEALLOCATE(pwrmax_rl_nsa_nray)
+    DEALLOCATE(pos_pwrmax_rs_nsa,pwrmax_rs_nsa)
+    DEALLOCATE(pos_pwrmax_rl_nsa,pwrmax_rl_nsa)
 
   END SUBROUTINE wr_deallocate
 END MODULE wrcomm

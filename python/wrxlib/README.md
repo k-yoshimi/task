@@ -61,35 +61,36 @@ export WRXLIB_PATH=/custom/path/libwrxapi.so
 Library lookup order (first match wins): `WRXLIB_PATH` env var,
 `<repo>/wrx/libwrxapi.so`, `<repo>/lib/libwrxapi.so`.
 
-## WRX_RUN_OK gate (read this before calling `.run()`)
+## WRX_RUN_OK gate (historical — now retired)
 
-**The L-4 build of `libwrxapi.so` retains a reference to
-`libgrf::grd1d` through `wrcalpwr.f90`** that cannot be fully resolved
-through the regular shared-library symbol graph. As a result calling
-`Wrxlib.run()` from the `.so` may segfault inside `wrcalpwr → grd1d`.
+**Resolved (2026-04-20).** Earlier `libwrxapi.so` builds SEGV'd inside
+`wrcalpwr → libgrf::grd1d` because `USE libgrf` resolved `grd1d` to the
+real `libgrf_pic.a` symbol, which then walked an uninitialized
+`grf_attr_type` past the boundary of the no-op `wrx_graphics_stubs.f90`
+shims. The fix gates the entire `PAGES/GRD1D/PAGEE` block in
+`wrcalpwr.f90` behind a `WRX_NO_GRAPHICS` environment variable that
+`wrx_api_init` sets via `setenv()` on `.so` startup. The binary `wrx`
+leaves the variable unset and continues to render through the full
+`libgsp/libg3d` stack unchanged.
 
-To make the failure mode loud rather than silent, the test suite gates
-every `wrx_run`-dependent test class behind the `WRX_RUN_OK=1`
-environment variable:
+Three companion fixes landed alongside the gate:
 
-```bash
-WRX_RUN_OK=1 python3 -m unittest discover python/wrxlib/tests -v
-```
+* `wrcalpwr.f90`: `nstpmax_all` clamp to `nstpmax-1` so `xtemp(nstp+1)`
+  no longer overruns when a ray uses every `NSTPMAX` step.
+* `wrcalpwr.f90`: `nraymax >= 2` guard around the unconditional ray-2
+  print and `grd1d(2,...)` call.
+* `wrcomm.f90 :: wr_allocate`: allocate + zero-init the per-species
+  `pos_pwrmax_{rs,rl}_nsa` and `pwrmax_{rs,rl}_nsa` arrays that
+  `wrx_get_state` reads (previously declared but never allocated, so
+  reading them via the `.so` SEGV'd).
+* `wrcomm.f90 :: wr_allocate`: ALLOCATED-canary guard on the SAVE-based
+  early-return so a `wrx_finalize → wrx_init` cycle re-allocates rather
+  than dereferencing freed pointers.
 
-Without `WRX_RUN_OK=1`, `TestWrxlibRun` (in `test_wrxlib.py`),
-`test_equivalence.py`, and `test_sweep.py` are all marked skipped.
-The C-side smoke test (`wrx/tests/c_abi/test_run_so.c`) follows the
-same convention and skips `wrx_run` entirely.
-
-What works without the gate: `wrx_init`, `wrx_set_param`,
-`wrx_get_state` (returns ierr=2 before run), and `wrx_finalize`
-exercise reliably from the `.so`. What requires the gate: any actual
-`.run()` call. If you need the full `wrx_run` pipeline today, use the
-Layer-1 driver (`wrx/wrxregress`) or the Layer-2 C harness that
-statically links `libgrf.a`. See
-[`docs/wrx-library/architecture.md`](../../docs/wrx-library/architecture.md)
-"libgrf::grd1d limitation" section for the full diagnosis and
-remediation roadmap.
+Tests should no longer set `WRX_RUN_OK=1`; the gate is now a stale
+no-op. The previous `WRX_RUN_OK` env variable is still honoured by
+test fixtures for backwards compatibility but produces no behavioural
+difference.
 
 ## Quick start
 

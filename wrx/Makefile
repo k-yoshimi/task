@@ -37,6 +37,7 @@ MODINCLUDE= -I./$(MOD) -I../pl/$(MOD) -I../dp/$(MOD) -I../eq/$(MOD) \
 SRCS_CORE = wrcomm.f90 wrinit.f90 wrparm.f90 wrprep.f90 wrview.f90 \
             wrsub.f90 \
             wrsetup.f90 wrcalpwr.f90 wrfdrv.f90 wroxb.f90 \
+            wrx_dump_state.f90 \
             wrexecr.f90 wrexecb.f90 \
             wrexec.f90 \
             wrfile.f90 \
@@ -456,7 +457,13 @@ wrx_api_check_so: libwrxapi.so $(WRX_API_SO_BIN)
 .PHONY: wrx_api_check_all
 wrx_api_check_all: wrx_api_check wrx_api_check_so $(WRX_API_NEG_BIN)
 	@echo "Phase L-6 wrx_api_check_all: running negative tests ..."
-	@printf '0\nc\n' | $(WRX_API_NEG_BIN) > tests/c_abi/out_negative.log 2>&1 ; \
+	@# wrx_init -> GSOPEN reads two lines (display-type, then "c") from
+	@# stdin. test_negative.c performs multiple wrx_init cycles (5 calls
+	@# at last count) so we provide enough "0\nc\n" pairs to outlast the
+	@# slowest init path. Without this, the 2nd init sees EOF and exits
+	@# silently before reaching the success printf, so the OK marker is
+	@# never emitted and the grep below fails (rc=0 but no "OK:" line).
+	@( for i in 1 2 3 4 5 6; do printf '0\nc\n'; done ) | $(WRX_API_NEG_BIN) > tests/c_abi/out_negative.log 2>&1 ; \
 	  rc=$$? ; \
 	  if [ $$rc -ne 0 ] || ! grep -q "OK: Layer 2 negative tests" tests/c_abi/out_negative.log ; then \
 	    echo "FAIL test_negative (rc=$$rc):" ; tail tests/c_abi/out_negative.log ; exit 1 ; \
@@ -481,8 +488,10 @@ $(OBJDIR)/wrfdrv.o: wrfdrv.f90 $(WRCOMM) wrsub.f90
 $(OBJDIR)/wroxb.o: wroxb.f90 $(WRCOMM) ../pl/plprof.f90 \
 wrfdrv.f90 wrsub.f90 ../dp/dpdisp.f90
 
+$(OBJDIR)/wrx_dump_state.o: wrx_dump_state.f90 $(WRCOMM) $(OBJDIR)/wrcomm.o
 $(OBJDIR)/wrexecr.o: wrexecr.f90 $(WRCOMM) ../pl/plprof.f90 \
-wrsub.f90 wrcalpwr.f90 wrfdrv.f90 wroxb.f90 
+wrsub.f90 wrcalpwr.f90 wrfdrv.f90 wroxb.f90 wrx_dump_state.f90 \
+$(OBJDIR)/wrx_dump_state.o
 $(OBJDIR)/wrexecb.o: wrexecb.f90 $(WRCOMM) ../pl/plprof.f90 \
 wrsub.f90
 $(OBJDIR)/wrexec.o: wrexec.f90 $(WRCOMM) wrexecr.f90 wrexecb.f90

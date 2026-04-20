@@ -26,6 +26,22 @@ CONTAINS
     REAL(rkind):: DOMG,DXP,DYP,DZP,DKXP,DKYP,DKZP,DS
     REAL(rkind):: dx
     REAL(rkind):: xtemp(0:nstpmax),ytemp(0:nstpmax,nsamax_wr,nraymax)
+    ! Headless-graphics gate. When WRX_NO_GRAPHICS is set in the
+    ! environment (e.g. by libwrxapi.so callers running without an X
+    ! display), skip the PAGES/GRD1D/PAGEE block below. Without this
+    ! gate, libwrxapi.so SEGVs deep inside libgrf (CALL grd1d ->
+    ! grf1d_exec -> stub mismatches in wrx_graphics_stubs.f90, which
+    ! were sized for a no-op shim but real grd1d resolves to the
+    ! libgrf module symbol via USE libgrf and walks an uninitialized
+    ! grf_attr_type past the stub boundary). The binary wrx links
+    ! against the full libgsp/libg3d stack so the same calls succeed.
+    CHARACTER(LEN=64) :: env_no_gr
+    INTEGER :: gr_status, gr_length
+    LOGICAL :: skip_graphics
+
+    CALL get_environment_variable('WRX_NO_GRAPHICS', env_no_gr, &
+         LENGTH=gr_length, STATUS=gr_status)
+    skip_graphics = (gr_status == 0 .AND. gr_length > 0)
 
 !   ----- evaluate plasma major radius range -----
 
@@ -227,10 +243,20 @@ CONTAINS
        END DO
     END DO
 
-    CALL pages
+    IF (.NOT. skip_graphics) CALL pages
 
     dx=1.D0/(nstpmax+1)
-    nstpmax_all=MAXVAL(nstpmax_nray(1:nraymax))+1
+    ! Clamp upper bound so xtemp(nstp+1) and ytemp(nstp+1,...) stay
+    ! within their (0:nstpmax) declared bounds. The historic
+    ! MAXVAL(...)+1 overshoots by 1 when a ray uses all NSTPMAX steps
+    ! (e.g. SMAX/DELS=NSTPMAX exactly), and pwr_nsa_nstp_nray on the
+    ! RHS is also (0:nstpmax)-bounded so reading at index NSTPMAX+1 is
+    ! an OOB read. Without this clamp, the binary wrx happens not to
+    ! crash because the ray usually terminates well before NSTPMAX so
+    ! nstpmax_all < NSTPMAX, but libwrxapi.so SEGVs whenever the
+    ! caller chooses NSTPMAX = SMAX/DELS exactly (e.g. test_wrxlib.py
+    ! TestWrxlibRun: NSTPMAX=2000, SMAX=2.0, DELS=1e-3).
+    nstpmax_all=MIN(MAXVAL(nstpmax_nray(1:nraymax))+1, nstpmax-1)
     DO nstp=0,nstpmax_all
        xtemp(nstp+1)=nstp*dx
     END DO
@@ -241,21 +267,37 @@ CONTAINS
           END DO
        END DO
     END DO
-    DO nstp=0,nstpmax_all,nstpmax_all/20
-       WRITE(6,'(I8,3ES12.4)') &
-            nstp,xtemp(nstp+1),ytemp(nstp+1,1,1),ytemp(nstp+1,1,2)
-    END DO
-    CALL grd1d(1,xtemp,ytemp(:,1,1),nstpmax_nray(1),nstpmax_nray(1),1, &
-         '@pwr-nstp vs. nstp@',0)
-    CALL grd1d(2,xtemp,ytemp(:,1,2),nstpmax_nray(2),nstpmax_nray(2),1, &
-         '@pwr-nstp vs. nstp@',0)
-    CALL grd1d(3,pos_nrs,pwr_nrs_nsa_nray, &
-         nrsmax,nrsmax,nsamax_wr*nraymax, &
-         '@pwr-nrs vs. pos-nrs@',0)
-    CALL grd1d(4,pos_nrl,pwr_nrl_nsa_nray, &
-         nrlmax,nrlmax,nsamax_wr*nraymax, &
-         '@pwr-nrl vs. pos-nrl@',0)
-    CALL pagee
+    ! Print loop: ytemp(:,*,2) is only valid for NRAYMAX>=2; emit a
+    ! safe placeholder for the 2-ray column when only one ray is run.
+    IF (nraymax >= 2) THEN
+       DO nstp=0,nstpmax_all,MAX(nstpmax_all/20,1)
+          WRITE(6,'(I8,3ES12.4)') &
+               nstp,xtemp(nstp+1),ytemp(nstp+1,1,1),ytemp(nstp+1,1,2)
+       END DO
+    ELSE
+       DO nstp=0,nstpmax_all,MAX(nstpmax_all/20,1)
+          WRITE(6,'(I8,2ES12.4)') &
+               nstp,xtemp(nstp+1),ytemp(nstp+1,1,1)
+       END DO
+    END IF
+    IF (.NOT. skip_graphics) THEN
+       CALL grd1d(1,xtemp,ytemp(:,1,1),nstpmax_nray(1),nstpmax_nray(1),1, &
+            '@pwr-nstp vs. nstp@',0)
+       ! Guard ray-2 plot: nstpmax_nray and ytemp(:,*,*) are only sized
+       ! to NRAYMAX. The original unconditional ray-2 reference would
+       ! dereference out-of-bounds memory when NRAYMAX=1.
+       IF (nraymax >= 2) THEN
+          CALL grd1d(2,xtemp,ytemp(:,1,2),nstpmax_nray(2),nstpmax_nray(2),1, &
+               '@pwr-nstp vs. nstp@',0)
+       END IF
+       CALL grd1d(3,pos_nrs,pwr_nrs_nsa_nray, &
+            nrsmax,nrsmax,nsamax_wr*nraymax, &
+            '@pwr-nrs vs. pos-nrs@',0)
+       CALL grd1d(4,pos_nrl,pwr_nrl_nsa_nray, &
+            nrlmax,nrlmax,nsamax_wr*nraymax, &
+            '@pwr-nrl vs. pos-nrl@',0)
+       CALL pagee
+    END IF
 
     ! --- power divided by division area ---
 
