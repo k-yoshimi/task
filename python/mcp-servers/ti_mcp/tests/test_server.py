@@ -17,6 +17,7 @@ Run from the repo root::
 """
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -355,15 +356,43 @@ class TestBuildServer(unittest.TestCase):
 class TestIntegration(unittest.TestCase):
     """End-to-end init → run(0) → get_state → finalize against .so."""
 
+    # ti_run / ti_prep read ADPOST/ADF11 data files relative to cwd
+    # (see ti/tiadas.f90). Without chdir into a directory containing
+    # ``ADF11-bin.data`` the run aborts with ierr=3 at the first
+    # OPEN. Reuse the same data dir that the equivalence test uses.
+    _DATA_CWD = Path(__file__).resolve().parents[4] / "test_run" / "test_output" / "ti_min"
+
     def setUp(self) -> None:
         # Reset server state between tests.
         srv.STATE.close()
+        self._prev_cwd = os.getcwd()
+        if self._DATA_CWD.exists():
+            os.chdir(self._DATA_CWD)
 
     def tearDown(self) -> None:
         srv.STATE.close()
+        os.chdir(self._prev_cwd)
+
+    # ti_run(0) requires a minimally-configured TICOMM (ti_init alone
+    # leaves NSMAX/NRMAX etc. at defaults that ti_prep rejects with
+    # ierr=3 = CALC_FAILED). Use the ti_min fixture's parameters --
+    # the same shape that the libtilib equivalence test uses.
+    _MIN_PARAMS = {
+        "NSMAX":   1,
+        "NRMAX":   10,
+        "NTSTEP":  1,
+        "NGTSTEP": 1,
+        "NGRSTEP": 1,
+        "NTMAX":   2,
+    }
+
+    def _set_min_params(self) -> None:
+        for k, v in self._MIN_PARAMS.items():
+            srv.handle_set_param(k, float(v))
 
     def test_init_run_state_finalize(self) -> None:
         self.assertIn("initialized", srv.handle_init())
+        self._set_min_params()
         self.assertIn("0", srv.handle_run(0))
         state = srv.handle_get_state()
         self.assertIn("NT", state)
@@ -371,9 +400,47 @@ class TestIntegration(unittest.TestCase):
         self.assertIn("finalized", srv.handle_finalize())
 
     def test_run_and_get_state_oneshot(self) -> None:
-        out = srv.handle_run_and_get_state(params=None, ntmax=0)
+        out = srv.handle_run_and_get_state(params=self._MIN_PARAMS, ntmax=0)
         self.assertIn("NT", out)
         self.assertIsInstance(out["scalars"], dict)
+
+    def test_reinit_cycle_reproducible(self) -> None:
+        """init -> set_min_params -> run(0) -> get_state -> finalize, twice.
+
+        Asserts the second cycle's state matches the first. Catches
+        heap-reuse leaks of the class fixed in tr's
+        ``trcomm_profile.f90`` zero-init sweep on 2026-04-20. ti got a
+        SAVE-guard fix today but has not been audited end-to-end for
+        the zero-init class of bug; this test is the guard.
+
+        If this SEGVs or produces NaN the test will fail loudly rather
+        than be masked; that is the intent.
+        """
+        import pytest  # type: ignore[import-not-found]
+
+        # First cycle. Mirror the existing TestIntegration setUp pattern:
+        # cwd is already in _DATA_CWD via setUp.
+        self._set_min_params()
+        srv.handle_init()
+        srv.handle_run(0)
+        s1 = srv.handle_get_state()
+        srv.handle_finalize()
+
+        # Second cycle with identical params.
+        self._set_min_params()
+        srv.handle_init()
+        srv.handle_run(0)
+        s2 = srv.handle_get_state()
+        srv.handle_finalize()
+
+        # ti state has no CPU-time fields; use strict equality.
+        if s1 != s2:
+            diffs = {k: (s1.get(k), s2.get(k)) for k in set(s1) | set(s2)
+                     if s1.get(k) != s2.get(k)}
+            pytest.fail(
+                "ti reinit cycle produced divergent state (possible "
+                f"heap-reuse leak): differing keys = {sorted(diffs)}"
+            )
 
 
 if __name__ == "__main__":  # pragma: no cover

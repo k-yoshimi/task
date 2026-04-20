@@ -373,6 +373,42 @@ class TestIntegration(unittest.TestCase):
         self.assertIn("NRMAX", out)
         self.assertIsInstance(out["profile"], list)
 
+    def test_reinit_cycle_reproducible(self) -> None:
+        """init -> run(0) -> get_state -> finalize, twice.
+
+        Asserts the second cycle's state matches the first. Catches
+        heap-reuse leaks of the class fixed in tr's
+        ``trcomm_profile.f90`` zero-init sweep on 2026-04-20 -- fp has
+        not yet been audited for the same bug class so this test is
+        the first line of defence.
+
+        If this SEGVs or produces NaN the test will fail loudly rather
+        than be masked; that is the intent.
+        """
+        import pytest  # type: ignore[import-not-found]
+
+        # First cycle: default init, no params.
+        srv.handle_init()
+        srv.handle_run(0)
+        s1 = srv.handle_get_state()
+        srv.handle_finalize()
+
+        # Second cycle with identical params.
+        srv.handle_init()
+        srv.handle_run(0)
+        s2 = srv.handle_get_state()
+        srv.handle_finalize()
+
+        # fp state has no CPU-time fields (TIMEFP is reset to 0 in
+        # fpprep.f90 so it matches across cycles). Strict equality.
+        if s1 != s2:
+            diffs = {k: (s1.get(k), s2.get(k)) for k in set(s1) | set(s2)
+                     if s1.get(k) != s2.get(k)}
+            pytest.fail(
+                "fp reinit cycle produced divergent state (possible "
+                f"heap-reuse leak): differing keys = {sorted(diffs)}"
+            )
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

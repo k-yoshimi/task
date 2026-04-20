@@ -304,6 +304,42 @@ class TestIntegration(unittest.TestCase):
         self.assertIn("NT", out)
         self.assertIsInstance(out["scalars"], dict)
 
+    def test_reinit_cycle_reproducible(self) -> None:
+        """init -> run(0) -> get_state -> finalize, twice.
+
+        Asserts the second cycle's state matches the first byte-for-byte.
+        Catches heap-reuse leaks of the class fixed in tr's
+        ``trcomm_profile.f90`` zero-init sweep on 2026-04-20: if a SAVE /
+        ALLOCATE-without-zeroing regression slips back in, the second
+        init will see residual state from the first cycle and this
+        test will trip.
+        """
+        import pytest  # type: ignore[import-not-found]
+
+        # First cycle: default init, no params needed.
+        srv.handle_init()
+        srv.handle_run(0)
+        s1 = srv.handle_get_state()
+        srv.handle_finalize()
+
+        # Second cycle with identical params.
+        srv.handle_init()
+        srv.handle_run(0)
+        s2 = srv.handle_get_state()
+        srv.handle_finalize()
+
+        # tr state has no CPU-time fields; direct equality is the strict
+        # check. If the two cycles drift we surface it immediately rather
+        # than masking with try/except.
+        if s1 != s2:
+            # Enumerate divergence for a readable failure.
+            diffs = {k: (s1.get(k), s2.get(k)) for k in set(s1) | set(s2)
+                     if s1.get(k) != s2.get(k)}
+            pytest.fail(
+                "tr reinit cycle produced divergent state (possible "
+                f"heap-reuse leak): differing keys = {sorted(diffs)}"
+            )
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

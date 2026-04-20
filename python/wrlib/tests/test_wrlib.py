@@ -257,8 +257,17 @@ class TestWrlibReinitAndShape(unittest.TestCase):
 
     def test_get_state_shapes_match_runtime_dims(self):
         """After a run, per-ray and profile list lengths must equal
-        the runtime nraymax/nrsmax/nrlmax (not WR_MAX_*)."""
+        the runtime nraymax/nrsmax/nrlmax (not WR_MAX_*).
+
+        Uses the wr_test001 minimal fixture so wr.run() has enough
+        namelist setup (MODELG=2, RR, RA, BB, NSMAX, ...) to actually
+        execute. Without a fixture, wr.run() fails with ierr=3 from
+        the equilibrium consistency check (RB defaults to 1.2 but the
+        empty namelist leaves RA at the pl_init default, mismatching).
+        """
+        from wrlib.tests.fixtures import wr_test001_params as f
         with Wrlib() as wr:
+            f.apply(wr)
             wr.run()
             state = wr.get_state()
             self.assertEqual(len(state.nstp_end), state.nraymax)

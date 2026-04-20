@@ -18,16 +18,18 @@ A change in ``nrgmax`` / ``nzgmax`` / ``npsmax`` across cells signals
 that ``eqcom*_mod`` state leaked across cycles, so we fail loudly. Nine
 successful cycles -> PASS.
 
-Triple-skip gates (all must pass for the class to run):
+Skip gates (all must pass for the class to run):
 
 * libeqapi.so is importable via :func:`eqlib._ffi._candidate_paths`,
 * eqlib package is importable,
-* ``EQ_RUN_OK=1`` is set in the environment (mirrors test_equivalence
-  -- ``eq.run(mode=1)`` requires a real eqdata file, which is only
-  reliably present after the L-0 baseline run).
+* the ``test_run/test_output/eq_iter01/eqdata.ITER01`` file exists --
+  the sweep runs ``eq_run(mode=1)`` which loads a real EQDSK; if
+  the L-0 baseline has not been generated yet we skip with an
+  instruction to ``./test_run/run_tests.sh eq_iter01`` first.
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 import unittest
@@ -36,6 +38,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve()
 REPO = HERE.parents[3]
 PYTHON_ROOT = REPO / "python"
+TEST_OUTPUT_DIR = REPO / "test_run" / "test_output"
 
 if str(PYTHON_ROOT) not in sys.path:
     sys.path.insert(0, str(PYTHON_ROOT))
@@ -43,7 +46,20 @@ if str(PYTHON_ROOT) not in sys.path:
 from eqlib import _ffi  # noqa: E402
 
 
-RUN_OK = os.environ.get("EQ_RUN_OK") == "1"
+@contextlib.contextmanager
+def _pushd(target: Path):
+    """chdir to ``target`` inside a ``with`` block, restore on exit.
+
+    EQRTSK / EQDSK loads in eqfile.f90 open ``KNAMEQ`` relative to the
+    current working directory, so MODELG=3 fixtures must run from
+    ``test_run/test_output/<case>/`` where the eqdata file lives.
+    """
+    prev = Path.cwd()
+    os.chdir(target)
+    try:
+        yield target
+    finally:
+        os.chdir(prev)
 
 
 def _any_so_exists() -> bool:
@@ -69,11 +85,6 @@ def _eqlib_importable() -> bool:
     "run `make -C eq libeqapi.so`",
 )
 @unittest.skipUnless(_eqlib_importable(), "python/eqlib not importable")
-@unittest.skipUnless(
-    RUN_OK,
-    "EQ_RUN_OK=1 required: eq.run(mode=1) needs a real eqdata file "
-    "for the ITER01 fixture; set EQ_RUN_OK=1 to enable.",
-)
 class TestSweep(unittest.TestCase):
     """3x3 RR x BB grid; smoke-only (no numerical regression)."""
 
@@ -99,20 +110,34 @@ class TestSweep(unittest.TestCase):
         from eqlib import Eq
         from eqlib.tests.fixtures import eq_iter01_params
 
+        # eq.run(mode=1) loads ``eqdata.ITER01`` relative to CWD, so we
+        # cd into the L-0 test_output directory that holds the file.
+        # If the L-0 baseline has not been generated yet, skip with an
+        # actionable hint rather than failing with rc=3.
+        eqdata_dir = TEST_OUTPUT_DIR / "eq_iter01"
+        knameq = eq_iter01_params.STRINGS.get("KNAMEQ", "eqdata.ITER01")
+        if not (eqdata_dir / knameq).exists():
+            self.skipTest(
+                f"eqdata '{knameq}' missing under {eqdata_dir}; "
+                "run `./test_run/run_tests.sh eq_iter01` first."
+            )
+
         results = []
-        for rr in self.RR_VALUES:
-            for bb in self.BB_VALUES:
-                # Re-init per sample (mirror trlib PR #83 fix). A fresh
-                # Eq context guarantees eq_init is called from scratch,
-                # so any TRCOMM-style leak in eqcom*_mod would surface
-                # as a dimension change or a hard crash.
-                with Eq() as eq:
-                    eq_iter01_params.apply(eq)
-                    eq.set_param("RR", float(rr))
-                    eq.set_param("BB", float(bb))
-                    eq.run(mode=self.MODE)
-                    state = eq.get_state()
-                    results.append((rr, bb, state))
+        with _pushd(eqdata_dir):
+            for rr in self.RR_VALUES:
+                for bb in self.BB_VALUES:
+                    # Re-init per sample (mirror trlib PR #83 fix). A
+                    # fresh Eq context guarantees eq_init is called
+                    # from scratch, so any TRCOMM-style leak in
+                    # eqcom*_mod would surface as a dimension change
+                    # or a hard crash.
+                    with Eq() as eq:
+                        eq_iter01_params.apply(eq)
+                        eq.set_param("RR", float(rr))
+                        eq.set_param("BB", float(bb))
+                        eq.run(mode=self.MODE)
+                        state = eq.get_state()
+                        results.append((rr, bb, state))
 
         # All 9 points must have completed.
         self.assertEqual(

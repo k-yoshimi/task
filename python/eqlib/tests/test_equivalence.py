@@ -14,23 +14,25 @@ For each case (``eq_iter01``, ``eq_tst2``):
 5. compare against ``test_run/baselines/<case>/metrics.json`` using
    ``test_run/scripts/compare_metrics.py`` with tolerance ``1e-10``.
 
-Triple-skip gates (all must pass for the class to run):
+Skip gates (all must pass for the class to run):
 
 * libeqapi.so is importable via :func:`eqlib._ffi._candidate_paths`
   (covers both ``eq/libeqapi.so`` and ``lib/libeqapi.so`` and an
   explicit ``EQLIB_PATH`` override),
-* the baseline JSON exists under ``test_run/baselines/``,
-* ``EQ_RUN_OK=1`` is set in the environment.
+* eqlib python package is importable,
+* compare_metrics.py is reachable.
 
-The ``EQ_RUN_OK`` gate is required because the L-5 EqState dict
-schema (``NRGMAX/NZGMAX/PSIPS/...``) does not yet overlap with the
-Phase 0 baseline schema (``NRMAX/NTHMAX/profile[].PSIP/PSIT/...``);
-extending :class:`eqlib.state.EqState` to also expose those fields is
-an L-7+ follow-up. Until then the equivalence test is opt-in so CI
-default is green and the contract is documented in code.
+The fixture's eqdata file (``KNAMEQ``) must live under
+``test_run/test_output/<case>/`` -- if not, the per-test
+``_check_case`` emits a ``self.skipTest`` with instructions to run
+``test_run/run_tests.sh <case>`` first.
 
-See ``docs/superpowers/plans/2026-04-18-eq-library-L6-test-4layers.md``
-Task 4 for the iteration protocol when the 1e-10 match is not yet met.
+History: previously this class was also gated behind ``EQ_RUN_OK=1``
+because the L-5 ``EqState`` schema was thought to diverge from the
+Phase 0 baseline. In practice ``compare_metrics.py`` only enforces
+the ``_DIMENSION_KEYS`` / ``scalars`` / ``profile`` overlap, all of
+which the L-5 ``EqState.to_dict`` already emits, so the gate is no
+longer needed: tolerance 1e-10 PASSes today.
 """
 from __future__ import annotations
 
@@ -72,12 +74,6 @@ if str(PYTHON_ROOT) not in sys.path:
     sys.path.insert(0, str(PYTHON_ROOT))
 
 from eqlib import _ffi  # noqa: E402
-
-
-# Opt-in gate: the L-5 EqState schema does not overlap the L-0
-# baseline schema, so a strict 1e-10 diff currently flags structural
-# missing keys. CI runs the test only when this is set to 1.
-RUN_OK = os.environ.get("EQ_RUN_OK") == "1"
 
 
 def _any_so_exists() -> bool:
@@ -174,12 +170,6 @@ def _compare_with_baseline(actual: dict, case_name: str, tol: str = "1e-10") -> 
 )
 @unittest.skipUnless(_eqlib_importable(), "python/eqlib not importable")
 @unittest.skipUnless(COMPARE_SCRIPT.exists(), f"{COMPARE_SCRIPT} missing")
-@unittest.skipUnless(
-    RUN_OK,
-    "EQ_RUN_OK=1 required: L-5 EqState schema does not yet overlap "
-    "the L-0 baseline schema; extending EqState is an L-7+ follow-up. "
-    "Set EQ_RUN_OK=1 once the schemas align.",
-)
 class TestEquivalence(unittest.TestCase):
     """Layer 1: match Phase 0 Fortran baseline at 1e-10."""
 

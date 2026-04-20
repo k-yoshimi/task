@@ -326,8 +326,34 @@ class TestIntegration(unittest.TestCase):
     def tearDown(self) -> None:
         srv.STATE.close()
 
+    # wr_run requires a properly-configured plasma + equilibrium
+    # (MODELG, RR, RA, BB, NSMAX, PA/PZ/PN/...). Without them, the
+    # default-init wr_run loops on a non-converging dispersion solution
+    # for 10-15 seconds before returning ierr=3 (= CALC_FAILED). Two
+    # such tests in a row blow the per-module timeout (this was the
+    # source of the aggregate `pytest python/` hang). Reuse the
+    # wr_test001 fixture that the libwr equivalence test uses so the
+    # exact same plasma+ray setup that PASSes there also runs here.
+    @classmethod
+    def setUpClass(cls) -> None:
+        from wrlib.tests.fixtures import wr_test001_params as f
+        cls._fixture = f
+
+    def _apply_fixture(self) -> None:
+        f = self._fixture
+        for name, value in f.SCALARS.items():
+            srv.handle_set_param(name, float(value))
+        for name, arr in f.ARRAYS.items():
+            if isinstance(arr, dict):
+                for i, v in arr.items():
+                    srv.handle_set_param(f"{name}[{int(i)}]", float(v))
+            else:
+                for i, v in enumerate(arr, start=1):
+                    srv.handle_set_param(f"{name}[{i}]", float(v))
+
     def test_init_run_state_finalize(self) -> None:
         self.assertIn("initialized", srv.handle_init())
+        self._apply_fixture()
         self.assertIn("0", srv.handle_run(0))
         state = srv.handle_get_state()
         self.assertIn("NRAYMAX", state)
@@ -335,7 +361,18 @@ class TestIntegration(unittest.TestCase):
         self.assertIn("finalized", srv.handle_finalize())
 
     def test_run_and_get_state_oneshot(self) -> None:
-        out = srv.handle_run_and_get_state(params=None, nray_request=0)
+        # Build the param dict the handler expects: scalars + flattened
+        # arrays as "NAME[i]"=value. Mirrors the equivalence-test pattern.
+        f = self._fixture
+        params: Dict[str, float] = {k: float(v) for k, v in f.SCALARS.items()}
+        for name, arr in f.ARRAYS.items():
+            if isinstance(arr, dict):
+                for i, v in arr.items():
+                    params[f"{name}[{int(i)}]"] = float(v)
+            else:
+                for i, v in enumerate(arr, start=1):
+                    params[f"{name}[{i}]"] = float(v)
+        out = srv.handle_run_and_get_state(params=params, nray_request=0)
         self.assertIn("NRAYMAX", out)
         self.assertIsInstance(out["scalars"], dict)
 
@@ -347,6 +384,43 @@ class TestIntegration(unittest.TestCase):
         # be closed from the caller's perspective.
         wr = srv.STATE.ensure_open()
         self.assertFalse(wr.closed)
+
+    def test_reinit_cycle_reproducible(self) -> None:
+        """init -> apply_fixture -> run(0) -> get_state -> finalize, twice.
+
+        Asserts the second cycle's state matches the first. Catches
+        heap-reuse leaks of the class fixed in tr's
+        ``trcomm_profile.f90`` zero-init sweep on 2026-04-20. wr has
+        not been audited for the same bug class; this test is the
+        first line of defence.
+
+        If this SEGVs or produces NaN the test will fail loudly rather
+        than be masked; that is the intent.
+        """
+        import pytest  # type: ignore[import-not-found]
+
+        # First cycle: init, apply wr_test001 fixture, run.
+        srv.handle_init()
+        self._apply_fixture()
+        srv.handle_run(0)
+        s1 = srv.handle_get_state()
+        srv.handle_finalize()
+
+        # Second cycle with identical params.
+        srv.handle_init()
+        self._apply_fixture()
+        srv.handle_run(0)
+        s2 = srv.handle_get_state()
+        srv.handle_finalize()
+
+        # wr state has no CPU-time fields; strict equality.
+        if s1 != s2:
+            diffs = {k: (s1.get(k), s2.get(k)) for k in set(s1) | set(s2)
+                     if s1.get(k) != s2.get(k)}
+            pytest.fail(
+                "wr reinit cycle produced divergent state (possible "
+                f"heap-reuse leak): differing keys = {sorted(diffs)}"
+            )
 
 
 if __name__ == "__main__":  # pragma: no cover
