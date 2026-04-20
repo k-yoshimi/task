@@ -188,7 +188,7 @@ CONTAINS
     END IF
     lb1 = LBOUND(arr,1); ub1 = UBOUND(arr,1)
     lb2 = LBOUND(arr,2); ub2 = UBOUND(arr,2)
-    WRITE(u, '(A,A,I0,",",I0,":",I0,",",I0,A)') &
+    WRITE(u, '(A,A,I0,":",I0,",",I0,":",I0,A)') &
          name, '_bounds=(', lb1, ub1, lb2, ub2, ')'
     WRITE(u, '(A,A,ES23.15E3)') name, '(lb,lb)=', arr(lb1,lb2)
     WRITE(u, '(A,A,ES23.15E3)') name, '(ub,ub)=', arr(ub1,ub2)
