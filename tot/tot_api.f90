@@ -62,7 +62,7 @@ MODULE tot_api
   ! when the wrap module pulls them all in.
   USE tr_api, ONLY: tr_api_init,     tr_api_run,     tr_api_get_state, &
                     tr_api_finalize
-  USE tr_state, ONLY: tr_state_c, TR_MAX_NRMAX, TR_MAX_NSMAX
+  USE tr_state, ONLY: tr_state_c
   USE ti_api, ONLY: ti_api_init,     ti_api_run,     ti_api_finalize
   USE fp_api, ONLY: fp_api_init,     fp_api_run,     fp_api_finalize
   ! tot links wrx/libwr.a (not wr/libwr.a), so the only wrcomm copy in
