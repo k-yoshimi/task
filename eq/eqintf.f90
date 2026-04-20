@@ -223,6 +223,10 @@
       NSUMAX1=NSUMAX
       ALLOCATE(RSU1(NSUMAX1))
       ALLOCATE(ZSU1(NSUMAX1))
+      ! Defensive zero-init (see PR #123 pattern): libeqapi.so finalize+reinit
+      ! cycle can reuse heap chunks with stale values.
+      RSU1 = 0.D0
+      ZSU1 = 0.D0
       DO NSU=1,NSUMAX1
          RSU1(NSU)=RSU(NSU)
          ZSU1(NSU)=ZSU(NSU)

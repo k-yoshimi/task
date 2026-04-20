@@ -23,12 +23,29 @@ contains
        allocate(hiv(ivdm),siv(ivdm),siw(ivdm),sdw(ivdm),ckv(ivdm),ssv(ivdm),aav(ivdm),rrv(ivdm), &
             &   rbv(ivdm),arv(ivdm),bbv(ivdm),biv(ivdm),r2b2v(ivdm),shv(ivdm),grbm2v(ivdm), &
             &   rov(ivdm),aiv(ivdm),brv(ivdm),epsv(ivdm),elipv(ivdm),trigv(ivdm),ftv(ivdm))
-       
+       ! Defensive zero-init (see PR #123 pattern): libeqapi.so finalize+reinit
+       ! cycle can reuse heap chunks with stale values.
+       rg = 0.d0; zg = 0.d0; psi = 0.d0; rbp = 0.d0
+       pds = 0.d0; fds = 0.d0; vlv = 0.d0; qqv = 0.d0; prv = 0.d0
+       csu = 0.d0; rsu = 0.d0; zsu = 0.d0
+       hiv = 0.d0; siv = 0.d0; siw = 0.d0; sdw = 0.d0; ckv = 0.d0
+       ssv = 0.d0; aav = 0.d0; rrv = 0.d0
+       rbv = 0.d0; arv = 0.d0; bbv = 0.d0; biv = 0.d0; r2b2v = 0.d0
+       shv = 0.d0; grbm2v = 0.d0
+       rov = 0.d0; aiv = 0.d0; brv = 0.d0; epsv = 0.d0; elipv = 0.d0
+       trigv = 0.d0; ftv = 0.d0
+
     case(2)
        ! *** allocate arrays that are used only when reading an equilibium data ***
        allocate(ieqout(10),ieqerr(10),icp(10),cp(10))
        allocate(ivac(0:nsfix),ncoil(0:nsfix),cvac(0:nsfix),rvac(0:nsfix),zvac(0:nsfix))
        allocate(rcoil(100,icvdm),zcoil(100,icvdm),ccoil(100,icvdm),rlimt(200),zlimt(200))
+       ! Defensive zero-init (see PR #123 pattern): libeqapi.so finalize+reinit
+       ! cycle can reuse heap chunks with stale values.
+       ieqout = 0; ieqerr = 0; icp = 0; cp = 0.d0
+       ivac = 0; ncoil = 0; cvac = 0.d0; rvac = 0.d0; zvac = 0.d0
+       rcoil = 0.d0; zcoil = 0.d0; ccoil = 0.d0
+       rlimt = 0.d0; zlimt = 0.d0
 
     case(-1)
        ! *** deallocate arrays that are widely used ***
@@ -211,6 +228,10 @@ contains
     ieqerr(1)=0
     allocate(bmax(ivdm),fint(0:intf),flam(0:intf))
     allocate(nsul(isrzdm),dll(isrzdm),zbl(isrzdm))
+    ! Defensive zero-init (see PR #123 pattern): libeqapi.so finalize+reinit
+    ! cycle can reuse heap chunks with stale values.
+    bmax = 0.d0; fint = 0.d0; flam = 0.d0
+    nsul = 0;    dll  = 0.d0; zbl  = 0.d0
     do j = 0, intf
        flam(j)  = DBLE(j) / DBLE(intf)
     end do

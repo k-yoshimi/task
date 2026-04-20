@@ -57,6 +57,9 @@
       ENDDO
 
       ALLOCATE(psi_temp(NRGMAX,NZGMAX))
+      ! Defensive zero-init (see PR #123 pattern): libeqapi.so finalize+reinit
+      ! cycle can reuse heap chunks with stale values.
+      psi_temp = 0.D0
       READ(neqdsk) psi_temp
       psirz(1:nrgmax,1:nzgmax)=psi_temp(1:nrgmax,1:nzgmax)
       DEALLOCATE(psi_temp)
@@ -92,6 +95,11 @@
 
 ! ----- find local minimum -----
       ALLOCATE(rc_xp(icountm),zc_xp(icountm),psic_xp(icountm))
+      ! Defensive zero-init (see PR #123 pattern): libeqapi.so finalize+reinit
+      ! cycle can reuse heap chunks with stale values.
+      rc_xp   = 0.D0
+      zc_xp   = 0.D0
+      psic_xp = 0.D0
       icount=0
       DO nz=3,nzgmax-2
          DO nr=3,nrgmax-2

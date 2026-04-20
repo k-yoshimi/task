@@ -792,6 +792,10 @@
       REAL(rkind),ALLOCATABLE:: FJT(:),PSIOLD(:,:)
 
       ALLOCATE(FJT(MLM),PSIOLD(NTGM,NSGM))
+      ! Defensive zero-init (see PR #123 pattern): libeqapi.so finalize+reinit
+      ! cycle can reuse heap chunks with stale values.
+      FJT    = 0.D0
+      PSIOLD = 0.D0
 
       DO NSG=1,NSGMAX
       DO NTG=1,NTGMAX
@@ -927,6 +931,11 @@
 
       ALLOCATE(PSISX(NTGPM,NSGPM),PSITX(NTGPM,NSGPM))
       ALLOCATE(PSISTX(NTGPM,NSGPM))
+      ! Defensive zero-init (see PR #123 pattern): libeqapi.so finalize+reinit
+      ! cycle can reuse heap chunks with stale values.
+      PSISX  = 0.D0
+      PSITX  = 0.D0
+      PSISTX = 0.D0
 !
 !     ----- mesh extended in sigma (radius) and theta (periodic) -----
 !

@@ -35,6 +35,11 @@
       EXTERNAL PSIGD,PSIGZ0
 
       ALLOCATE(PSIRG(NRGM,NZGM),PSIZG(NRGM,NZGM),PSIRZG(NRGM,NZGM))
+      ! Defensive zero-init (see PR #123 pattern): libeqapi.so finalize+reinit
+      ! cycle can reuse heap chunks with stale values.
+      PSIRG  = 0.D0
+      PSIZG  = 0.D0
+      PSIRZG = 0.D0
       IERR=0
 !
 !     ----- calculate setup for psig(R,Z) -----
@@ -233,6 +238,11 @@
 !     ----- calculate spline coef for psi(R,Z) -----
 !
       ALLOCATE(PSIRG(NRGM,NZGM),PSIZG(NRGM,NZGM),PSIRZG(NRGM,NZGM))
+      ! Defensive zero-init (see PR #123 pattern): libeqapi.so finalize+reinit
+      ! cycle can reuse heap chunks with stale values.
+      PSIRG  = 0.D0
+      PSIZG  = 0.D0
+      PSIRZG = 0.D0
 
       CALL SPL2D(RG,ZG,PSIRZ,PSIRG,PSIZG,PSIRZG,UPSIRZ, &
                  NRGM,NRGMAX,NZGMAX,0,0,IERR)

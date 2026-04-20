@@ -100,6 +100,10 @@
 
       ALLOCATE(PSIRG(NRGM,NZGM),PSIZG(NRGM,NZGM),PSIRZG(NRGM,NZGM))
       ALLOCATE(HJTRG(NRGM,NZGM),HJTZG(NRGM,NZGM),HJTRZG(NRGM,NZGM))
+      ! Defensive zero-init (see PR #123 pattern): libeqapi.so finalize+reinit
+      ! cycle can reuse heap chunks with stale values.
+      PSIRG  = 0.D0; PSIZG  = 0.D0; PSIRZG = 0.D0
+      HJTRG  = 0.D0; HJTZG  = 0.D0; HJTRZG = 0.D0
 
       CALL SPL2D(RG,ZG,PSIRZ,PSIRG,PSIZG,PSIRZG,UPSIRZ, &
                  NRGM,NRGMAX,NZGMAX,0,0,IERR)
@@ -579,6 +583,10 @@
       REAL(rkind),ALLOCATABLE:: URPSW(:,:),UZPSW(:,:)
 
       ALLOCATE(URPSW(4,NTHMP),UZPSW(4,NTHMP))
+      ! Defensive zero-init (see PR #123 pattern): libeqapi.so finalize+reinit
+      ! cycle can reuse heap chunks with stale values.
+      URPSW = 0.D0
+      UZPSW = 0.D0
 
       npmax=abs(MDLEQV)
       IERR=0
@@ -940,6 +948,11 @@
       REAL(rkind) CHIPL
 
       ALLOCATE(D01(NTHMP,NRM),D10(NTHMP,NRM),D11(NTHMP,NRM))
+      ! Defensive zero-init (see PR #123 pattern): libeqapi.so finalize+reinit
+      ! cycle can reuse heap chunks with stale values.
+      D01 = 0.D0
+      D10 = 0.D0
+      D11 = 0.D0
 !
 !      DO NR=1,NRMAX
 !         WRITE(6,'(A,I5,1P5E12.4)')
