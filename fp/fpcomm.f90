@@ -681,6 +681,257 @@ module fpcomm
           NREND_save=NREND
           NSAMAX_save=NSAMAX
           NSBMAX_save=NSBMAX
+
+          ! Defensive zero-init of every allocatable array in this scope.
+          ! Mirrors the tr/trcomm_profile.f90 (PR #121) and wrx/wrcomm.f90
+          ! (PR #123) sweeps: a fresh `fp` binary launch starts with a
+          ! kernel-zeroed heap, but libfpapi.so re-init after fp_finalize
+          ! goes through glibc malloc which can return a chunk that still
+          ! holds the previous run's values. Without this sweep, property-
+          ! test-style NSMAX/NRMAX/NPMAX sweeps SEGV at process teardown
+          ! as a latent use-of-stale-malloc-chunk (e.g. python fplib
+          ! test_property_boundary.py::TestFplibBoundaryValues PASSes in
+          ! isolation but SIGABRTs during the full pytest suite).
+          ! --- 1D ---
+          F1(:,:,:) = 0.D0
+          F(:,:,:)  = 0.D0
+          RG(:)     = 0.D0; RM(:)   = 0.D0; VOLR(:) = 0.D0
+          BP(:)     = 0.D0; QR(:)   = 0.D0
+          BPG(:)    = 0.D0; BPM(:)  = 0.D0
+          QLG_INIT(:) = 0.D0; QLM_INIT(:) = 0.D0
+          QLG(:)    = 0.D0; QLM(:)  = 0.D0
+          RJ1(:)    = 0.D0; E1(:)   = 0.D0
+          RJ2(:)    = 0.D0; E2(:)   = 0.D0
+          EP(:)     = 0.D0; EM(:)   = 0.D0; EM_W(:) = 0.D0
+          RJ_IND(:) = 0.D0
+          EPSRM(:)  = 0.D0; EPSRG(:)  = 0.D0
+          EPSRM2(:) = 0.D0; EPSRG2(:) = 0.D0
+          EPSRMX(:) = 0.D0; EPSRGX(:) = 0.D0
+          ITL(:) = 0; ITU(:) = 0
+          ITLG(:) = 0; ITUG(:) = 0
+          ITLG_RG(:) = 0; ITUG_RG(:) = 0
+          ITL_judge(:) = 0; ITLG_judge(:) = 0
+          THG(:) = 0.D0; THM(:) = 0.D0
+          DELP(:) = 0.D0
+          RFSAD(:)       = 0.D0
+          RFSADG(:)      = 0.D0
+          RFSADG_RG(:)   = 0.D0
+          RATIO_NAVMAX(:) = 0.D0
+          A_chi0(:)      = 0.D0
+          Line_Element(:) = 0.D0
+          RLAMDA_NRMAXP1(:) = 0.D0
+          ETAM_NRMAXP1(:)   = 0.D0
+          ETAG_NRMAXP1(:)   = 0.D0
+          SING(:) = 0.D0; COSG(:) = 0.D0
+          SINM(:) = 0.D0; COSM(:) = 0.D0
+          RNFP0(:) = 0.D0; RNFPS(:) = 0.D0
+          RTFP0(:) = 0.D0; RTFPS(:) = 0.D0
+          RTFD0(:) = 0.D0; RTFDS(:) = 0.D0
+          AMFP(:)  = 0.D0; AEFP(:)  = 0.D0
+          PTFP0(:) = 0.D0; VTFP0(:) = 0.D0
+          RNFD0(:) = 0.D0
+          AEFD(:)  = 0.D0; AMFD(:)  = 0.D0
+          PTFD0(:) = 0.D0; VTFD0(:) = 0.D0
+          THETA0(:) = 0.D0
+          RN0_MGI(:) = 0.D0
+          SIGMA_SPP(:) = 0.D0; SIGMA_SPM(:) = 0.D0
+          RJ_bs(:)  = 0.D0
+          RJ_bsm(:) = 0.D0
+          conduct_sp(:) = 0.D0
+          RFP(:) = 0.D0
+          RFP_ava(:) = 0.D0
+          RNS_S2(:) = 0.D0
+          tau_ta0(:) = 0.D0
+          RPDRS(:) = 0.D0; RNDRS(:) = 0.D0
+          tau_se(:) = 0.D0; tau_n(:) = 0.D0
+          DEPS_SS(:) = 0.D0
+          PIP_E(:)   = 0.D0
+          NLMAX(:) = 0
+          DL(:) = 0.D0; BM(:) = 0.D0
+          FM(:) = 0.D0
+          FM_shadow_m(:) = 0.D0; FM_shadow_p(:) = 0.D0
+
+          ! --- 2D ---
+          PG(:,:) = 0.D0; PM(:,:) = 0.D0
+          PG2(:,:) = 0.D0; PM2(:,:) = 0.D0
+          RLAMDAG(:,:) = 0.D0; RLAMDAG_RG(:,:) = 0.D0
+          ETAMG(:,:)   = 0.D0; ETAMG_RG(:,:)   = 0.D0
+          ETAG(:,:)    = 0.D0; ETAM(:,:)       = 0.D0
+          ETAG_RG(:,:) = 0.D0; ETAM_RG(:,:)    = 0.D0
+          RLAMDA(:,:)  = 0.D0; RLAMDC(:,:)     = 0.D0
+          RLAMDA_RG(:,:) = 0.D0; RLAMDC_G(:,:) = 0.D0
+          RNFP(:,:) = 0.D0; RTFP(:,:) = 0.D0
+          RNFP_G(:,:) = 0.D0; RTFP_G(:,:) = 0.D0
+          PTFP(:,:) = 0.D0; VTFP(:,:) = 0.D0
+          THETA(:,:) = 0.D0; DKBSR(:,:) = 0.D0
+          RNFD(:,:) = 0.D0; RTFD(:,:) = 0.D0
+          PTFD(:,:) = 0.D0; VTFD(:,:) = 0.D0
+          RN_MGI(:,:)   = 0.D0
+          RN_MGI_G(:,:) = 0.D0
+          RNSL(:,:) = 0.D0; RJSL(:,:) = 0.D0
+          RJESL(:,:) = 0.D0
+          RNSL_DELF(:,:) = 0.D0
+          RWSL_PARA(:,:) = 0.D0; RWSL_PERP(:,:) = 0.D0
+          RJSRL(:,:) = 0.D0
+          RWSL(:,:) = 0.D0; RWS123L(:,:) = 0.D0
+          RSPBL(:,:) = 0.D0; RSPFL(:,:) = 0.D0
+          RSPSL(:,:) = 0.D0; RSPLL(:,:) = 0.D0
+          RSPSL_CX(:,:) = 0.D0
+          RSP_ICL(:,:) = 0.D0
+          RPCSL(:,:) = 0.D0; RPESL(:,:) = 0.D0
+          RPWSL(:,:) = 0.D0; RLHSL(:,:) = 0.D0
+          RFWSL(:,:) = 0.D0; RECSL(:,:) = 0.D0
+          RWRSL(:,:) = 0.D0; RWMSL(:,:) = 0.D0
+          RDIDTL(:,:) = 0.D0
+          RDIDT(:,:)  = 0.D0
+          RPSSL(:,:)  = 0.D0
+          RPLSL(:,:)  = 0.D0
+          RNS(:,:)  = 0.D0; RJS(:,:) = 0.D0; RJS_M(:,:) = 0.D0
+          RJES(:,:) = 0.D0
+          RNS_DELF_NSA(:,:)  = 0.D0
+          RWS_DELF_PARA(:,:) = 0.D0; RWS_DELF_PERP(:,:) = 0.D0
+          RNS_DELF(:,:) = 0.D0
+          RWS_PARA(:,:) = 0.D0; RWS_PERP(:,:) = 0.D0
+          TP_FRACL(:,:) = 0.D0; TP_FRAC_DELL(:,:) = 0.D0
+          TP_FRAC(:,:)  = 0.D0; TP_FRAC_DEL(:,:)  = 0.D0
+          RJSR(:,:) = 0.D0
+          RWS(:,:) = 0.D0; RWS123(:,:) = 0.D0
+          RSPB(:,:) = 0.D0; RSPF(:,:) = 0.D0
+          RSP_IC(:,:) = 0.D0
+          RSPL(:,:) = 0.D0; RSPS(:,:) = 0.D0
+          RSPS_CX(:,:) = 0.D0
+          RPCS(:,:) = 0.D0; RPES(:,:) = 0.D0
+          RPWS(:,:) = 0.D0; RLHS(:,:) = 0.D0
+          RFWS(:,:) = 0.D0; RECS(:,:) = 0.D0
+          RWRS(:,:) = 0.D0; RWMS(:,:) = 0.D0
+          RPSS(:,:) = 0.D0
+          RPLS(:,:) = 0.D0
+          RPDR(:,:) = 0.D0; RNDR(:,:) = 0.D0
+          RPDRL(:,:) = 0.D0; RNDRL(:,:) = 0.D0
+          RT_BULK(:,:)  = 0.D0
+          RTL_BULK(:,:) = 0.D0
+          RPWLH_L(:,:) = 0.D0
+          RPWFW_L(:,:) = 0.D0
+          RPWEC_L(:,:) = 0.D0
+          RPWWR_L(:,:) = 0.D0
+          RPWWM_L(:,:) = 0.D0
+          RIPP(:,:) = 0.D0
+          RN_TEMP(:,:) = 0.D0; RT_TEMP(:,:) = 0.D0
+          RN_INIT(:,:) = 0.D0; RT_INIT(:,:) = 0.D0
+          RN_BULK(:,:) = 0.D0
+          AL(:,:) = 0.D0
+          LL(:,:) = 0
+          NP_BULK(:,:) = 0
+          NP_thermal(:,:) = 0
+
+          ! --- 3D ---
+          VOLP(:,:,:) = 0.D0
+          FS0(:,:,:) = 0.D0; FS2(:,:,:) = 0.D0; FS1(:,:,:) = 0.D0
+          SPPD(:,:,:) = 0.D0
+          NMA(:,:,:) = 0
+          RPCS2L(:,:,:) = 0.D0
+          RPCS2L_DEL(:,:,:) = 0.D0
+          RPCS2(:,:,:) = 0.D0
+          RPCS2_DEL(:,:,:) = 0.D0
+          RP_BULK(:,:,:)  = 0.D0
+          RPL_BULK(:,:,:) = 0.D0
+          LNLAM(:,:,:) = 0.D0
+          RNUF(:,:,:) = 0.D0
+          RNUD(:,:,:) = 0.D0
+
+          ! --- 4D ---
+          FNS(:,:,:,:) = 0.D0
+          FNS0(:,:,:,:) = 0.D0
+          FNSP(:,:,:,:) = 0.D0
+          FNSM(:,:,:,:) = 0.D0
+          FNSP_DEL(:,:,:,:)  = 0.D0
+          FNSP_MXWL(:,:,:,:) = 0.D0
+          FNSB(:,:,:,:) = 0.D0
+          WEIGHP(:,:,:,:) = 0.D0
+          WEIGHT(:,:,:,:) = 0.D0
+          WEIGHR(:,:,:,:) = 0.D0
+          DPP(:,:,:,:) = 0.D0; DPT(:,:,:,:) = 0.D0
+          DTP(:,:,:,:) = 0.D0; DTT(:,:,:,:) = 0.D0
+          FPP(:,:,:,:) = 0.D0; FTH(:,:,:,:) = 0.D0
+          DRR(:,:,:,:) = 0.D0; FRR(:,:,:,:) = 0.D0
+          FEPP(:,:,:,:) = 0.D0; FETH(:,:,:,:) = 0.D0
+          DCPP(:,:,:,:) = 0.D0; DCPT(:,:,:,:) = 0.D0
+          DCTP(:,:,:,:) = 0.D0; DCTT(:,:,:,:) = 0.D0
+          FCPP(:,:,:,:) = 0.D0; FCTH(:,:,:,:) = 0.D0
+          DLPP(:,:,:,:) = 0.D0; FLPP(:,:,:,:) = 0.D0
+          FSPP(:,:,:,:) = 0.D0; FSTH(:,:,:,:) = 0.D0
+          DWPP(:,:,:,:) = 0.D0; DWPT(:,:,:,:) = 0.D0
+          DWTP(:,:,:,:) = 0.D0; DWTT(:,:,:,:) = 0.D0
+          DWLHPP(:,:,:,:) = 0.D0; DWLHPT(:,:,:,:) = 0.D0
+          DWFWPP(:,:,:,:) = 0.D0; DWFWPT(:,:,:,:) = 0.D0
+          DWECPP(:,:,:,:) = 0.D0; DWECPT(:,:,:,:) = 0.D0
+          DWECTP(:,:,:,:) = 0.D0; DWECTT(:,:,:,:) = 0.D0
+          DWWRPP(:,:,:,:) = 0.D0; DWWRPT(:,:,:,:) = 0.D0
+          DWWRTP(:,:,:,:) = 0.D0; DWWRTT(:,:,:,:) = 0.D0
+          DWWMPP(:,:,:,:) = 0.D0; DWWMPT(:,:,:,:) = 0.D0
+          DWWMTP(:,:,:,:) = 0.D0; DWWMTT(:,:,:,:) = 0.D0
+          SPP(:,:,:,:) = 0.D0; PPL(:,:,:,:) = 0.D0
+          SPPB(:,:,:,:) = 0.D0; SPPF(:,:,:,:) = 0.D0
+          SPPS(:,:,:,:) = 0.D0; SPPI(:,:,:,:) = 0.D0
+          SPPL(:,:,:,:) = 0.D0; SPPL_CX(:,:,:,:) = 0.D0
+          SPP_ICRF(:,:,:,:) = 0.D0
+
+          ! --- 5D ---
+          DCPP2(:,:,:,:,:) = 0.D0; DCPT2(:,:,:,:,:) = 0.D0
+          DCTP2(:,:,:,:,:) = 0.D0; DCTT2(:,:,:,:,:) = 0.D0
+          FCPP2(:,:,:,:,:) = 0.D0; FCTH2(:,:,:,:,:) = 0.D0
+
+          ! --- conditionally-allocated (mirror allocate guards above) ---
+          IF(MODELD.ne.0)THEN
+             WEIGHR_G(:,:,:,:) = 0.D0
+          END IF
+          IF(MODEL_WAVE.ne.0)THEN
+             DWPP_P(:,:,:,:) = 0.D0; DWPT_P(:,:,:,:) = 0.D0
+             DWTP_P(:,:,:,:) = 0.D0; DWTT_P(:,:,:,:) = 0.D0
+          END IF
+          IF(MODEL_DISRUPT.ne.0)THEN
+             ER_drei(:)   = 0.D0; ER_crit(:) = 0.D0
+             Rconnor(:)   = 0.D0; lnl_gl(:)  = 0.D0
+             RP_crit(:)   = 0.D0
+             RN_disrupt(:) = 0.D0; RN_runaway(:) = 0.D0
+             RN_drei(:)    = 0.D0; RN_runaway_M(:) = 0.D0
+             Rj_ohm(:) = 0.D0; RJ_runaway(:) = 0.D0
+             R_djdt(:) = 0.D0
+             previous_rate(:)   = 0.D0
+             previous_rate_p(:) = 0.D0
+             previous_rate_G(:)   = 0.D0
+             previous_rate_p_G(:) = 0.D0
+             RE_PITCH(:) = 0.D0
+             RT_quench(:)   = 0.D0
+             RT_quench_f(:) = 0.D0
+             POST_LNLAM_f(:,:,:) = 0.D0
+             POST_LNLAM(:,:,:)   = 0.D0
+             POST_tau_ta0_f(:) = 0.D0
+             POST_tau_ta(:,:)  = 0.D0
+             E_drei0(:) = 0.D0; E_crit0(:) = 0.D0
+          END IF
+          IF(MODEL_EX_READ_Tn.ne.0)THEN
+             RN_READ(:,:) = 0.D0; RT_READ(:,:) = 0.D0
+             RNE_EXP(:)   = 0.D0
+             RTE_EXP(:)   = 0.D0
+             RTI_EXP(:)   = 0.D0
+             cte_fit(:) = 0.D0; cne_fit(:) = 0.D0; cti_fit(:) = 0.D0
+          END IF
+          IF(ABS(MODELS).eq.2.OR.MODELS.eq.3)THEN
+             IF(ABS(MODELS).eq.2)THEN
+                SIGMAV_NF(:,:,:,:,:) = 0.D0
+                SIGMAV_NF_BT(:,:,:)  = 0.D0
+             ELSEIF(MODELS.eq.3)THEN
+                SIGMAV_LG(:,:,:,:,:) = 0.D0
+                PL_NF(:,:)           = 0.D0
+             END IF
+             RATE_NF(:,:)    = 0.D0
+             RATE_NF_BT(:,:) = 0.D0
+             RATE_NF_TT(:,:) = 0.D0
+             RATE_NF_D2(:,:,:,:) = 0.D0
+             RATE_NF_D1(:,:,:,:) = 0.D0
+          ENDIF
+
           return
         end subroutine fp_allocate
 
@@ -960,6 +1211,27 @@ module fpcomm
           allocate(PDR(NSAMAX,NTG1M),PNDR(NSAMAX,NTG1M))
           allocate(PTT_BULK(NSAMAX,NTG1M))
 
+          ! Defensive zero-init (see fp_allocate for the full rationale).
+          ! Time-history (NTG1M) arrays are appended to each step; NTG1 is
+          ! reset to 0 elsewhere, but a partial NaN from stale heap has
+          ! been observed to leak into the first-step averages during
+          ! property-test re-init cycles.
+          PTG(:) = 0.D0; PET(:) = 0.D0; PQT(:) = 0.D0; Q_ENG(:) = 0.D0
+          PNT(:,:) = 0.D0; PWT(:,:) = 0.D0; PTT(:,:) = 0.D0
+          PIT(:,:) = 0.D0; PIRT(:,:) = 0.D0
+          PPCT(:,:) = 0.D0; PPST(:,:) = 0.D0; PPLT(:,:) = 0.D0
+          PPWT(:,:) = 0.D0; PPET(:,:) = 0.D0
+          PLHT(:,:) = 0.D0; PFWT(:,:) = 0.D0; PECT(:,:) = 0.D0
+          PWRT(:,:) = 0.D0; PWMT(:,:) = 0.D0
+          PTT3(:,:) = 0.D0; PITT(:,:) = 0.D0; PWTT(:,:) = 0.D0
+          PNT2(:,:) = 0.D0; PWT2(:,:) = 0.D0; PWTD(:,:) = 0.D0
+          PTT2(:,:) = 0.D0; PIT2(:,:) = 0.D0
+          PSPT(:,:) = 0.D0; PSPBT(:,:) = 0.D0; PSPFT(:,:) = 0.D0
+          PSPLT(:,:) = 0.D0; PSPST(:,:) = 0.D0
+          PPCT2(:,:,:) = 0.D0
+          PDR(:,:) = 0.D0; PNDR(:,:) = 0.D0
+          PTT_BULK(:,:) = 0.D0
+
           NSAMAX_save=NSAMAX
           NSBMAX_save=NSBMAX
           return
@@ -1213,6 +1485,25 @@ module fpcomm
           allocate(RTT_BULK(NRMAX,NSAMAX,NTG2M))
           allocate(RATE_RUNAWAY2(NRMAX,NSAMAX,NTG2M))
           allocate(RPCT2(NRMAX,NSBMAX,NSAMAX,NTG2M))
+
+          ! Defensive zero-init (see fp_allocate for the full rationale).
+          ! NTG2M arrays are also accumulated per-step so any stale heap
+          ! chunk would taint the first post-reinit average otherwise.
+          RTG(:) = 0.D0
+          RET(:,:) = 0.D0; RQT(:,:) = 0.D0
+          EPTR(:,:) = 0.D0
+          RATE_RUNAWAY(:,:) = 0.D0
+          RNT(:,:,:) = 0.D0; RWT(:,:,:) = 0.D0; RTT(:,:,:) = 0.D0
+          RJT(:,:,:) = 0.D0; RJRT(:,:,:) = 0.D0
+          RPCT(:,:,:) = 0.D0; RPWT(:,:,:) = 0.D0; RPET(:,:,:) = 0.D0
+          RLHT(:,:,:) = 0.D0; RFWT(:,:,:) = 0.D0; RECT(:,:,:) = 0.D0
+          RWRT(:,:,:) = 0.D0; RWMT(:,:,:) = 0.D0
+          RSPBT(:,:,:) = 0.D0; RSPFT(:,:,:) = 0.D0
+          RSPLT(:,:,:) = 0.D0; RSPST(:,:,:) = 0.D0
+          RPDRT(:,:,:) = 0.D0; RNDRT(:,:,:) = 0.D0
+          RTT_BULK(:,:,:) = 0.D0
+          RATE_RUNAWAY2(:,:,:) = 0.D0
+          RPCT2(:,:,:,:) = 0.D0
 
           NRMAX_save=NRMAX
           NSAMAX_save=NSAMAX
