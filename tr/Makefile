@@ -35,6 +35,7 @@ SRCS_CORE=trcdbm.f90 trmodels.f90 \
      trcoef_turbulence.f90 trcoef_neoclassical.f90 \
      trcoef_resistivity.f90 trcoef_adhoc.f90 \
      trinit.f90 trparm.f90 trview.f90 \
+     tr_dump_state.f90 \
      trmetric.f90 trprof.f90 trprep.f90 \
      trufsub.f90 tr_ufile_task.f90 tr_ufile_topics.f90 trufile.f90 \
      trfile.f90 trhelp.f90 \
@@ -471,7 +472,13 @@ $(OBJDIR)/trmain.o : trmain.f90 trcomm.f90 $(OBJDIR)/trrslt_print.o
 $(OBJDIR)/trmenu.o : trmenu.f90 trcomm.f90 trcom1.f90 $(OBJDIR)/trrslt_files.o $(OBJDIR)/trrslt_print.o
 $(OBJDIR)/trinit.o : trinit.f90 trcomm.f90 trcom1.f90
 $(OBJDIR)/trparm.o : trparm.f90 trcomm.f90 trcom1.f90
-$(OBJDIR)/trprep.o : trprep.f90 trcomm.f90 trcom1.f90
+$(OBJDIR)/tr_dump_state.o : tr_dump_state.f90 \
+                     trcom0.f90 trcomm_param.f90 trcomm_ctrl.f90 \
+                     trcomm_profile.f90 \
+                     $(OBJDIR)/trcomm_param.o $(OBJDIR)/trcomm_ctrl.o \
+                     $(OBJDIR)/trcomm_profile.o $(OBJDIR)/trcom0.o
+$(OBJDIR)/trprep.o : trprep.f90 trcomm.f90 trcom1.f90 \
+                     $(OBJDIR)/tr_dump_state.o
 $(OBJDIR)/trprof.o : trprof.f90 trcomm.f90 trcom1.f90 trcoef_resistivity.f90
 $(OBJDIR)/trmetric.o : trmetric.f90 trcomm.f90 trcom1.f90
 $(OBJDIR)/trfile.o : trfile.f90 trcomm.f90 trcom1.f90

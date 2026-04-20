@@ -15,6 +15,7 @@ CONTAINS
     USE trprof
     USE trbpsd
     USE trmetric
+    USE tr_dump_state_mod, ONLY : tr_dump_state_if_requested
     IMPLICIT NONE
     INTEGER,INTENT(OUT):: ierr
 
@@ -104,6 +105,10 @@ CONTAINS
       GRG(1)=0.0
       GRM(1:NRMAX)  =SNGL(RM(1:NRMAX))
       GRG(2:NRMAX+1)=SNGL(RG(1:NRMAX))
+
+      ! Optional state dump for binary-vs-library divergence diagnosis.
+      ! No-op unless TR_DUMP_STATE env var is set to a writable file path.
+      CALL tr_dump_state_if_requested('after_tr_prep')
 
       RETURN
 

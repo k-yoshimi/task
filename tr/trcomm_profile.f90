@@ -143,6 +143,17 @@ CONTAINS
       IF(ierr /= 0) RETURN
     ALLOCATE(BP(NRMAX),RDP(NRMAX),RPSI(NRMAX),STAT=ierr)
       IF(ierr /= 0) RETURN
+    ! Zero-init BP/RDP/RPSI: when libtrapi.so re-ALLOCATEs after a
+    ! finalize+init cycle, glibc malloc may return the same chunk that
+    ! tst2 freed in DEALLOCATE_TRCOMM, so the new "uninit" memory holds
+    ! the previous run's poloidal-field values. trcalc.f90:66 *does*
+    ! overwrite BP every step, but RDP feeds into that very assignment
+    ! (BP=AR1RHOG*RDP/RR), and stale RDP can leak into BP. Same for
+    ! EZOH (1060 below) and any profile that an MDL flag short-circuits
+    ! out of being recomputed.
+    BP(:)   = 0.D0
+    RDP(:)  = 0.D0
+    RPSI(:) = 0.D0
     ALLOCATE(RN(NRMAX,NSTM),RT(NRMAX,NSTM),RU(NRMAX,NSTM),STAT=ierr)
       IF(ierr /= 0) RETURN
     ALLOCATE(RW(NRMAX,NFM),RNF(NRMAX,NFM),RTF(NRMAX,NFM),STAT=ierr)
@@ -164,6 +175,10 @@ CONTAINS
       IF(ierr /= 0) RETURN
     ALLOCATE(EZOH(NRMAX),QP(NRMAX),AJTOR(NRMAX),AJNB(NRMAX),STAT=ierr)
       IF(ierr /= 0) RETURN
+    EZOH(:)  = 0.D0
+    QP(:)    = 0.D0
+    AJTOR(:) = 0.D0
+    AJNB(:)  = 0.D0
     ALLOCATE(QPINV(NRMAX),STAT=ierr)
       IF(ierr /= 0) RETURN
     ALLOCATE(AJRF(NRMAX),AJBS(NRMAX),PNB(NRMAX),SNB(NRMAX),STAT=ierr)
@@ -238,6 +253,19 @@ CONTAINS
       IF(ierr /= 0) RETURN
     ALLOCATE(PNSA(NSTM),PTSA(NSTM),STAT=ierr)
       IF(ierr /= 0) RETURN
+    ! Zero-init sister arrays of PNSS (PR #119). When NSMAX < NSM
+    ! (e.g. tst2 has NSMAX=2 but NSM=4 hard-coded in tr/trcom0.f90:11),
+    ! tr_prof_impurity (trprof.f90:319-322,329-331) only writes
+    ! PNSSA(1), PNSSA(2:NSMAX), PNSSA(7), PNSSA(8) -- leaving
+    ! PNSSA(NSMAX+1 .. NSM) untouched. TR_EDGE_SELECTOR/DETERMINER
+    ! (trprof.f90:680-720) then reads PNSSA(NS)/PNSA(NS)/PTSA(NS) for
+    ! NS=1..NSM=4 in DO NS=1,NSM loops, getting machine-dependent
+    ! garbage that cascades to NaN/negative T in libtrapi.so callers
+    ! (libtrapi sees non-zero heap from prior Python+numpy mallocs).
+    ! See docs/external-patches/tr/REPORT.md.
+    PNSSA(:) = 0.D0
+    PNSA(:)  = 0.D0
+    PTSA(:)  = 0.D0
     ALLOCATE(PEX(NRMAX,NSTM),SEX(NRMAX,NSTM),STAT=ierr)
       IF(ierr /= 0) RETURN
     ALLOCATE(AKDWD(NRMAX,NSM,NSM),AKDWP(NRMAX,NSM,NSM),STAT=ierr)
@@ -297,6 +325,85 @@ CONTAINS
 
     ALLOCATE(PNSSO(NSTM),PTSO(NSTM),PNSSAO(NSTM),PTSAO(NSTM),STAT=ierr)
       IF(ierr /= 0) RETURN
+    ! Zero-init the saved/restored edge profiles. TR_EDGE_SELECTOR
+    ! (trprof.f90:680-720) saves PNSS->PNSSO, PTS->PTSO, then later
+    ! restores PNSS<-PNSSO, etc., using DO NS=1,NSM (hard-coded NSM=4).
+    ! When NSMAX<4 and the process heap is non-zero (libtrapi.so loaded
+    ! by Python), PNSSO(3:4)/PNSSAO(3:4) contain junk on the first save
+    ! call before the corresponding writer has run, and that junk is
+    ! then restored back into PNSS/PNSSA. See REPORT.md.
+    PNSSO(:)  = 0.D0
+    PTSO(:)   = 0.D0
+    PNSSAO(:) = 0.D0
+    PTSAO(:)  = 0.D0
+
+    ! Defensive zero-init of every profile array. A standalone tr2 binary
+    ! launch starts with a fresh process heap (effectively zero). The
+    ! libtrapi.so re-init path (after tr_finalize -> ALLOCATE_TRCOMM
+    ! again) goes through glibc malloc, which may return a chunk that
+    ! still holds the previous run's values. Without this sweep, fields
+    ! like BP/EZOH/RDP retain stale poloidal-field/equilibrium values
+    ! from the prior fixture, which then leak into the next test's
+    ! tr_set_metric / trcalc step (NaN cascade in tr_iter01-after-
+    ! tr_tst2). Zero-init mimics the fresh-process heap that the binary
+    ! tr2 has, so consecutive Trlib() instances are reproducible.
+    RG(:) = 0.D0; RM(:) = 0.D0; RHOM(:) = 0.D0; RHOG(:) = 0.D0
+    RN(:,:) = 0.D0; RT(:,:) = 0.D0; RU(:,:) = 0.D0; RW(:,:) = 0.D0
+    RNF(:,:) = 0.D0; RTF(:,:) = 0.D0
+    ANC(:) = 0.D0; ANFE(:) = 0.D0; ANNU(:) = 0.D0; ZEFF(:) = 0.D0
+    PZC(:) = 0.D0; PZFE(:) = 0.D0
+    BETA(:) = 0.D0; BETAP(:) = 0.D0; BETAL(:) = 0.D0; BETAPL(:) = 0.D0
+    BETAQ(:) = 0.D0; PBM(:) = 0.D0; PADD(:) = 0.D0
+    VTOR(:) = 0.D0; VPAR(:) = 0.D0; VPRP(:) = 0.D0; VPOL(:) = 0.D0
+    WROT(:) = 0.D0; ER(:) = 0.D0; VEXB(:) = 0.D0; WEXB(:) = 0.D0
+    AGMP(:) = 0.D0; VEXBP(:) = 0.D0; WEXBP(:) = 0.D0
+    AJ(:) = 0.D0; AJOH(:) = 0.D0; AJRF(:) = 0.D0; AJBS(:) = 0.D0
+    QPINV(:) = 0.D0
+    PNB(:) = 0.D0; SNB(:) = 0.D0; PBIN(:) = 0.D0
+    PNF(:) = 0.D0; SNF(:) = 0.D0; PFIN(:) = 0.D0; POH(:) = 0.D0
+    PRB(:) = 0.D0; PRC(:) = 0.D0; PRL(:) = 0.D0; PRSUM(:) = 0.D0
+    PCX(:) = 0.D0; PIE(:) = 0.D0
+    SIE(:) = 0.D0; SCX(:) = 0.D0; TSIE(:) = 0.D0; TSCX(:) = 0.D0
+    PIN(:,:) = 0.D0; SSIN(:,:) = 0.D0; PBCL(:,:) = 0.D0; SPE(:,:) = 0.D0
+    PFCL(:,:) = 0.D0; PRF(:,:) = 0.D0
+    PRFV(:,:,:) = 0.D0; AJRFV(:,:) = 0.D0
+    RGFLX(:,:) = 0.D0; SPSC(:,:) = 0.D0
+    ETA(:) = 0.D0; S(:) = 0.D0; ALPHA(:) = 0.D0; RKCV(:) = 0.D0
+    TAUB(:) = 0.D0; TAUF(:) = 0.D0; TAUK(:) = 0.D0
+    AK(:,:) = 0.D0; AVK(:,:) = 0.D0; AD(:,:) = 0.D0; AV(:,:) = 0.D0
+    AKNC(:,:) = 0.D0; AKDW(:,:) = 0.D0; ADNC(:,:) = 0.D0; ADDW(:,:) = 0.D0
+    AVNC(:,:) = 0.D0; AVDW(:,:) = 0.D0; AVKNC(:,:) = 0.D0; AVKDW(:,:) = 0.D0
+    VGR1(:,:) = 0.D0; VGR2(:,:) = 0.D0; VGR3(:,:) = 0.D0; VGR4(:,:) = 0.D0
+    RHOTR(:) = 0.D0; PRHO(:) = 0.D0; HJRHO(:) = 0.D0; VTRHO(:) = 0.D0
+    TRHO(:) = 0.D0; TTRHO(:) = 0.D0; DVRHO(:) = 0.D0; RKPRHO(:) = 0.D0
+    ABRHO(:) = 0.D0; ABVRHO(:) = 0.D0
+    PSITRHO(:) = 0.D0; PSIPRHO(:) = 0.D0; PPPRHO(:) = 0.D0
+    PIQRHO(:) = 0.D0; PIRHO(:) = 0.D0; FACTQ(:) = 0.D0
+    ARRHO(:) = 0.D0; AR1RHO(:) = 0.D0; AR2RHO(:) = 0.D0
+    RJCB(:) = 0.D0; EPSRHO(:) = 0.D0; BPRHO(:) = 0.D0
+    RMJRHO(:) = 0.D0; RMNRHO(:) = 0.D0
+    TTRHOG(:) = 0.D0; DVRHOG(:) = 0.D0; RKPRHOG(:) = 0.D0
+    ABRHOG(:) = 0.D0; ABVRHOG(:) = 0.D0
+    ARRHOG(:) = 0.D0; AR1RHOG(:) = 0.D0; AR2RHOG(:) = 0.D0
+    ABB2RHOG(:) = 0.D0; AIB2RHOG(:) = 0.D0; ARHBRHOG(:) = 0.D0
+    PVOLRHOG(:) = 0.D0; PSURRHOG(:) = 0.D0; ABB1RHO(:) = 0.D0
+    RMJRHOG(:) = 0.D0; RMNRHOG(:) = 0.D0; RDPVRHOG(:) = 0.D0
+    QRHO(:) = 0.D0
+    RTM(:) = 0.D0; AMZ(:) = 0.D0; PEXT(:) = 0.D0
+    PEX(:,:) = 0.D0; SEX(:,:) = 0.D0
+    AKDWD(:,:,:) = 0.D0; AKDWP(:,:,:) = 0.D0
+    ADDWD(:,:,:) = 0.D0; ADDWP(:,:,:) = 0.D0
+    VV(:,:,:,:) = 0.D0; DD(:,:,:,:) = 0.D0
+    VI(:,:,:,:) = 0.D0; DI(:,:,:,:) = 0.D0
+    AJBSNC(:) = 0.D0; ETANC(:) = 0.D0; AJEXNC(:) = 0.D0
+    CJBSP(:,:) = 0.D0; CJBST(:,:) = 0.D0
+    ADNCG(:,:) = 0.D0; AVNCG(:,:) = 0.D0
+    AKNCP(:,:,:) = 0.D0; AKNCT(:,:,:) = 0.D0
+    ADNCP(:,:,:) = 0.D0; ADNCT(:,:,:) = 0.D0
+    AKLP(:,:,:) = 0.D0; AKLD(:,:,:) = 0.D0
+    ADLP(:,:,:) = 0.D0; ADLD(:,:,:) = 0.D0
+    RGFLS(:,:,:) = 0.D0; RQFLS(:,:,:) = 0.D0
+    PTSA(:) = 0.D0  ! redundant with line above but kept for clarity
   END SUBROUTINE allocate_trcomm_profile
 
   SUBROUTINE deallocate_trcomm_profile
