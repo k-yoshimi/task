@@ -1,0 +1,38 @@
+diff --git a/trmodels/nclass/nclass_mod.for b/trmodels/nclass/nclass_mod.for
+--- a/trmodels/nclass/nclass_mod.for
++++ b/trmodels/nclass/nclass_mod.for
+@@ -460,6 +460,12 @@
+       CALL RARRAY_ZERO(3*mx_ms*m_i,crhatp)
+       CALL RARRAY_ZERO(3*mx_ms*m_i,crhatt)
+       CALL RARRAY_ZERO(3*mx_mi*3*m_i,ab)
+       CALL RARRAY_ZERO(5*m_s,gfl_s)
+       CALL RARRAY_ZERO(5*m_s,qfl_s)
++!  rhatp/rhatt: only the diagonal (k,i,i) is filled by U_LU_BACKSUB;
++!  off-diagonal entries are READ further below to copy into uaip/uait.
++!  Without explicit zeroing the off-diagonals return uninitialised
++!  stack contents.  Physically the off-diagonals are zero (species
++!  responses are independent in this decomposition step).
++      CALL RARRAY_ZERO(3*mx_ms*mx_ms,rhatp)
++      CALL RARRAY_ZERO(3*mx_ms*mx_ms,rhatt)
+       p_etap=0.0
+       p_bsjb=0.0
+       p_exjb=0.0
+diff --git a/tx/nclass/nclass_mod.f b/tx/nclass/nclass_mod.f
+--- a/tx/nclass/nclass_mod.f
++++ b/tx/nclass/nclass_mod.f
+@@ -460,6 +460,12 @@
+       CALL RARRAY_ZERO(3*mx_ms*m_i,crhatp)
+       CALL RARRAY_ZERO(3*mx_ms*m_i,crhatt)
+       CALL RARRAY_ZERO(3*mx_mi*3*m_i,ab)
+       CALL RARRAY_ZERO(5*m_s,gfl_s)
+       CALL RARRAY_ZERO(5*m_s,qfl_s)
++!  rhatp/rhatt: only the diagonal (k,i,i) is filled by U_LU_BACKSUB;
++!  off-diagonal entries are READ further below to copy into uaip/uait.
++!  Without explicit zeroing the off-diagonals return uninitialised
++!  stack contents.  Physically the off-diagonals are zero (species
++!  responses are independent in this decomposition step).
++      CALL RARRAY_ZERO(3*mx_ms*mx_ms,rhatp)
++      CALL RARRAY_ZERO(3*mx_ms*mx_ms,rhatt)
+       p_etap=0.0
+       p_bsjb=0.0
+       p_exjb=0.0

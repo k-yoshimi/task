@@ -1,0 +1,46 @@
+diff --git a/tr/trcomm_profile.f90 b/tr/trcomm_profile.f90
+--- a/tr/trcomm_profile.f90
++++ b/tr/trcomm_profile.f90
+@@ -237,8 +237,22 @@ CONTAINS
+     ALLOCATE(RTM(NSTM),AMZ(NSTM),PEXT(NSTM),PNSSA(NSTM),STAT=ierr)
+       IF(ierr /= 0) RETURN
+     ALLOCATE(PNSA(NSTM),PTSA(NSTM),STAT=ierr)
+       IF(ierr /= 0) RETURN
++    ! ---------------------------------------------------------------
++    ! Zero-init sister arrays of PNSS (PR #119). When NSMAX < NSM
++    ! (e.g. tst2 has NSMAX=2 but tr/trcom0.f90:11 hard-codes NSM=4),
++    ! tr_prof_impurity (trprof.f90:319-322,329-331) only writes
++    ! PNSSA(1), PNSSA(2:NSMAX), PNSSA(7), PNSSA(8) -- leaving
++    ! PNSSA(NSMAX+1 .. NSM) untouched. TR_EDGE_SELECTOR
++    ! (trprof.f90:680-720) then reads PNSSA(NS)/PNSA(NS)/PTSA(NS) for
++    ! NS=1..NSM=4 in DO NS=1,NSM loops, getting machine-dependent
++    ! garbage that cascades to NaN in RT through the turbulence
++    ! coefficient chain (trcoef_turbulence.f90:181-186) and via the
++    ! wall-boundary pressure RPV=PNSSA(NS)*PTSA(NS) at trexec.f90:1772.
++    ! See docs/external-patches/tr/REPORT.md.
++    PNSSA(:) = 0.D0
++    PNSA(:)  = 0.D0
++    PTSA(:)  = 0.D0
+     ALLOCATE(PEX(NRMAX,NSTM),SEX(NRMAX,NSTM),STAT=ierr)
+       IF(ierr /= 0) RETURN
+     ALLOCATE(AKDWD(NRMAX,NSM,NSM),AKDWP(NRMAX,NSM,NSM),STAT=ierr)
+       IF(ierr /= 0) RETURN
+@@ -296,8 +309,18 @@ CONTAINS
+       IF(ierr /= 0) RETURN
+
+     ALLOCATE(PNSSO(NSTM),PTSO(NSTM),PNSSAO(NSTM),PTSAO(NSTM),STAT=ierr)
+       IF(ierr /= 0) RETURN
++    ! Zero-init the saved/restored edge profiles. TR_EDGE_SELECTOR
++    ! (trprof.f90:680-720) saves PNSS->PNSSO, PTS->PTSO, then later
++    ! restores PNSS<-PNSSO, etc., using DO NS=1,NSM (hard-coded
++    ! NSM=4). When NSMAX<4 and the process heap is non-zero (e.g.
++    ! libtrapi.so loaded by Python), PNSSO(3:4)/PNSSAO(3:4) contain
++    ! junk on the first save call before the corresponding writer
++    ! has run, and that junk is then restored back into PNSS/PNSSA.
++    PNSSO(:)  = 0.D0
++    PTSO(:)   = 0.D0
++    PNSSAO(:) = 0.D0
++    PTSAO(:)  = 0.D0
+   END SUBROUTINE allocate_trcomm_profile
+
+   SUBROUTINE deallocate_trcomm_profile
