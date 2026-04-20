@@ -943,7 +943,12 @@ module fpcomm
         subroutine fp_deallocate
           implicit none
 
-          deallocate(MTXLEN,MTXPOS,SAVLEN)
+          ! MTXLEN/MTXPOS/SAVLEN are allocated in fpprep.f90, not here
+          ! in fp_allocate. If fp_deallocate is reached on a path where
+          ! fpprep did not run (partial init, error recovery), the
+          ! unguarded deallocate would crash. Match the SAVPOS /
+          ! Rank_Partition_Data guards already present below.
+          IF(ALLOCATED(MTXLEN)) deallocate(MTXLEN,MTXPOS,SAVLEN)
           IF(ALLOCATED(SAVPOS)) deallocate(SAVPOS)
           IF(ALLOCATED(Rank_Partition_Data)) deallocate(Rank_Partition_Data)
 
