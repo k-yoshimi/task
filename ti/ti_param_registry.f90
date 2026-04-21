@@ -84,10 +84,15 @@ CONTAINS
     ! ---- plasma scalar int ----
     ! Early-reject out-of-range values so property-based / fuzz callers
     ! get a clean INVALID here instead of a later SEGV in ti_allocate.
-    ! 100 = plcomm::NSM hard upper bound.
+    ! 100 = plcomm::NSM hard upper bound. Use ERR_UNKNOWN_NAME (=1)
+    ! rather than ERR_BAD_INDEX (=2): BAD_INDEX is reserved for array-
+    ! subscript errors and would mislead a direct Fortran caller about
+    ! the failure mode. Both codes collapse to TI_ERR_INVALID at the
+    ! C ABI (ti_api.f90), matching the ierr=1 convention used by the
+    ! sibling tr/fp/wr registries.
     CASE ("NSMAX")
        IF (INT(value) < 1 .OR. INT(value) > 100) THEN
-          ierr = ERR_BAD_INDEX; RETURN
+          ierr = ERR_UNKNOWN_NAME; RETURN
        END IF
        NSMAX = INT(value)
 
