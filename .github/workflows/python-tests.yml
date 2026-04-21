@@ -15,6 +15,14 @@ jobs:
   pytest:
     name: pytest (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    # Hard upper bound on the whole job: if any test enters a genuine
+    # infinite loop inside libXapi.so (runaway physics iteration, not a
+    # clean STOP), per-test --timeout=signal cannot interrupt it — the
+    # child is spinning in C/Fortran and never returns to Python. This
+    # cap ensures the runner aborts instead of hanging up to the
+    # default 360 min. Typical runtime is ~12 s; 10 min is plenty of
+    # slack for a slow CI host without wasting minutes on a hung test.
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -217,7 +225,7 @@ jobs:
           python -m pytest python/ \
             --forked \
             --timeout=120 \
-            --timeout-method=thread \
+            --timeout-method=signal \
             --tb=short \
             -ra \
             --maxfail=50
