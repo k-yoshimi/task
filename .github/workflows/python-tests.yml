@@ -125,7 +125,7 @@ jobs:
       - name: Install Python test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-mock pytest-subtests pytest-forked
+          pip install pytest pytest-mock pytest-subtests pytest-forked pytest-timeout
           # tomli is needed only on <3.11; keep installed for safety on 3.11 too.
           pip install tomli
 
@@ -216,6 +216,8 @@ jobs:
           # test does not take down the whole suite.
           python -m pytest python/ \
             --forked \
+            --timeout=120 \
+            --timeout-method=signal \
             --tb=short \
             -ra \
             --maxfail=50
