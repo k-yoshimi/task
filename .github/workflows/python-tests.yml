@@ -217,7 +217,7 @@ jobs:
           python -m pytest python/ \
             --forked \
             --timeout=120 \
-            --timeout-method=signal \
+            --timeout-method=thread \
             --tb=short \
             -ra \
             --maxfail=50
