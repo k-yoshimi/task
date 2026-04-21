@@ -28,28 +28,28 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install Fortran/C build deps (gfortran-14 via toolchain PPA)
+      - name: Install Fortran/C build deps
         # gfortran + gcc + make are needed to build the libXapi.so
         # shared libraries that the Layer 1 equivalence and FFI tests
         # dlopen at runtime. Without these the tests SKIP and CI gives a
         # false pass — which previously masked real fp/eq drift.
         #
-        # Ubuntu 24.04 ships gfortran 13.2.0 by default; we pull
-        # gfortran-14 from the `ubuntu-toolchain-r/test` PPA because
-        # several Layer-1 tests SIGABRT on 13.2.0 but not on 13.3+ /
-        # 14.x. Explicitly point the Fortran driver at gfortran-14 via
-        # update-alternatives so the Makefiles pick it up.
+        # Use Ubuntu 24.04's default gfortran (13.2.0). PR #138
+        # experimented with gfortran-14 from the toolchain PPA on the
+        # hypothesis that the SIGABRT class was a 13.2 codegen bug; the
+        # actual root cause was the BPSD species_kid OOB write fixed
+        # by the patch applied in the next step. With gfortran-14 the
+        # FP results drift from the Phase-0 baselines (generated with
+        # 13.x) by ~1e-9 — beyond the 1e-10 equivalence tolerance — so
+        # we stay on the system 13.2.
         #
         # X11 is intentionally NOT installed: each lib*api.so excludes
         # graphics archives (see fp/Makefile:318), so X11 is never
         # linked into the .so files we build here.
         run: |
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gcc gfortran-14 make
-          sudo update-alternatives --install /usr/bin/gfortran gfortran \
-            /usr/bin/gfortran-14 140
+            gfortran gcc make valgrind
           gfortran --version | head -1
 
       - name: Clone BPSD + apply species-kid OOB fix
