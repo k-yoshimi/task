@@ -52,26 +52,33 @@ jobs:
             /usr/bin/gfortran-14 140
           gfortran --version | head -1
 
-      - name: Clone BPSD (sibling repo expected at ../bpsd)
+      - name: Clone BPSD + apply species-kid OOB fix
         # All module Makefiles reference BPSD_SRC=../../bpsd; the BPSD
         # source lives at https://github.com/ats-fukuyama/bpsd and is
         # not vendored into this repo.
         #
-        # Historical note: earlier drafts of this workflow referenced
-        # docs/external-patches/bpsd/bpsd-species-kid-oob-fix.patch to
-        # work around a BPSD heap-corruption bug. That patch file was
-        # never committed to this repo (the guarded `if [[ -f ]]` was
-        # silently a no-op), and the deselect-heavy release CI does not
-        # hit the SIGABRT path. If a future PR re-enables the
-        # equivalence / lifecycle tests and CI starts SIGABRTing inside
-        # bpsd_species::bpsd_species_put, either:
-        #   1. restore the patch file alongside re-enabling those tests
-        #      (see commit history on the older ci/ branches for the
-        #      actual diff), or
-        #   2. prefer fixing it upstream at github.com/ats-fukuyama/bpsd.
+        # Apply docs/external-patches/bpsd/bpsd-species-kid-oob-fix.patch
+        # to the freshly-cloned upstream because BPSD's
+        # bpsd_setup_species_kdata loop writes one element past the
+        # kid/kunit arrays (last iteration with nd = ndmax-1 = 18 writes
+        # kid(21) when array size is 20). This 32-byte CHARACTER overflow
+        # smashes the next malloc chunk's metadata and triggers
+        # "corrupted size vs. prev_size" SIGABRTs in the libtrapi.so /
+        # libtotapi.so Python wrappers under CI's glibc heap layout.
+        # The bug does not always reproduce on developer hosts (heap
+        # canary placement varies) — it was located via valgrind in
+        # PR #139.
+        #
+        # Once upstream merges the equivalent fix
+        # (https://github.com/ats-fukuyama/bpsd), drop this `git apply`
+        # step and the patch file.
         run: |
+          set -e
           git clone --depth 1 https://github.com/ats-fukuyama/bpsd.git \
             "$GITHUB_WORKSPACE/../bpsd"
+          git -C "$GITHUB_WORKSPACE/../bpsd" apply --verbose \
+            "$GITHUB_WORKSPACE/docs/external-patches/bpsd/bpsd-species-kid-oob-fix.patch"
+          echo "BPSD species kid OOB fix applied."
           ls -la "$GITHUB_WORKSPACE/../bpsd" | head -5
 
       - name: Provision mtxp/make.mtxp from nompi template
@@ -193,37 +200,30 @@ jobs:
           # of lib<mod>api.so + the ctypes-layer / state-struct tests
           # that cover the C ABI shape.
         run: |
-          # --forked isolates each test in a subprocess (pytest-forked).
-          # Some individual tests still SEGV / SIGABRT in CI's stricter
-          # gfortran runtime — those are deselected here, tracked as
-          # follow-up integration work.
+          # The previous huge --deselect list deferred Layer-1
+          # equivalence + lifecycle + integration tests because they
+          # SIGABRTed in CI. Root cause located via valgrind in #139:
+          # write-past-end in upstream BPSD's bpsd_setup_species_kdata
+          # loop. With docs/external-patches/bpsd/bpsd-species-kid-oob-
+          # fix.patch now applied during the BPSD clone step above,
+          # those tests should pass — restore them per MEMORY.md
+          # feedback_never_skip_tests + feedback_equivalence_must_pass:
+          # SKIPped tests do not count as verification.
           #
-          # What IS covered here: FFI struct-layout tests, error-mapping
-          # tests, registry-shape checks, serialisation round-trips, and
-          # all pure-Python logic. What's NOT covered yet: Layer-1
-          # equivalence (lib_run -> baseline comparison).
+          # property_boundary / property_fanout stay ignored: they
+          # crash on a different bug class (tr NRMAX registry gap,
+          # fp/ti/wr NSMAX range-guard, wr MDLWRI=2 unsupported)
+          # tracked separately as a PR #125 deferred punch list.
+          #
+          # --forked keeps process isolation so any single still-bad
+          # test does not take down the whole suite.
           python -m pytest python/ \
             --forked \
             --tb=short \
             -ra \
             --maxfail=20 \
             --ignore-glob='*property_boundary*' \
-            --ignore-glob='*property_fanout*' \
-            --deselect='python/eqlib/tests/test_equivalence.py' \
-            --deselect='python/fplib/tests/test_equivalence.py' \
-            --deselect='python/tilib/tests/test_equivalence.py' \
-            --deselect='python/trlib/tests/test_equivalence.py' \
-            --deselect='python/wrlib/tests/test_equivalence.py' \
-            --deselect='python/wrxlib/tests/test_equivalence.py' \
-            --deselect='python/totlib/tests/test_equivalence.py' \
-            --deselect='python/eqlib/tests/test_sweep.py' \
-            --deselect='python/fplib/tests/test_sweep.py' \
-            --deselect='python/tilib/tests/test_sweep.py' \
-            --deselect='python/trlib/tests/test_sweep.py' \
-            --deselect='python/wrlib/tests/test_sweep.py' \
-            --deselect='python/wrxlib/tests/test_sweep.py' \
-            --deselect='python/totlib/tests/test_sweep.py' \
-            -k 'not TestIntegration and not TestL6Integration and not TestLifecycle and not TestTotRunGetState and not test_run_zero_and_get_state'
+            --ignore-glob='*property_fanout*'
 
       # Deferred: "Run C ABI check drivers (per-module integration)"
       # The <mod>_api_check_all Makefile targets recompile wrcomm.f90
