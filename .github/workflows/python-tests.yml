@@ -200,20 +200,17 @@ jobs:
           # of lib<mod>api.so + the ctypes-layer / state-struct tests
           # that cover the C ABI shape.
         run: |
-          # The previous huge --deselect list deferred Layer-1
-          # equivalence + lifecycle + integration tests because they
-          # SIGABRTed in CI. Root cause located via valgrind in #139:
-          # write-past-end in upstream BPSD's bpsd_setup_species_kdata
-          # loop. With docs/external-patches/bpsd/bpsd-species-kid-oob-
-          # fix.patch now applied during the BPSD clone step above,
-          # those tests should pass — restore them per MEMORY.md
-          # feedback_never_skip_tests + feedback_equivalence_must_pass:
-          # SKIPped tests do not count as verification.
-          #
-          # property_boundary / property_fanout stay ignored: they
-          # crash on a different bug class (tr NRMAX registry gap,
-          # fp/ti/wr NSMAX range-guard, wr MDLWRI=2 unsupported)
-          # tracked separately as a PR #125 deferred punch list.
+          # Full test surface. No --ignore-glob or --deselect per
+          # MEMORY.md feedback_never_skip_tests + feedback_
+          # equivalence_must_pass: SKIPped tests do not count as
+          # verification. BPSD heap-corruption root cause is fixed
+          # by docs/external-patches/bpsd/bpsd-species-kid-oob-fix.patch
+          # (PR #140). property_boundary / property_fanout are the
+          # remaining class; this PR adds NSMAX range guards (one of
+          # the three known-bug triplet) and un-ignores the property
+          # suites so CI verifies the guard in action. Follow-up PRs
+          # will fix tr NRMAX registry gap + wr MDLWRI=2 to make the
+          # property tests pass fully.
           #
           # --forked keeps process isolation so any single still-bad
           # test does not take down the whole suite.
@@ -221,9 +218,7 @@ jobs:
             --forked \
             --tb=short \
             -ra \
-            --maxfail=20 \
-            --ignore-glob='*property_boundary*' \
-            --ignore-glob='*property_fanout*'
+            --maxfail=50
 
       # Deferred: "Run C ABI check drivers (per-module integration)"
       # The <mod>_api_check_all Makefile targets recompile wrcomm.f90
