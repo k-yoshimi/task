@@ -29,6 +29,7 @@ HERE = Path(__file__).resolve()
 REPO = HERE.parents[3]
 PYTHON_ROOT = REPO / "python"
 TEST_OUTPUT_DIR = REPO / "test_run" / "test_output"
+FIXTURES_DIR = HERE.parent / "fixtures"
 DEFAULT_SO = REPO / "tr" / "libtrapi.so"
 
 if str(PYTHON_ROOT) not in sys.path:
@@ -67,15 +68,26 @@ class TestTrlibBoundaryValues(unittest.TestCase):
     """Boundary-value mutations on top of the ``tr_tst2`` fixture."""
 
     #: tst2 writes KNAMEQ=eqdata.TST-2; the eqdata file lives under
-    #: test_run/test_output/tr_tst2/ after `./test_run/run_tests.sh tr_tst2`.
-    WORKDIR = TEST_OUTPUT_DIR / "tr_tst2"
-    EQDATA = WORKDIR / "eqdata.TST-2"
+    #: test_run/test_output/tr_tst2/ after `./test_run/run_tests.sh tr_tst2`,
+    #: but CI does not run that script. Fall back to the committed fixture
+    #: at python/trlib/tests/fixtures/eqdata.TST-2 so the NSMAX / NRMAX /
+    #: DT / RR / BB sweeps actually exercise libtrapi.so instead of being
+    #: skipTest'd away in CI.
+    WORKDIR_PRIMARY = TEST_OUTPUT_DIR / "tr_tst2"
+    WORKDIR_FIXTURE = FIXTURES_DIR
+    EQDATA_PRIMARY = WORKDIR_PRIMARY / "eqdata.TST-2"
+    EQDATA_FIXTURE = FIXTURES_DIR / "eqdata.TST-2"
 
     def setUp(self):
-        if not self.EQDATA.exists():
+        if self.EQDATA_PRIMARY.exists():
+            self.WORKDIR = self.WORKDIR_PRIMARY
+        elif self.EQDATA_FIXTURE.exists():
+            self.WORKDIR = self.WORKDIR_FIXTURE
+        else:
             self.skipTest(
-                f"eqdata missing at {self.EQDATA}; "
-                "run `./test_run/run_tests.sh tr_tst2` first."
+                f"eqdata missing at {self.EQDATA_PRIMARY} or "
+                f"{self.EQDATA_FIXTURE}; run "
+                "`./test_run/run_tests.sh tr_tst2` first."
             )
 
     def _apply_and_run(self, tr, mutations: dict, ntmax: int) -> "TrState":
