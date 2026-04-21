@@ -76,7 +76,12 @@ CONTAINS
     CASE ("RIP");   RIP   = value
 
     ! --- B. plasma scalars / arrays (plcomm) -----------------------
-    CASE ("NSMAX"); NSMAX = INT(value)
+    ! Early-reject out-of-range values so property-based / fuzz callers
+    ! get a clean ierr=1 INVALID here instead of a later SEGV deep in
+    ! wr_allocate. 100 = plcomm::NSM hard upper bound.
+    CASE ("NSMAX")
+       IF (INT(value) < 1 .OR. INT(value) > 100) THEN; ierr = 1; RETURN; END IF
+       NSMAX = INT(value)
     CASE ("PA");    IF (idx < 1 .OR. idx > SIZE(PA))   THEN; ierr = 1; ELSE; PA(idx)   = value; END IF
     CASE ("PZ");    IF (idx < 1 .OR. idx > SIZE(PZ))   THEN; ierr = 1; ELSE; PZ(idx)   = value; END IF
     CASE ("PN");    IF (idx < 1 .OR. idx > SIZE(PN))   THEN; ierr = 1; ELSE; PN(idx)   = value; END IF

@@ -69,9 +69,19 @@ CONTAINS
     CASE ("NTMAX");  NTMAX  = NINT(value)
     CASE ("NAVMAX"); NAVMAX = NINT(value)
     ! --- species count -------------------------------------------
-    CASE ("NSMAX");  NSMAX  = NINT(value)
-    CASE ("NSAMAX"); NSAMAX = NINT(value)
-    CASE ("NSBMAX"); NSBMAX = NINT(value)
+    ! Early-reject out-of-range values so property-based / fuzz callers
+    ! get a clean ierr=1 INVALID here instead of a later SEGV deep in
+    ! fp_allocate. 100 = plcomm::NSM hard upper bound; 8 matches
+    ! fp/fp_state.f90::FP_MAX_NSAMAX for the C ABI struct.
+    CASE ("NSMAX")
+       IF (NINT(value) < 1 .OR. NINT(value) > 100) THEN; ierr = 1; RETURN; END IF
+       NSMAX  = NINT(value)
+    CASE ("NSAMAX")
+       IF (NINT(value) < 1 .OR. NINT(value) > 8) THEN; ierr = 1; RETURN; END IF
+       NSAMAX = NINT(value)
+    CASE ("NSBMAX")
+       IF (NINT(value) < 1 .OR. NINT(value) > 8) THEN; ierr = 1; RETURN; END IF
+       NSBMAX = NINT(value)
     ! --- species mapping arrays (1-origin, NSM-bound) ------------
     CASE ("NS_NSA")
        IF (idx < 1 .OR. idx > SIZE(NS_NSA)) THEN; ierr = 2; RETURN; END IF

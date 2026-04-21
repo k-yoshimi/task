@@ -82,7 +82,14 @@ CONTAINS
     CASE ("MODEL_NPROF");  MODEL_NPROF  = INT(value)
 
     ! ---- plasma scalar int ----
-    CASE ("NSMAX");        NSMAX        = INT(value)
+    ! Early-reject out-of-range values so property-based / fuzz callers
+    ! get a clean INVALID here instead of a later SEGV in ti_allocate.
+    ! 100 = plcomm::NSM hard upper bound.
+    CASE ("NSMAX")
+       IF (INT(value) < 1 .OR. INT(value) > 100) THEN
+          ierr = ERR_BAD_INDEX; RETURN
+       END IF
+       NSMAX = INT(value)
 
     ! ---- 1D arrays indexed by NS (plcomm) ----
     ! PA = atomic mass (plcomm true name). ti namelist calls this "PM" via
