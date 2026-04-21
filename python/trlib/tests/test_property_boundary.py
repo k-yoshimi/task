@@ -50,7 +50,11 @@ _REASON_142 = (
     "tr/trexec.f90 + trprep.f90 STOP abort the forked worker — "
     "tracked in #142; marker must be removed once that lands."
 )
-_XFAIL_TR_STOP_ISSUE_142 = pytest.mark.xfail(strict=False, reason=_REASON_142)
+# strict=True: when #142 lands and the STOPs become returns, these
+# tests flip XFAIL → XPASS, and strict=True turns XPASS into FAILED,
+# forcing CI-red until the marker is removed. That's the automated
+# removal-pressure the review asked for — no reliance on grep habits.
+_XFAIL_TR_STOP_ISSUE_142 = pytest.mark.xfail(strict=True, reason=_REASON_142)
 _SKIP_TR_STOP_ISSUE_142 = pytest.mark.skip(reason=_REASON_142)
 
 HERE = Path(__file__).resolve()
@@ -176,15 +180,15 @@ class TestTrlibBoundaryValues(unittest.TestCase):
                         self._assert_finite_state(state)
 
     def test_NSMAX_above_TR_MAX_get_state_raises(self):
-        """NSMAX > TR_MAX_NSMAX (=8) must be rejected by tr_get_state.
+        """NSMAX > TR_MAX_NSMAX (=8) must raise TrlibError.
 
-        The tr_param_registry CASE for NSMAX has no guard (it just
-        INT-casts), so set_param accepts the value silently. The
-        failure surfaces in tr_get_state which rejects NSMAX > 8 with
-        ierr=3 (mapped to TrlibRunError) at tr/tr_api.f90:281. NSMAX=0
-        and NSMAX<0 are intentionally NOT covered here because the
-        registry guard for them is missing -- see the deferred
-        registry-hardening punch-list reported by this PR.
+        This PR (#141) adds an early-reject guard in
+        tr_param_registry.f90 so set_param('NSMAX', >8) raises
+        TrlibParamError synchronously; any future refactor that moves
+        NSMAX validation will still satisfy `assertRaises(TrlibError)`
+        because both TrlibParamError and TrlibRunError are TrlibError
+        subclasses. NSMAX=0 and NSMAX<0 are still unguarded — see the
+        registry-hardening follow-up in the PR body.
         """
         from trlib import Trlib
         from trlib.errors import TrlibError
