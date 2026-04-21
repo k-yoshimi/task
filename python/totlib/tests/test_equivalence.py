@@ -182,7 +182,30 @@ class TestEquivalence(unittest.TestCase):
 
         The fixture module must expose ``apply`` / ``NTMAX`` /
         ``BASELINE_NAME`` (see :mod:`fixtures.tot_demo2014_params`).
+
+        When the fixture references a KNAMEQ eqdata file, skip cleanly
+        if the baseline directory's eqdata is missing — same pattern as
+        ``trlib/tests/test_equivalence.py``. Without this guard CI
+        without the baseline data SIGABRTs deep inside eq_load and
+        crashes the pytest-forked worker, producing an
+        ``INTERNALERROR>`` instead of an actionable skip.
         """
+        # Look for any KNAMEQ entry in STRINGS (eq:KNAMEQ or tr:KNAMEQ);
+        # all tot equivalence fixtures that need eqdata set both.
+        knameq = None
+        for key in ("eq:KNAMEQ", "tr:KNAMEQ"):
+            v = getattr(fixture_module, "STRINGS", {}).get(key)
+            if v:
+                knameq = v
+                break
+        if knameq:
+            candidate = REPO / "test_run" / "test_output" / fixture_module.BASELINE_NAME
+            if not (candidate / knameq).exists():
+                self.skipTest(
+                    f"eqdata '{knameq}' missing under {candidate}; "
+                    f"run `./test_run/run_tests.sh "
+                    f"{fixture_module.BASELINE_NAME}` first."
+                )
         actual = _run_case(
             fixture_module.apply,
             ntmax=fixture_module.NTMAX,
