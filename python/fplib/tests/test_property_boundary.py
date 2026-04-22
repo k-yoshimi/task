@@ -18,17 +18,9 @@ runtime, so the upper bounds in the sweep are kept conservative
 from __future__ import annotations
 
 import math
-import os
 import sys
 import unittest
 from pathlib import Path
-
-import pytest
-
-# SIGABRT manifests in CI (GH Actions' Ubuntu heap layout) but not on
-# this dev host. Apply xfail CI-only so strict=True (CLAUDE.md rule)
-# does not fail local runs where the test happens to pass.
-_CI = os.environ.get("CI", "").lower() == "true"
 
 HERE = Path(__file__).resolve()
 REPO = HERE.parents[3]
@@ -136,20 +128,6 @@ class TestFplibBoundaryValues(unittest.TestCase):
                         continue
                     self._assert_finite_state(state)
 
-    # XFAIL_REMOVE_WITH_144: tracked in #144 — SIGABRT (signal 6) in
-    # fp heap-reuse path (#111 family). DOCUMENTED EXCEPTION to
-    # CLAUDE.md §Test-suite discipline: strict=False.
-    # The crash is heap-layout flaky — run 24751395782 CRASHED, run
-    # 24753105813 passed cleanly. strict=True would FAIL CI on every
-    # clean-pass run (XPASS(strict)=FAILED). Removal pressure
-    # intentionally shifts from strict-flip to the grep string +
-    # #144 link; when #144 lands the follow-up PR will delete this
-    # marker directly.
-    @pytest.mark.xfail(
-        condition=_CI, strict=False,
-        reason="SIGABRT in fp heap-reuse path — tracked in #144; "
-               "marker must be removed once that lands.",
-    )
     def test_NSMAX_in_range(self):
         """NSMAX in {1..4} must round-trip via FpState.nsamax (NSAMAX=NSMAX)."""
         from fplib import Fplib
