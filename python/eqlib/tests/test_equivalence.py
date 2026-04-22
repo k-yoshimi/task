@@ -50,6 +50,7 @@ REPO = HERE.parents[3]
 PYTHON_ROOT = REPO / "python"
 BASELINES_DIR = REPO / "test_run" / "baselines"
 TEST_OUTPUT_DIR = REPO / "test_run" / "test_output"
+FIXTURES_DIR = HERE.parent / "fixtures"
 COMPARE_SCRIPT = REPO / "test_run" / "scripts" / "compare_metrics.py"
 
 
@@ -194,13 +195,21 @@ class TestEquivalence(unittest.TestCase):
         knameq = getattr(fixture_module, "STRINGS", {}).get("KNAMEQ")
         if knameq:
             candidate = TEST_OUTPUT_DIR / fixture_module.BASELINE_NAME
-            if not (candidate / knameq).exists():
+            if (candidate / knameq).exists():
+                # Prefer dev-generated eqdata (Phase-0 runner output)
+                cwd = candidate
+            elif (FIXTURES_DIR / knameq).exists():
+                # CI / fresh checkout: fall back to the committed
+                # fixture so the equivalence test runs instead of
+                # silently skipping (CLAUDE.md §Test-suite discipline).
+                cwd = FIXTURES_DIR
+            else:
                 self.skipTest(
-                    f"eqdata '{knameq}' missing under {candidate}; "
-                    "run `./test_run/run_tests.sh "
+                    f"eqdata '{knameq}' missing under {candidate} "
+                    f"or {FIXTURES_DIR}; run "
+                    "`./test_run/run_tests.sh "
                     f"{fixture_module.BASELINE_NAME}` first."
                 )
-            cwd = candidate
         actual = _run_case(
             fixture_module.apply,
             mode=fixture_module.MODE,
