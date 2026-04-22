@@ -221,6 +221,32 @@ class TestBulkParamDispatch(unittest.TestCase):
         with self.assertRaises(WrxlibError):
             srv._apply_bulk_params(wrx, {"mode_beam": True})
 
+    def test_rejects_non_numeric_string_element(self) -> None:
+        # MED-5: float() on a non-numeric list element maps to WrxlibError.
+        wrx = _MockWrxlib()
+        with self.assertRaises(WrxlibError) as ctx:
+            srv._apply_bulk_params(wrx, {"PN": [0.7, "oops"]})
+        self.assertIn("PN[2]", str(ctx.exception))
+
+    def test_rejects_non_int_dict_index(self) -> None:
+        # MED-5: int() on a non-numeric index maps to WrxlibError.
+        wrx = _MockWrxlib()
+        with self.assertRaises(WrxlibError) as ctx:
+            srv._apply_bulk_params(wrx, {"NCMIN": {"bad": 1}})
+        self.assertIn("NCMIN", str(ctx.exception))
+
+    def test_partial_bulk_mutation_on_failure(self) -> None:
+        # LOW-2: on a partial failure, earlier keys remain written.
+        wrx = _MockWrxlib()
+        with self.assertRaises(WrxlibError):
+            srv._apply_bulk_params(
+                wrx,
+                {"RR": 6.2, "BAD": object(), "BB": 5.3},
+            )
+        scalar_names = [n for n, _ in wrx.scalar_calls]
+        self.assertIn("RR", scalar_names)
+        self.assertNotIn("BB", scalar_names)
+
 
 class TestHandlersWithMockedState(unittest.TestCase):
     """Exercise handle_* against a mocked _ServerState.ensure_open."""

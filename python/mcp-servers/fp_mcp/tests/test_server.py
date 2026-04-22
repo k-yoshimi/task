@@ -242,6 +242,39 @@ class TestBulkParamDispatch(unittest.TestCase):
         with self.assertRaises(FplibError):
             srv._apply_bulk_params(fp, {"KNAMFP": "path.in"})
 
+    def test_rejects_bool(self) -> None:
+        # bool is a subclass of int; we want it rejected as ambiguous.
+        fp = _MockFplib()
+        with self.assertRaises(FplibError):
+            srv._apply_bulk_params(fp, {"MODELG": True})
+
+    def test_rejects_non_numeric_string_element(self) -> None:
+        # MED-5: float() on a non-numeric list element maps to FplibError.
+        fp = _MockFplib()
+        with self.assertRaises(FplibError) as ctx:
+            srv._apply_bulk_params(fp, {"PA": [1.0, "oops"]})
+        self.assertIn("PA[2]", str(ctx.exception))
+
+    def test_rejects_non_int_dict_index(self) -> None:
+        # MED-5: int() on a non-numeric index maps to FplibError.
+        fp = _MockFplib()
+        with self.assertRaises(FplibError) as ctx:
+            srv._apply_bulk_params(fp, {"PN": {"bad": 0.4}})
+        self.assertIn("PN", str(ctx.exception))
+
+    def test_partial_bulk_mutation_on_failure(self) -> None:
+        # LOW-2: on a partial failure, earlier keys remain written.
+        # Documented as non-transactional in set_params docstring.
+        fp = _MockFplib()
+        with self.assertRaises(FplibError):
+            srv._apply_bulk_params(
+                fp,
+                {"RR": 6.5, "BAD": object(), "BB": 5.3},
+            )
+        scalar_names = [n for n, _ in fp.scalar_calls]
+        self.assertIn("RR", scalar_names)
+        self.assertNotIn("BB", scalar_names)
+
 
 class TestHandlersWithMockedState(unittest.TestCase):
     """Exercise handle_* against a mocked _ServerState.ensure_open."""

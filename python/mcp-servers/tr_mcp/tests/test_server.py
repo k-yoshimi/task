@@ -192,6 +192,41 @@ class TestBulkParamDispatch(unittest.TestCase):
         with self.assertRaises(TrlibError):
             srv._apply_bulk_params(tr, {"RR": object()})
 
+    def test_rejects_bool(self) -> None:
+        # bool is a subclass of int; we want it rejected as ambiguous.
+        tr = _MockTrlib()
+        with self.assertRaises(TrlibError):
+            srv._apply_bulk_params(tr, {"MDLNB": True})
+
+    def test_rejects_non_numeric_string_element(self) -> None:
+        # MED-5: float() on a non-numeric string should map to TrlibError
+        # (not leak a raw ValueError), with the key name in the message.
+        tr = _MockTrlib()
+        with self.assertRaises(TrlibError) as ctx:
+            srv._apply_bulk_params(tr, {"PN": [0.7, "oops"]})
+        self.assertIn("PN[2]", str(ctx.exception))
+
+    def test_rejects_non_int_dict_index(self) -> None:
+        # MED-5: int() on a non-numeric index should map to TrlibError.
+        tr = _MockTrlib()
+        with self.assertRaises(TrlibError) as ctx:
+            srv._apply_bulk_params(tr, {"PT": {"not-an-int": 3.5}})
+        self.assertIn("PT", str(ctx.exception))
+
+    def test_partial_bulk_mutation_on_failure(self) -> None:
+        # LOW-2: on a partial failure, earlier keys remain written.
+        # Documented as non-transactional in set_params docstring.
+        tr = _MockTrlib()
+        with self.assertRaises(TrlibError):
+            srv._apply_bulk_params(
+                tr,
+                {"RR": 6.5, "BAD": object(), "BB": 5.3},
+            )
+        # RR was applied before the failing 'BAD' key; BB never reached.
+        scalar_names = [n for n, _ in tr.scalar_calls]
+        self.assertIn("RR", scalar_names)
+        self.assertNotIn("BB", scalar_names)
+
 
 class TestHandlersWithMockedState(unittest.TestCase):
     """Exercise handle_* against a mocked _ServerState.ensure_open."""
@@ -215,6 +250,16 @@ class TestHandlersWithMockedState(unittest.TestCase):
         msg = srv.handle_set_param("RR", 6.5)
         self.assertIn("RR", msg)
         self.assertEqual(self.mock_tr.scalar_calls[-1], ("RR", 6.5))
+
+    def test_handle_set_param_str(self) -> None:
+        # MED-6: tr_mcp exposes set_param_str mirroring eq_mcp.
+        msg = srv.handle_set_param_str("KNAMEQ", "eqdata.ITER01")
+        self.assertIn("KNAMEQ", msg)
+        self.assertIn("eqdata.ITER01", msg)
+        self.assertEqual(
+            self.mock_tr.string_calls[-1],
+            ("KNAMEQ", "eqdata.ITER01"),
+        )
 
     def test_handle_set_params(self) -> None:
         msg = srv.handle_set_params({"BB": 5.3})

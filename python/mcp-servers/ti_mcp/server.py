@@ -283,23 +283,56 @@ def _apply_bulk_params(ti: Tilib, params: Dict[str, SupportedValue]) -> List[str
     * ``dict[int, float]``          — sparse {index: value}, applied as
       ``NAME[index]``; indices must be 1-origin.
     * ``str``                       — the ti C ABI only accepts
-      ``double`` values, so strings round-trip to :py:meth:`set_param`
-      (which raises :class:`TilibParamError`). The error path is then
-      translated by :func:`_wrap_tilib_error` into a human-readable
-      ToolError. Kept in the surface to keep the shape uniform with
+      ``double`` values, so strings raise :class:`TilibParamError`
+      here. The error path is then translated by
+      :func:`_wrap_tilib_error` into a human-readable ToolError.
+      Kept in the surface to keep the shape uniform with
       ``tr_mcp.set_params``.
+
+    .. warning::
+
+       This routine is **non-transactional**: parameters are forwarded
+       to the underlying Fortran library one at a time and a failure
+       partway through leaves earlier writes in place. Callers that
+       need rollback semantics must validate the input dict (and snap
+       the prior state) themselves. A two-pass dry-run + apply is
+       tracked as a follow-up.
     """
     applied: List[str] = []
     for name, value in params.items():
+        # Reject bool early: bool is a subclass of int and would be
+        # silently coerced by float(); the contract is explicit numbers.
+        if isinstance(value, bool):
+            raise TilibError(
+                f"unsupported value type for '{name}': bool (use 0/1)"
+            )
         if isinstance(value, (list, tuple)):
             for i, v in enumerate(value, start=1):
                 key = f"{name}[{i}]"
-                ti.set_param(key, float(v))
+                try:
+                    coerced = float(v)
+                except (TypeError, ValueError) as exc:
+                    raise TilibError(
+                        f"invalid numeric value for '{key}': {v!r} ({exc})"
+                    ) from exc
+                ti.set_param(key, coerced)
                 applied.append(key)
         elif isinstance(value, dict):
             for idx, v in value.items():
-                key = f"{name}[{int(idx)}]"
-                ti.set_param(key, float(v))
+                try:
+                    int_idx = int(idx)
+                except (TypeError, ValueError) as exc:
+                    raise TilibError(
+                        f"invalid index for '{name}': {idx!r} ({exc})"
+                    ) from exc
+                key = f"{name}[{int_idx}]"
+                try:
+                    coerced = float(v)
+                except (TypeError, ValueError) as exc:
+                    raise TilibError(
+                        f"invalid numeric value for '{key}': {v!r} ({exc})"
+                    ) from exc
+                ti.set_param(key, coerced)
                 applied.append(key)
         elif isinstance(value, str):
             # No string-setter exists on the ti C ABI (see ti/ti_api.h).
@@ -310,7 +343,13 @@ def _apply_bulk_params(ti: Tilib, params: Dict[str, SupportedValue]) -> List[str
                 f"('{name}' = {value!r}); use a numeric value"
             )
         elif isinstance(value, (int, float)):
-            ti.set_param(name, float(value))
+            try:
+                coerced = float(value)
+            except (TypeError, ValueError) as exc:
+                raise TilibError(
+                    f"invalid numeric value for '{name}': {value!r} ({exc})"
+                ) from exc
+            ti.set_param(name, coerced)
             applied.append(name)
         else:
             raise TilibError(
@@ -462,7 +501,9 @@ def build_server() -> Any:
             "or `set_params`, advance with `run`, and read state with "
             "`get_state`. Use `describe_parameters` to discover valid "
             "parameter names. `run_and_get_state` is a convenience "
-            "one-shot wrapper."
+            "one-shot wrapper. Note: `set_params` is *non-transactional* "
+            "— on a partial failure, parameters applied before the "
+            "failing key remain set."
         ),
     )
 
@@ -497,6 +538,13 @@ def build_server() -> Any:
 
         The TI C ABI (``ti_set_param``) is double-only, so string values
         are rejected with an ``invalid parameter`` error.
+
+        **Non-transactional**: keys are applied in iteration order and
+        a failure on key ``N`` leaves keys ``0..N-1`` already written
+        to the underlying Fortran library. There is no automatic
+        rollback in this PR — pre-validate with ``describe_parameters``
+        if a clean rollback matters. (Two-pass dry-run + apply is
+        tracked as a follow-up task.)
         """
         return handle_set_params(params)
 

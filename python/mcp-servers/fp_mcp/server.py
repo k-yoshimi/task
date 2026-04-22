@@ -243,21 +243,60 @@ def _apply_bulk_params(fp: Fplib, params: Dict[str, SupportedValue]) -> List[str
       is applied as ``NAME[i]``.
     * ``dict[int, float]``          — sparse {index: value}, applied as
       ``NAME[index]``; indices must be 1-origin.
+
+    .. warning::
+
+       This routine is **non-transactional**: parameters are forwarded
+       to the underlying Fortran library one at a time and a failure
+       partway through leaves earlier writes in place. Callers that
+       need rollback semantics must validate the input dict (and snap
+       the prior state) themselves. A two-pass dry-run + apply is
+       tracked as a follow-up.
     """
     applied: List[str] = []
     for name, value in params.items():
+        # Reject bool early: bool is a subclass of int and would be
+        # silently coerced by float(); the contract is explicit numbers.
+        if isinstance(value, bool):
+            raise FplibError(
+                f"unsupported value type for '{name}': bool (use 0/1)"
+            )
         if isinstance(value, (list, tuple)):
             for i, v in enumerate(value, start=1):
                 key = f"{name}[{i}]"
-                fp.set_param(key, float(v))
+                try:
+                    coerced = float(v)
+                except (TypeError, ValueError) as exc:
+                    raise FplibError(
+                        f"invalid numeric value for '{key}': {v!r} ({exc})"
+                    ) from exc
+                fp.set_param(key, coerced)
                 applied.append(key)
         elif isinstance(value, dict):
             for idx, v in value.items():
-                key = f"{name}[{int(idx)}]"
-                fp.set_param(key, float(v))
+                try:
+                    int_idx = int(idx)
+                except (TypeError, ValueError) as exc:
+                    raise FplibError(
+                        f"invalid index for '{name}': {idx!r} ({exc})"
+                    ) from exc
+                key = f"{name}[{int_idx}]"
+                try:
+                    coerced = float(v)
+                except (TypeError, ValueError) as exc:
+                    raise FplibError(
+                        f"invalid numeric value for '{key}': {v!r} ({exc})"
+                    ) from exc
+                fp.set_param(key, coerced)
                 applied.append(key)
         elif isinstance(value, (int, float)):
-            fp.set_param(name, float(value))
+            try:
+                coerced = float(value)
+            except (TypeError, ValueError) as exc:
+                raise FplibError(
+                    f"invalid numeric value for '{name}': {value!r} ({exc})"
+                ) from exc
+            fp.set_param(name, coerced)
             applied.append(name)
         else:
             raise FplibError(
@@ -410,9 +449,12 @@ def build_server() -> Any:
             "or `set_params`, advance with `run`, and read state with "
             "`get_state`. Use `describe_parameters` to discover valid "
             "parameter names. `run_and_get_state` is a convenience "
-            "one-shot wrapper. Note: fp_finalize does NOT deallocate "
-            "FPCOMM — repeated init/finalize cycles in one process are "
-            "not supported; restart the server for a clean slate."
+            "one-shot wrapper. Note: `set_params` is *non-transactional* "
+            "— on a partial failure, parameters applied before the "
+            "failing key remain set. Note: fp_finalize does NOT "
+            "deallocate FPCOMM — repeated init/finalize cycles in one "
+            "process are not supported; restart the server for a clean "
+            "slate."
         ),
     )
 
@@ -446,6 +488,13 @@ def build_server() -> Any:
         * a number (scalar)
         * a list/tuple (1-origin array, all elements applied)
         * a dict ``{index: value}`` (1-origin sparse array)
+
+        **Non-transactional**: keys are applied in iteration order and
+        a failure on key ``N`` leaves keys ``0..N-1`` already written
+        to the underlying Fortran library. There is no automatic
+        rollback in this PR — pre-validate with ``describe_parameters``
+        if a clean rollback matters. (Two-pass dry-run + apply is
+        tracked as a follow-up task.)
         """
         return handle_set_params(params)
 

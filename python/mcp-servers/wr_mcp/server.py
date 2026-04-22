@@ -322,21 +322,60 @@ def _apply_bulk_params(wr: Wrlib, params: Dict[str, SupportedValue]) -> List[str
 
     wrlib has no string-valued parameter equivalent to trlib's KNAMEQ
     at this layer, so strings are rejected with a clear error.
+
+    .. warning::
+
+       This routine is **non-transactional**: parameters are forwarded
+       to the underlying Fortran library one at a time and a failure
+       partway through leaves earlier writes in place. Callers that
+       need rollback semantics must validate the input dict (and snap
+       the prior state) themselves. A two-pass dry-run + apply is
+       tracked as a follow-up.
     """
     applied: List[str] = []
     for name, value in params.items():
+        # bool is a subclass of int; reject as ambiguous up-front
+        # before any shape-specific branches.
+        if isinstance(value, bool):
+            raise WrlibError(
+                f"unsupported value type for '{name}': bool (use 0/1)"
+            )
         if isinstance(value, (list, tuple)):
             for i, v in enumerate(value, start=1):
                 key = f"{name}[{i}]"
-                wr.set_param(key, float(v))
+                try:
+                    coerced = float(v)
+                except (TypeError, ValueError) as exc:
+                    raise WrlibError(
+                        f"invalid numeric value for '{key}': {v!r} ({exc})"
+                    ) from exc
+                wr.set_param(key, coerced)
                 applied.append(key)
         elif isinstance(value, dict):
             for idx, v in value.items():
-                key = f"{name}[{int(idx)}]"
-                wr.set_param(key, float(v))
+                try:
+                    int_idx = int(idx)
+                except (TypeError, ValueError) as exc:
+                    raise WrlibError(
+                        f"invalid index for '{name}': {idx!r} ({exc})"
+                    ) from exc
+                key = f"{name}[{int_idx}]"
+                try:
+                    coerced = float(v)
+                except (TypeError, ValueError) as exc:
+                    raise WrlibError(
+                        f"invalid numeric value for '{key}': {v!r} ({exc})"
+                    ) from exc
+                wr.set_param(key, coerced)
                 applied.append(key)
-        elif isinstance(value, (int, float)) and not isinstance(value, bool):
-            wr.set_param(name, float(value))
+        elif isinstance(value, (int, float)):
+            try:
+                coerced = float(value)
+            except (TypeError, ValueError) as exc:
+                raise WrlibError(
+                    f"invalid numeric value for '{name}': {value!r} ({exc})"
+                ) from exc
+            wr.set_param(name, coerced)
             applied.append(name)
         else:
             raise WrlibError(
@@ -491,9 +530,12 @@ def build_server() -> Any:
             "or `set_params`, launch the sweep with `run`, and read "
             "state with `get_state`. Use `describe_parameters` to "
             "discover valid parameter names. `run_and_get_state` is a "
-            "convenience one-shot wrapper. After `finalize`, the next "
-            "call auto-reinitializes to default parameters — treat "
-            "init → run → get_state → finalize as one simulation."
+            "convenience one-shot wrapper. Note: `set_params` is "
+            "*non-transactional* — on a partial failure, parameters "
+            "applied before the failing key remain set. After "
+            "`finalize`, the next call auto-reinitializes to default "
+            "parameters — treat init → run → get_state → finalize as "
+            "one simulation."
         ),
     )
 
@@ -524,6 +566,13 @@ def build_server() -> Any:
         * a number (scalar)
         * a list/tuple (1-origin array, all elements applied)
         * a dict ``{index: value}`` (1-origin sparse array)
+
+        **Non-transactional**: keys are applied in iteration order and
+        a failure on key ``N`` leaves keys ``0..N-1`` already written
+        to the underlying Fortran library. There is no automatic
+        rollback in this PR — pre-validate with ``describe_parameters``
+        if a clean rollback matters. (Two-pass dry-run + apply is
+        tracked as a follow-up task.)
         """
         return handle_set_params(params)
 

@@ -230,18 +230,53 @@ def _apply_bulk_params(tr: Trlib, params: Dict[str, SupportedValue]) -> List[str
       is applied as ``NAME[i]``.
     * ``dict[int, float]``          — sparse {index: value}, applied as
       ``NAME[index]``; indices must be 1-origin.
+    * ``str``                       — forwarded to
+      :py:meth:`Trlib.set_param_str` (e.g. ``KNAMEQ``).
+
+    .. warning::
+
+       This routine is **non-transactional**: parameters are forwarded
+       to the underlying Fortran library one at a time and a failure
+       partway through leaves earlier writes in place. Callers that
+       need rollback semantics must validate the input dict (and snap
+       the prior state) themselves. A two-pass dry-run + apply is
+       tracked as a follow-up.
     """
     applied: List[str] = []
     for name, value in params.items():
+        # Reject bool early: bool is a subclass of int and would be
+        # silently coerced by float(); the contract is explicit numbers.
+        if isinstance(value, bool):
+            raise TrlibError(
+                f"unsupported value type for '{name}': bool (use 0/1)"
+            )
         if isinstance(value, (list, tuple)):
             for i, v in enumerate(value, start=1):
                 key = f"{name}[{i}]"
-                tr.set_param(key, float(v))
+                try:
+                    coerced = float(v)
+                except (TypeError, ValueError) as exc:
+                    raise TrlibError(
+                        f"invalid numeric value for '{key}': {v!r} ({exc})"
+                    ) from exc
+                tr.set_param(key, coerced)
                 applied.append(key)
         elif isinstance(value, dict):
             for idx, v in value.items():
-                key = f"{name}[{int(idx)}]"
-                tr.set_param(key, float(v))
+                try:
+                    int_idx = int(idx)
+                except (TypeError, ValueError) as exc:
+                    raise TrlibError(
+                        f"invalid index for '{name}': {idx!r} ({exc})"
+                    ) from exc
+                key = f"{name}[{int_idx}]"
+                try:
+                    coerced = float(v)
+                except (TypeError, ValueError) as exc:
+                    raise TrlibError(
+                        f"invalid numeric value for '{key}': {v!r} ({exc})"
+                    ) from exc
+                tr.set_param(key, coerced)
                 applied.append(key)
         elif isinstance(value, str):
             # String-valued (e.g. KNAMEQ). Requires libtrapi.so with L-6
@@ -250,7 +285,13 @@ def _apply_bulk_params(tr: Trlib, params: Dict[str, SupportedValue]) -> List[str
             tr.set_param_str(name, value)
             applied.append(name)
         elif isinstance(value, (int, float)):
-            tr.set_param(name, float(value))
+            try:
+                coerced = float(value)
+            except (TypeError, ValueError) as exc:
+                raise TrlibError(
+                    f"invalid numeric value for '{name}': {value!r} ({exc})"
+                ) from exc
+            tr.set_param(name, coerced)
             applied.append(name)
         else:
             raise TrlibError(
@@ -308,6 +349,23 @@ def handle_set_param(name: str, value: float) -> str:
         tr = STATE.ensure_open()
         tr.set_param(name, float(value))
         return f"set {name} = {value}"
+    except Exception as exc:
+        raise _wrap_trlib_error(exc) from exc
+
+
+def handle_set_param_str(name: str, value: str) -> str:
+    """Set a string-valued tr parameter (e.g. ``KNAMEQ``).
+
+    Routed through :py:meth:`Trlib.set_param_str`, which requires a
+    libtrapi.so built with the L-6 registry extension. Older builds
+    raise :class:`TrlibError` with a rebuild hint; that message is
+    translated by :func:`_wrap_trlib_error` into a human-readable
+    ToolError.
+    """
+    try:
+        tr = STATE.ensure_open()
+        tr.set_param_str(name, str(value))
+        return f"set {name} = {value!r}"
     except Exception as exc:
         raise _wrap_trlib_error(exc) from exc
 
@@ -384,7 +442,7 @@ def handle_run_and_get_state(
 # above are the unit-testable surface either way.
 # =====================================================================
 def build_server() -> Any:
-    """Build and return a FastMCP server instance with the 9 tr tools."""
+    """Build and return a FastMCP server instance with the 10 tr tools."""
     if not MCP_AVAILABLE:
         raise RuntimeError(
             "Python MCP SDK (`mcp`) is not installed. "
@@ -396,10 +454,12 @@ def build_server() -> Any:
         instructions=(
             "TASK/TR transport-code MCP server. "
             "Call `init` first, configure parameters with `set_param` "
-            "or `set_params`, advance with `run`, and read state with "
-            "`get_state`. Use `describe_parameters` to discover valid "
-            "parameter names. `run_and_get_state` is a convenience "
-            "one-shot wrapper."
+            "/ `set_param_str` / `set_params`, advance with `run`, and "
+            "read state with `get_state`. Use `describe_parameters` to "
+            "discover valid parameter names. `run_and_get_state` is a "
+            "convenience one-shot wrapper. Note: `set_params` is "
+            "*non-transactional* — on a partial failure, parameters "
+            "applied before the failing key remain set."
         ),
     )
 
@@ -418,9 +478,20 @@ def build_server() -> Any:
         """Set a tr parameter by name.
 
         Use ``NAME[i]`` (1-origin) for array elements, e.g. ``PN[1]``.
-        See `describe_parameters` for the full registry.
+        For string parameters (``KNAMEQ`` etc.) use ``set_param_str``
+        instead. See `describe_parameters` for the full registry.
         """
         return handle_set_param(name, value)
+
+    @mcp.tool()
+    def set_param_str(name: str, value: str) -> str:
+        """Set a tr string-valued parameter (``KNAMEQ`` etc.).
+
+        Requires a ``libtrapi.so`` built with the L-6 registry
+        extension (``make -C tr libtrapi.so``); older builds raise a
+        clear "rebuild the shared library" error.
+        """
+        return handle_set_param_str(name, value)
 
     @mcp.tool()
     def set_params(params: Dict[str, Any]) -> str:
@@ -431,6 +502,13 @@ def build_server() -> Any:
         * a list/tuple (1-origin array, all elements applied)
         * a dict ``{index: value}`` (1-origin sparse array)
         * a string (for KNAMEQ and similar string-valued parameters)
+
+        **Non-transactional**: keys are applied in iteration order and
+        a failure on key ``N`` leaves keys ``0..N-1`` already written
+        to the underlying Fortran library. There is no automatic
+        rollback in this PR — pre-validate with ``describe_parameters``
+        if a clean rollback matters. (Two-pass dry-run + apply is
+        tracked as a follow-up task.)
         """
         return handle_set_params(params)
 
@@ -522,6 +600,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             [
                 "init",
                 "set_param",
+                "set_param_str",
                 "set_params",
                 "run",
                 "get_state",

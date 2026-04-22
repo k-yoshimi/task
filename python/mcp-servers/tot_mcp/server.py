@@ -145,7 +145,7 @@ _EQ_INLINE_REGISTRY: Dict[str, Dict[str, Any]] = {
     "NTHMAX":  {"type": "int",   "group": "grid",     "description": "number of poloidal grid points"},
     "NSUMAX":  {"type": "int",   "group": "grid",     "description": "number of equilibrium surfaces"},
     "NPRINT":  {"type": "int",   "group": "io",       "description": "print level"},
-    "PSIB":    {"type": "float[]", "group": "boundary", "description": "boundary flux array (1-origin)"},
+    "PSIB":    {"type": "float[0..5]", "group": "boundary", "description": "boundary flux array (0-origin, PSIB[0]..PSIB[5]; matches eq/eq_param_registry.f90 REAL(8) :: PSIB(0:5))"},
     "RIPFC":   {"type": "float[]", "group": "pfc",      "description": "PFC coil currents (1-origin) [MA]"},
     "RPFC":    {"type": "float[]", "group": "pfc",      "description": "PFC coil R positions (1-origin) [m]"},
     "ZPFC":    {"type": "float[]", "group": "pfc",      "description": "PFC coil Z positions (1-origin) [m]"},
@@ -293,9 +293,24 @@ def _apply_bulk_params(tot: Tot, params: Dict[str, SupportedValue]) -> List[str]
       ``"<ns>:NAME[index]"``; indices must be 1-origin.
     * ``str``                        — forwarded to
       :py:meth:`Tot.set_param_str`.
+
+    .. warning::
+
+       This routine is **non-transactional**: parameters are forwarded
+       to the underlying Fortran library one at a time and a failure
+       partway through leaves earlier writes in place. Callers that
+       need rollback semantics must validate the input dict (and snap
+       the prior state) themselves. A two-pass dry-run + apply is
+       tracked as a follow-up.
     """
     applied: List[str] = []
     for name, value in params.items():
+        # Reject bool early: bool is a subclass of int and would be
+        # silently coerced by float(); the contract is explicit numbers.
+        if isinstance(value, bool):
+            raise TotlibError(
+                f"unsupported value type for '{name}': bool (use 0/1)"
+            )
         if isinstance(value, (list, tuple)):
             # Slice ``"<ns>:BASE"`` so we can re-attach the prefix to
             # each subscripted key. Names without ``:`` will be caught
@@ -305,12 +320,25 @@ def _apply_bulk_params(tot: Tot, params: Dict[str, SupportedValue]) -> List[str]
                 # Forward as-is to let Tot raise the canonical error
                 # for "missing namespace prefix" — this keeps the error
                 # message LLM-friendly.
-                tot.set_param(name, float(value[0]) if value else 0.0)
+                try:
+                    coerced = float(value[0]) if value else 0.0
+                except (TypeError, ValueError) as exc:
+                    raise TotlibError(
+                        f"invalid numeric value for '{name}': {value!r} "
+                        f"({exc})"
+                    ) from exc
+                tot.set_param(name, coerced)
                 applied.append(name)
                 continue
             for i, v in enumerate(value, start=1):
                 key = f"{ns}:{bare}[{i}]"
-                tot.set_param(key, float(v))
+                try:
+                    coerced = float(v)
+                except (TypeError, ValueError) as exc:
+                    raise TotlibError(
+                        f"invalid numeric value for '{key}': {v!r} ({exc})"
+                    ) from exc
+                tot.set_param(key, coerced)
                 applied.append(key)
         elif isinstance(value, dict):
             ns, sep, bare = name.partition(":")
@@ -318,19 +346,44 @@ def _apply_bulk_params(tot: Tot, params: Dict[str, SupportedValue]) -> List[str]
                 # Same fall-through as the list case: let Tot raise.
                 if value:
                     first_idx, first_val = next(iter(value.items()))
-                    tot.set_param(name, float(first_val))
+                    try:
+                        coerced = float(first_val)
+                    except (TypeError, ValueError) as exc:
+                        raise TotlibError(
+                            f"invalid numeric value for '{name}': "
+                            f"{first_val!r} ({exc})"
+                        ) from exc
+                    tot.set_param(name, coerced)
                     applied.append(name)
                 continue
             for idx, v in value.items():
-                key = f"{ns}:{bare}[{int(idx)}]"
-                tot.set_param(key, float(v))
+                try:
+                    int_idx = int(idx)
+                except (TypeError, ValueError) as exc:
+                    raise TotlibError(
+                        f"invalid index for '{ns}:{bare}': {idx!r} ({exc})"
+                    ) from exc
+                key = f"{ns}:{bare}[{int_idx}]"
+                try:
+                    coerced = float(v)
+                except (TypeError, ValueError) as exc:
+                    raise TotlibError(
+                        f"invalid numeric value for '{key}': {v!r} ({exc})"
+                    ) from exc
+                tot.set_param(key, coerced)
                 applied.append(key)
         elif isinstance(value, str):
             # String setter: only `tr:` and `eq:` are backed today.
             tot.set_param_str(name, value)
             applied.append(name)
         elif isinstance(value, (int, float)):
-            tot.set_param(name, float(value))
+            try:
+                coerced = float(value)
+            except (TypeError, ValueError) as exc:
+                raise TotlibError(
+                    f"invalid numeric value for '{name}': {value!r} ({exc})"
+                ) from exc
+            tot.set_param(name, coerced)
             applied.append(name)
         else:
             raise TotlibError(
@@ -464,7 +517,11 @@ def handle_describe_parameters() -> Dict[str, Any]:
         "name_syntax": (
             "Every parameter name MUST be of the form '<ns>:<bare>' "
             "where <ns> is one of {}. Array elements use '<ns>:NAME[i]' "
-            "(1-origin), e.g. 'tr:PN[1]' or 'eq:PSIB[1]'."
+            "(usually 1-origin), e.g. 'tr:PN[1]'. The eq:PSIB array is "
+            "0-origin (eq:PSIB[0]..eq:PSIB[5]) because the underlying "
+            "Fortran is REAL(8) :: PSIB(0:5). The 'wr:' namespace is an "
+            "alias of 'wrx:' (tot links wrx/libwr.a, not wr/libwr.a; "
+            "see tot/tot_param_registry.f90)."
         ).format(TOT_NAMESPACES),
         "parameters": PARAMETER_REGISTRIES,
     }
@@ -508,12 +565,18 @@ def build_server() -> Any:
             "TASK/TOT integrated-orchestrator MCP server. "
             "Call `init` first, configure parameters with `set_param` "
             "or `set_params` (names MUST be namespaced as '<ns>:<name>' "
-            "where <ns> in {eq, tr, fp, ti, wr, wrx}), advance with "
-            "`run`, and read state with `get_state`. Use "
-            "`describe_parameters` to discover valid namespaced names. "
-            "`run_and_get_state` is a convenience one-shot wrapper. "
-            "Note: `run`/`get_state` return TotlibNotImplementedError "
-            "until L-6 lands; `set_param`/`set_param_str` already work."
+            "where <ns> in {eq, tr, fp, ti, wr, wrx}; 'wr:' is an alias "
+            "of 'wrx:' on the Fortran side), advance with `run`, and "
+            "read state with `get_state`. Use `describe_parameters` to "
+            "discover valid namespaced names. `run_and_get_state` is a "
+            "convenience one-shot wrapper. Note: `set_params` is "
+            "*non-transactional* — on a partial failure, parameters "
+            "applied before the failing key remain set; pre-validate "
+            "with `describe_parameters` if a clean rollback matters. "
+            "EQ-specific note: PSIB is 0-origin (eq:PSIB[0]..eq:PSIB[5]); "
+            "all other 1D arrays are 1-origin. Note: `run`/`get_state` "
+            "return TotlibNotImplementedError until L-6 lands; "
+            "`set_param`/`set_param_str` already work."
         ),
     )
 
@@ -536,10 +599,16 @@ def build_server() -> Any:
         example ``"eq:RR"``, ``"tr:DT"``, ``"fp:NSMAX"``,
         ``"ti:RR"``, ``"wr:RFIN"`` or ``"wrx:RFIN"``. Use
         ``"<ns>:NAME[i]"`` (1-origin) for array elements, e.g.
-        ``"tr:PN[1]"``. ``value`` may be a number or a string —
-        string values route to the ``tr:`` / ``eq:`` string setters
-        (other namespaces will reject strings). See
-        `describe_parameters` for the full registry.
+        ``"tr:PN[1]"``. The ``eq:PSIB`` array is 0-origin
+        (``eq:PSIB[0]..eq:PSIB[5]``); all other 1D arrays are
+        1-origin. The ``wr:`` namespace is an alias of ``wrx:``
+        because tot links ``wrx/libwr.a`` rather than
+        ``wr/libwr.a`` — both prefixes route to the same Fortran
+        ``wrx_param_set`` (see ``tot/tot_param_registry.f90``).
+        ``value`` may be a number or a string — string values route
+        to the ``tr:`` / ``eq:`` string setters (other namespaces
+        will reject strings). See `describe_parameters` for the full
+        registry.
         """
         return handle_set_param(name, value)
 
@@ -554,6 +623,13 @@ def build_server() -> Any:
         * a dict ``{index: value}`` (1-origin sparse array)
         * a string (only the ``tr:`` and ``eq:`` namespaces back
           string setters today; other namespaces will reject strings)
+
+        **Non-transactional**: keys are applied in iteration order and
+        a failure on key ``N`` leaves keys ``0..N-1`` already written
+        to the underlying Fortran library. There is no automatic
+        rollback in this PR — pre-validate with ``describe_parameters``
+        if a clean rollback matters. (Two-pass dry-run + apply is
+        tracked as a follow-up task.)
         """
         return handle_set_params(params)
 

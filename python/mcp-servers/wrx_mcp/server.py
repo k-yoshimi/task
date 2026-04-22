@@ -280,26 +280,60 @@ def _apply_bulk_params(wrx: Wrxlib, params: Dict[str, SupportedValue]) -> List[s
 
     Unlike :mod:`tr_mcp`, wrxlib has no string parameters so those are
     rejected here with a clear message.
+
+    .. warning::
+
+       This routine is **non-transactional**: parameters are forwarded
+       to the underlying Fortran library one at a time and a failure
+       partway through leaves earlier writes in place. Callers that
+       need rollback semantics must validate the input dict (and snap
+       the prior state) themselves. A two-pass dry-run + apply is
+       tracked as a follow-up.
     """
     applied: List[str] = []
     for name, value in params.items():
-        if isinstance(value, (list, tuple)):
-            for i, v in enumerate(value, start=1):
-                key = f"{name}[{i}]"
-                wrx.set_param(key, float(v))
-                applied.append(key)
-        elif isinstance(value, dict):
-            for idx, v in value.items():
-                key = f"{name}[{int(idx)}]"
-                wrx.set_param(key, float(v))
-                applied.append(key)
-        elif isinstance(value, bool):
-            # bool is a subclass of int; reject as ambiguous.
+        # bool is a subclass of int; reject as ambiguous up-front
+        # before any shape-specific branches.
+        if isinstance(value, bool):
             raise WrxlibError(
                 f"unsupported value type for '{name}': bool (use 0/1)"
             )
+        if isinstance(value, (list, tuple)):
+            for i, v in enumerate(value, start=1):
+                key = f"{name}[{i}]"
+                try:
+                    coerced = float(v)
+                except (TypeError, ValueError) as exc:
+                    raise WrxlibError(
+                        f"invalid numeric value for '{key}': {v!r} ({exc})"
+                    ) from exc
+                wrx.set_param(key, coerced)
+                applied.append(key)
+        elif isinstance(value, dict):
+            for idx, v in value.items():
+                try:
+                    int_idx = int(idx)
+                except (TypeError, ValueError) as exc:
+                    raise WrxlibError(
+                        f"invalid index for '{name}': {idx!r} ({exc})"
+                    ) from exc
+                key = f"{name}[{int_idx}]"
+                try:
+                    coerced = float(v)
+                except (TypeError, ValueError) as exc:
+                    raise WrxlibError(
+                        f"invalid numeric value for '{key}': {v!r} ({exc})"
+                    ) from exc
+                wrx.set_param(key, coerced)
+                applied.append(key)
         elif isinstance(value, (int, float)):
-            wrx.set_param(name, float(value))
+            try:
+                coerced = float(value)
+            except (TypeError, ValueError) as exc:
+                raise WrxlibError(
+                    f"invalid numeric value for '{name}': {value!r} ({exc})"
+                ) from exc
+            wrx.set_param(name, coerced)
             applied.append(name)
         else:
             raise WrxlibError(
@@ -471,7 +505,9 @@ def build_server() -> Any:
             "or `set_params`, execute ray tracing with `run`, and read "
             "state with `get_state`. Use `describe_parameters` to "
             "discover valid parameter names. `run_and_get_state` is a "
-            "convenience one-shot wrapper. "
+            "convenience one-shot wrapper. Note: `set_params` is "
+            "*non-transactional* — on a partial failure, parameters "
+            "applied before the failing key remain set. "
             "NOTE: `run` / `run_and_get_state` require WRX_RUN_OK=1 in "
             "the environment because of a known libgrf::grd1d dlopen "
             "issue; see README."
@@ -507,6 +543,13 @@ def build_server() -> Any:
         * a dict ``{index: value}`` (1-origin sparse array)
 
         (wrxlib has no string parameters.)
+
+        **Non-transactional**: keys are applied in iteration order and
+        a failure on key ``N`` leaves keys ``0..N-1`` already written
+        to the underlying Fortran library. There is no automatic
+        rollback in this PR — pre-validate with ``describe_parameters``
+        if a clean rollback matters. (Two-pass dry-run + apply is
+        tracked as a follow-up task.)
         """
         return handle_set_params(params)
 

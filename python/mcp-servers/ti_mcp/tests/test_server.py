@@ -225,6 +225,39 @@ class TestBulkParamDispatch(unittest.TestCase):
         with self.assertRaises(TilibError):
             srv._apply_bulk_params(ti, {"RR": object()})
 
+    def test_rejects_bool(self) -> None:
+        # bool is a subclass of int; we want it rejected as ambiguous.
+        ti = _MockTilib()
+        with self.assertRaises(TilibError):
+            srv._apply_bulk_params(ti, {"NSMAX": True})
+
+    def test_rejects_non_numeric_string_element(self) -> None:
+        # MED-5: float() on a non-numeric list element maps to TilibError.
+        ti = _MockTilib()
+        with self.assertRaises(TilibError) as ctx:
+            srv._apply_bulk_params(ti, {"PN": [0.7, "oops"]})
+        self.assertIn("PN[2]", str(ctx.exception))
+
+    def test_rejects_non_int_dict_index(self) -> None:
+        # MED-5: int() on a non-numeric index maps to TilibError.
+        ti = _MockTilib()
+        with self.assertRaises(TilibError) as ctx:
+            srv._apply_bulk_params(ti, {"PT": {"not-an-int": 3.5}})
+        self.assertIn("PT", str(ctx.exception))
+
+    def test_partial_bulk_mutation_on_failure(self) -> None:
+        # LOW-2: on a partial failure, earlier keys remain written.
+        # Documented as non-transactional in set_params docstring.
+        ti = _MockTilib()
+        with self.assertRaises(TilibError):
+            srv._apply_bulk_params(
+                ti,
+                {"RR": 3.0, "BAD": object(), "BB": 2.0},
+            )
+        scalar_names = [n for n, _ in ti.scalar_calls]
+        self.assertIn("RR", scalar_names)
+        self.assertNotIn("BB", scalar_names)
+
 
 class TestHandlersWithMockedState(unittest.TestCase):
     """Exercise handle_* against a mocked _ServerState.ensure_open."""
