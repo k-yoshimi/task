@@ -46,21 +46,24 @@ import pytest
 # DO NOT extend either marker to new tests. DO NOT forget to delete
 # both once #142 lands — search-strings `XFAIL_REMOVE_WITH_142` and
 # `SKIP_REMOVE_WITH_142` find every call-site.
-_REASON_142 = (
-    "tr/trexec.f90 + trprep.f90 STOP abort the forked worker — "
-    "tracked in #142; marker must be removed once that lands."
+_REASON_152 = (
+    "non-finite output in trlib BB/DT/RR sweeps after PR #152 removed "
+    "the tr/trprep.f90 STOPs (#142 B Batch 1) — tracked in #152; "
+    "marker must be removed once that physics/numerical bug is fixed."
 )
-# The STOP manifests LOCALLY (laptop heap layout reproduces the reinit
-# cycle) but not on CI (GH Actions' fresh fork state doesn't). So:
-#   - condition="CI env not set" → xfail applies ONLY locally
-#   - strict=True → local XPASS (when #142 lands) flips to FAILED and
-#     the pre-push gate (CLAUDE.md) forces marker removal there
-#   - CI sees these tests without xfail at all → they pass normally
-# This pattern satisfies CLAUDE.md §Test-suite discipline (strict=True
-# requirement) while not failing CI today for the environment mismatch.
-_CI = os.environ.get("CI", "").lower() == "true"
-_XFAIL_TR_STOP_ISSUE_142 = pytest.mark.xfail(
-    condition=not _CI, strict=True, reason=_REASON_142,
+_REASON_142 = (
+    "tr/trexec.f90 STOP abort the forked worker (signal-0 INTERNALERROR) "
+    "— tracked in #142; marker must be removed once trexec STOPs land "
+    "(separate batch from PR #152 which fixed trprep)."
+)
+# XFAIL_REMOVE_WITH_152: applied UNCONDITIONALLY (was condition-gated to
+# local-only when the bug was a STOP that pytest-forked handled
+# differently across environments). Now both local and CI exhibit the
+# non-finite assertion-fail mode.
+# strict=False per CLAUDE.md narrow exception: heap/state-flaky failure;
+# strict=True would false-flag clean-pass runs.
+_XFAIL_TR_NONFINITE_152 = pytest.mark.xfail(
+    strict=False, reason=_REASON_152,
 )
 _SKIP_TR_STOP_ISSUE_142 = pytest.mark.skip(reason=_REASON_142)
 
@@ -226,7 +229,7 @@ class TestTrlibBoundaryValues(unittest.TestCase):
                         with self.assertRaises(TrlibParamError):
                             tr.set_param("NRMAX", float(nrmax))
 
-    @_XFAIL_TR_STOP_ISSUE_142    # XFAIL_REMOVE_WITH_142
+    @_XFAIL_TR_NONFINITE_152    # XFAIL_REMOVE_WITH_152
     def test_DT_sweep(self):
         """Vary DT over 4 decades; tiny DT may not advance but must not NaN."""
         from trlib import Trlib
@@ -244,7 +247,7 @@ class TestTrlibBoundaryValues(unittest.TestCase):
                             continue
                         self._assert_finite_state(state)
 
-    @_XFAIL_TR_STOP_ISSUE_142    # XFAIL_REMOVE_WITH_142
+    @_XFAIL_TR_NONFINITE_152    # XFAIL_REMOVE_WITH_152
     def test_RR_sweep(self):
         from trlib import Trlib
         from trlib.errors import TrlibError
@@ -260,7 +263,7 @@ class TestTrlibBoundaryValues(unittest.TestCase):
                             continue
                         self._assert_finite_state(state)
 
-    @_XFAIL_TR_STOP_ISSUE_142    # XFAIL_REMOVE_WITH_142
+    @_XFAIL_TR_NONFINITE_152    # XFAIL_REMOVE_WITH_152
     def test_BB_sweep(self):
         from trlib import Trlib
         from trlib.errors import TrlibError

@@ -24,7 +24,9 @@ CONTAINS
 
       IF(MDLUF.NE.0.AND.MDLXP.NE.0) CALL IPDB_OPEN(KUFDEV, KUFDCG)
       IF(MDLUF.NE.0) CALL UFILE_INTERFACE(KDIRX,KUFDIR,KUFDEV,KUFDCG,0)
-      CALL TR_EQS_SELECT(0)
+      CALL TR_EQS_SELECT(0, ierr)
+      IF(ierr.NE.0) RETURN   ! #142: TR_EQS_SELECT now returns ierr=1 on
+                             ! MDLEQE/MDLEQN inconsistency instead of STOP
 
       NRAMAX=INT(RHOA*NRMAX)
       DR = 1.D0/DBLE(NRMAX)
@@ -73,7 +75,7 @@ CONTAINS
       CALL tr_bpsd_put(ierr)
       IF(ierr.NE.0) THEN
          write(6,'(A,I5)') 'XX tr_bpsd_put in tr_prof: ierr=',ierr
-         STOP
+         RETURN   ! #142: was STOP — abort kills the libtrapi.so host process
       END IF
 
 !     *** CALCULATE METRIC FACTOR ***
@@ -81,7 +83,7 @@ CONTAINS
       CALL tr_set_metric(ierr)
       IF(ierr.NE.0) THEN
          write(6,'(A,I5)') 'XX tr_set_metric in tr_metric: ierr=',ierr
-         STOP
+         RETURN   ! #142: was STOP
       END IF
       
 !     *** CALCULATE ANEAVE and ANC, ANFE ***
@@ -97,7 +99,7 @@ CONTAINS
       CALL tr_bpsd_put(ierr)
       IF(ierr.NE.0) THEN
          write(6,'(A,I5)') 'XX tr_bpsd_put in tr_prof: ierr=',ierr
-         STOP
+         RETURN   ! #142: was STOP
       END IF
 
 !     *** initilize graphic data ***
@@ -122,7 +124,7 @@ CONTAINS
 
 !     ***********************************************************
 
-  SUBROUTINE TR_EQS_SELECT(INIT)
+  SUBROUTINE TR_EQS_SELECT(INIT, IERR)
 
     USE TRCOMM, ONLY : &
          AMM, AMZ, MDDIAG, MDLEOI, MDLEQ0, MDLEQB, MDLEQE, MDLEQN, &
@@ -133,6 +135,10 @@ CONTAINS
     USE TRCOM1, ONLY : INS
     IMPLICIT NONE
     INTEGER,INTENT(IN) :: INIT
+    INTEGER,INTENT(OUT),OPTIONAL :: IERR  ! #142: optional so existing
+                                ! callers without IERR (legacy main path)
+                                ! still compile. Library-reachable callers
+                                ! pass IERR and check it.
     INTEGER:: IND, INDH, INDHD, MDANOM, MDSLCT, NEQ, NEQ1, NEQI
     INTEGER:: NEQRMAX, NEQS, NEQT, NNSC, NNSMAX, NNSN, NS, NSSN, NSVN
     INTEGER, SAVE :: NSSMAX
@@ -188,9 +194,15 @@ CONTAINS
          NEQMAX=MDLEQB+NSMAX+(MDLEQT+MDLEQU)*NSMAX+MDLEQ0*NSNMAX+MDLEQZ*NSZMAX
       ENDIF
 
+      IF(PRESENT(IERR)) IERR = 0
       IF(MDLEQN.EQ.0.AND.(MDLEQE.EQ.1.OR.MDLEQE.EQ.2)) THEN
          WRITE(6,*)  'XX TR_EQS_SELECT : MDLEQE can be 1 or 2 when MDLEQN is 1.'
-         STOP
+         IF(PRESENT(IERR)) THEN
+            IERR = 1
+            RETURN
+         END IF
+         STOP   ! legacy fallback: callers without IERR keep abort
+                ! semantics; the trprep:27 caller now passes IERR.
       ENDIF
 
       NSS(1:NEQMAXM)=-1  ! 0: EM, particle species
