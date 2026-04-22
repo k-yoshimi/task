@@ -222,6 +222,20 @@ CONTAINS
           PHI=ATAN2(YP,XP)
           s=s+dels
 
+          ! Guard YN(0:NEQ, 0:NSTPMAX) against vacuum-mode overflow.
+          ! Without this check the loop appends past nstp=NSTPMAX when
+          ! the ray never hits dense plasma (e.g. high pne_threshold or
+          ! initial point trapped in vacuum). Valgrind: Invalid write
+          ! at lines 226-229 with stacks through wr_setup_start_point;
+          ! tracked in #144.
+          IF(nstp.GE.NSTPMAX) THEN
+             WRITE(6,'(A,2I6,2ES12.4)') &
+                  'wr_setup_start_point: vacuum loop overflow nray,nstp,R,Z=',&
+                  NRAY,nstp,RP,ZP
+             IERR=3
+             RETURN
+          END IF
+
           nstp=nstp+1
           YN(0,nstp)= s
           YN(1,nstp)= XP
