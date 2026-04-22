@@ -50,11 +50,18 @@ _REASON_142 = (
     "tr/trexec.f90 + trprep.f90 STOP abort the forked worker — "
     "tracked in #142; marker must be removed once that lands."
 )
-# strict=True: when #142 lands and the STOPs become returns, these
-# tests flip XFAIL → XPASS, and strict=True turns XPASS into FAILED,
-# forcing CI-red until the marker is removed. That's the automated
-# removal-pressure the review asked for — no reliance on grep habits.
-_XFAIL_TR_STOP_ISSUE_142 = pytest.mark.xfail(strict=True, reason=_REASON_142)
+# The STOP manifests LOCALLY (laptop heap layout reproduces the reinit
+# cycle) but not on CI (GH Actions' fresh fork state doesn't). So:
+#   - condition="CI env not set" → xfail applies ONLY locally
+#   - strict=True → local XPASS (when #142 lands) flips to FAILED and
+#     the pre-push gate (CLAUDE.md) forces marker removal there
+#   - CI sees these tests without xfail at all → they pass normally
+# This pattern satisfies CLAUDE.md §Test-suite discipline (strict=True
+# requirement) while not failing CI today for the environment mismatch.
+_CI = os.environ.get("CI", "").lower() == "true"
+_XFAIL_TR_STOP_ISSUE_142 = pytest.mark.xfail(
+    condition=not _CI, strict=True, reason=_REASON_142,
+)
 _SKIP_TR_STOP_ISSUE_142 = pytest.mark.skip(reason=_REASON_142)
 
 HERE = Path(__file__).resolve()

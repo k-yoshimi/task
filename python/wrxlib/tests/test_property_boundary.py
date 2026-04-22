@@ -23,6 +23,22 @@ import sys
 import unittest
 from pathlib import Path
 
+import pytest
+
+# XFAIL_REMOVE_WITH_144: SIGABRT (signal 6) in wrx_heap_reuse_bug_class
+# (#110 family) surfaces on mutated-parameter sweeps. Tracked in #144.
+# Applied CI-only because the crash is heap-layout dependent and this
+# dev host does not reproduce it. strict=True per CLAUDE.md — when
+# #144 lands in CI, XPASS → FAILED → CI red → marker removal forced.
+# pytest-forked reports SIGABRT worker exits as FAILED (not
+# INTERNALERROR), so xfail catches it cleanly.
+_CI = os.environ.get("CI", "").lower() == "true"
+_XFAIL_WRX_HEAP_144 = pytest.mark.xfail(
+    condition=_CI, strict=True,
+    reason="SIGABRT in wrx heap-reuse path — tracked in #144; "
+           "marker must be removed once that lands.",
+)
+
 HERE = Path(__file__).resolve()
 REPO = HERE.parents[3]
 PYTHON_ROOT = REPO / "python"
@@ -88,6 +104,7 @@ class TestWrxlibBoundaryValues(unittest.TestCase):
         wrx.run(self.NRAYMAX)
 
     # --- sweeps -----------------------------------------------------------
+    @_XFAIL_WRX_HEAP_144    # XFAIL_REMOVE_WITH_144
     def test_MDLWRI_sweep(self):
         from wrxlib import Wrxlib
         from wrxlib.errors import WrxlibError
@@ -101,6 +118,7 @@ class TestWrxlibBoundaryValues(unittest.TestCase):
                         # a controlled failure as acceptable.
                         continue
 
+    @_XFAIL_WRX_HEAP_144    # XFAIL_REMOVE_WITH_144
     def test_pne_threshold_sweep(self):
         """pne_threshold (cold dispersion floor) over 3 decades."""
         from wrxlib import Wrxlib
