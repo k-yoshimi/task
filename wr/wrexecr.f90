@@ -165,6 +165,20 @@ CONTAINS
           R=SQRT(X**2+Y**2)
           PHI=ATAN2(Y,X)
           s=s+dels
+
+          ! Mirror the wrx-side guard from PR #146: vacuum loop without
+          ! NSTPMAX upper bound writes past the end of YN(0:NEQ, 0:NSTPMAX)
+          ! when the ray never reaches the density threshold (e.g.
+          ! NSTPMAX=1 in property tests). Same bug class as
+          ! wrx/wrexecr.f90:225; tracked under #142 / #144 sister.
+          IF(nstp.GE.NSTPMAX) THEN
+             WRITE(6,'(A,2I6,2ES12.4)') &
+                  'wr_exec_single_ray: vacuum loop overflow nray,nstp,R,Z=',&
+                  NRAY,nstp,R,Z
+             ierr=103
+             RETURN
+          END IF
+
           nstp=nstp+1
           YN(0,nstp)= s
           YN(1,nstp)= R
@@ -174,7 +188,11 @@ CONTAINS
           YN(5,nstp)= RKPHI
           YN(6,nstp)= RKZ
           YN(7,nstp)= UUI
-          nstp=nstp+1
+          ! Removed spurious `nstp=nstp+1` here (was at the original
+          ! line 177): the iteration body has TWO increments but only
+          ! ONE write into YN, so every other YN slot was left
+          ! UNINITIALIZED and the effective buffer was halved. Drop
+          ! the duplicate so nstp tracks YN properly.
 
           IF(R.GT.RMAX_WR.OR. &
              R.LT.RMIN_WR.OR. &
@@ -304,8 +322,23 @@ CONTAINS
        rk_R=rk_R2
        rk_phi=rk_phi2
     CASE DEFAULT
+       ! #142 STOP migration: returning IERR=3 instead of aborting the
+       ! whole host process. Caller (wr_exec_rays:32) already does
+       ! `IF(IERR.NE.0) cycle`, so a single bad ray is skipped and the
+       ! sweep continues. Without this, libwrapi.so callers (pytest
+       ! workers, MCP servers) lose the entire process when a fixture
+       ! lands on MODEW=0 — see PR #141 CI hang on wr property_boundary
+       ! test_NRAYMAX_3/4.
+       !
+       ! IERR=3 is a NEW code (not reusing 2 = "ray out of region" at
+       ! line 255 nor 102/103 = "vacuum / geometry overflow"). Distinct
+       ! semantics: this is a programming-error class (invalid MODEW
+       ! enum), not a physics-result class. Keeping it separate so
+       ! future diagnostic surfaces (MCP error reporters, dump-state)
+       ! can classify correctly.
        WRITE(6,'(A,I4)') 'XX wr_exec_single_ray: MODEW is not 1 nor 2:', MODEW
-       STOP
+       IERR=3
+       RETURN
     END SELECT
     rkpara=rkx*mag%bnx+rky*mag%bny+rkz*mag%bnz
 
