@@ -332,6 +332,18 @@ def _apply_bulk_params(eq: Eq, params: Dict[str, SupportedValue]) -> List[str]:
     applied: List[str] = []
     for name, value in params.items():
         if isinstance(value, (list, tuple)):
+            # PSIB is the only 0-origin array in eq's registry
+            # (Fortran REAL(8) :: PSIB(0:5)). Reject list-form for it
+            # explicitly: enumerate(start=1) would generate PSIB[1..6],
+            # silently writing wrong indices and leaving PSIB[0] unset
+            # before the final PSIB[6] write trips out-of-range on
+            # partial mutation. Force the dict form.
+            if name == "PSIB":
+                raise EqlibError(
+                    "PSIB is a 0-origin array; pass a dict "
+                    "{0: v0, 1: v1, ...} instead of a list "
+                    "(a list would silently start at index 1)."
+                )
             for i, v in enumerate(value, start=1):
                 key = f"{name}[{i}]"
                 eq.set_param(key, float(v))
@@ -508,7 +520,21 @@ def handle_run_and_get_state(
     params: Optional[Dict[str, SupportedValue]] = None,
     mode: int = 1,
 ) -> Dict[str, Any]:
+    """One-shot init → set_params → run → get_state.
+
+    Codex review (P2) fix: force-close any prior :class:`Eq` handle
+    before opening a fresh one so this call is genuinely isolated.
+    Without the close, prior tool calls in the same MCP server process
+    leak their parameter mutations (MODELG, KNAMEQ, mesh sizes, etc.)
+    into the one-shot run because libeqapi.so holds singleton Fortran
+    state — the user-facing contract ("init + set + run + get_state")
+    requires a fresh init each call.
+    """
     try:
+        # Force a fresh handle: STATE.close() finalizes any prior Eq,
+        # then ensure_open() opens a new one. Mirrors the documented
+        # init step of the one-shot contract.
+        STATE.close()
         eq = STATE.ensure_open()
         if params:
             _apply_bulk_params(eq, params)

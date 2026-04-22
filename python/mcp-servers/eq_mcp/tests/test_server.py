@@ -274,6 +274,25 @@ class TestBulkParamDispatch(unittest.TestCase):
         with self.assertRaises(EqlibError):
             srv._apply_bulk_params(eq, {"MODELG": True})
 
+    def test_psib_list_form_raises(self) -> None:
+        """PSIB is 0-origin; list form would silently misalign indices.
+
+        feature-dev review (MED): without an explicit guard,
+        ``{"PSIB": [v0, v1, v2, v3, v4, v5]}`` enumerates as
+        ``PSIB[1..6]``, leaves ``PSIB[0]`` unset, and trips out-of-range
+        only on the final ``PSIB[6]`` write — after partial mutation.
+        Force the dict form by raising up-front.
+        """
+        eq = _MockEq()
+        with self.assertRaises(EqlibError) as ctx:
+            srv._apply_bulk_params(
+                eq, {"PSIB": [2.0, 0.5, 0.0, 0.0, 0.0, 0.0]}
+            )
+        self.assertIn("PSIB", str(ctx.exception))
+        self.assertIn("0-origin", str(ctx.exception))
+        # No partial mutation: nothing should have been applied.
+        self.assertEqual(eq.scalar_calls, [])
+
 
 class TestHandlersWithMockedState(unittest.TestCase):
     """Exercise handle_* against a mocked _ServerState.ensure_open."""
@@ -340,6 +359,21 @@ class TestHandlersWithMockedState(unittest.TestCase):
         self.assertIn("NRGMAX", out)
         self.assertEqual(self.mock_eq.scalar_calls[-1], ("RR", 6.2))
         self.assertEqual(self.mock_eq.run_calls, [1])
+
+    def test_handle_run_and_get_state_force_closes_prior(self) -> None:
+        """Codex review (P2): prior STATE.eq must be finalized before
+        the one-shot run, so left-over MODELG / KNAMEQ / mesh from
+        earlier tool calls cannot leak into the supposedly-isolated
+        run. Verified by patching STATE.close() and asserting it is
+        called before STATE.ensure_open() inside the same handler.
+        """
+        with mock.patch.object(srv.STATE, "close") as mock_close:
+            srv.handle_run_and_get_state(params={"RR": 6.2}, mode=1)
+            self.assertEqual(
+                mock_close.call_count, 1,
+                "run_and_get_state must STATE.close() to finalize prior Eq "
+                "before opening a fresh handle (Codex review P2).",
+            )
 
     def test_handle_validate_returns_list_of_dicts(self) -> None:
         # No diagnostics -> empty list.
