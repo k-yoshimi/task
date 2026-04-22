@@ -198,6 +198,26 @@ class TestBulkParamDispatch(unittest.TestCase):
         with self.assertRaises(TrlibError):
             srv._apply_bulk_params(tr, {"MDLNB": True})
 
+    def test_rejects_bool_in_list(self) -> None:
+        # Codex P2 follow-up: nested bool in a bulk list must also
+        # raise, not be silently coerced to 1.0 by float().
+        tr = _MockTrlib()
+        with self.assertRaises(TrlibError):
+            srv._apply_bulk_params(tr, {"PN": [0.7, True]})
+
+    def test_rejects_bool_in_dict_value(self) -> None:
+        # Codex P2 follow-up: nested bool as dict value must also raise.
+        tr = _MockTrlib()
+        with self.assertRaises(TrlibError):
+            srv._apply_bulk_params(tr, {"PT": {1: True}})
+
+    def test_rejects_bool_dict_index(self) -> None:
+        # Codex P2 follow-up: bool key would be int()-coerced to 1;
+        # reject up-front so the index origin is unambiguous.
+        tr = _MockTrlib()
+        with self.assertRaises(TrlibError):
+            srv._apply_bulk_params(tr, {"PT": {True: 3.5}})
+
     def test_rejects_non_numeric_string_element(self) -> None:
         # MED-5: float() on a non-numeric string should map to TrlibError
         # (not leak a raw ValueError), with the key name in the message.

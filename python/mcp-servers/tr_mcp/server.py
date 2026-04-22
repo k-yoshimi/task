@@ -253,6 +253,14 @@ def _apply_bulk_params(tr: Trlib, params: Dict[str, SupportedValue]) -> List[str
         if isinstance(value, (list, tuple)):
             for i, v in enumerate(value, start=1):
                 key = f"{name}[{i}]"
+                # Nested bool: subclass of int would be coerced to 1.0
+                # by float() — reject before float() so the top-level
+                # bool contract also holds inside bulk arrays.
+                if isinstance(v, bool):
+                    raise TrlibError(
+                        f"unsupported value type for '{key}': "
+                        f"bool (use 0/1)"
+                    )
                 try:
                     coerced = float(v)
                 except (TypeError, ValueError) as exc:
@@ -263,6 +271,17 @@ def _apply_bulk_params(tr: Trlib, params: Dict[str, SupportedValue]) -> List[str
                 applied.append(key)
         elif isinstance(value, dict):
             for idx, v in value.items():
+                # Reject bool keys AND bool values up-front; int(True)
+                # == 1 would otherwise silently land in NAME[1].
+                if isinstance(idx, bool):
+                    raise TrlibError(
+                        f"invalid index for '{name}': bool (use 0/1)"
+                    )
+                if isinstance(v, bool):
+                    raise TrlibError(
+                        f"unsupported value type for '{name}[{idx}]': "
+                        f"bool (use 0/1)"
+                    )
                 try:
                     int_idx = int(idx)
                 except (TypeError, ValueError) as exc:

@@ -248,6 +248,24 @@ class TestBulkParamDispatch(unittest.TestCase):
         with self.assertRaises(FplibError):
             srv._apply_bulk_params(fp, {"MODELG": True})
 
+    def test_rejects_bool_in_list(self) -> None:
+        # Codex P2 follow-up: nested bool in list must also raise.
+        fp = _MockFplib()
+        with self.assertRaises(FplibError):
+            srv._apply_bulk_params(fp, {"PA": [1.0, True]})
+
+    def test_rejects_bool_in_dict_value(self) -> None:
+        # Codex P2 follow-up: bool as dict value must raise.
+        fp = _MockFplib()
+        with self.assertRaises(FplibError):
+            srv._apply_bulk_params(fp, {"PN": {1: True}})
+
+    def test_rejects_bool_dict_index(self) -> None:
+        # Codex P2 follow-up: bool key would be int()-coerced to 1.
+        fp = _MockFplib()
+        with self.assertRaises(FplibError):
+            srv._apply_bulk_params(fp, {"PN": {True: 0.5}})
+
     def test_rejects_non_numeric_string_element(self) -> None:
         # MED-5: float() on a non-numeric list element maps to FplibError.
         fp = _MockFplib()

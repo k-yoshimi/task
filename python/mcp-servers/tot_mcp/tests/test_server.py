@@ -268,6 +268,24 @@ class TestBulkParamDispatch(unittest.TestCase):
         with self.assertRaises(TotlibError):
             srv._apply_bulk_params(tot, {"tr:MDLNB": True})
 
+    def test_rejects_bool_in_list(self) -> None:
+        # Codex P2 follow-up: nested bool in list must also raise.
+        tot = _MockTot()
+        with self.assertRaises(TotlibError):
+            srv._apply_bulk_params(tot, {"tr:PN": [0.7, True]})
+
+    def test_rejects_bool_in_dict_value(self) -> None:
+        # Codex P2 follow-up: bool as dict value must raise.
+        tot = _MockTot()
+        with self.assertRaises(TotlibError):
+            srv._apply_bulk_params(tot, {"tr:PT": {1: True}})
+
+    def test_rejects_bool_dict_index(self) -> None:
+        # Codex P2 follow-up: bool key would be int()-coerced to 1.
+        tot = _MockTot()
+        with self.assertRaises(TotlibError):
+            srv._apply_bulk_params(tot, {"tr:PT": {True: 3.5}})
+
     def test_rejects_non_numeric_string_element(self) -> None:
         # MED-5: float() on a non-numeric list element maps to TotlibError.
         tot = _MockTot()

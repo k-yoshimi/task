@@ -221,6 +221,24 @@ class TestBulkParamDispatch(unittest.TestCase):
         with self.assertRaises(WrxlibError):
             srv._apply_bulk_params(wrx, {"mode_beam": True})
 
+    def test_rejects_bool_in_list(self) -> None:
+        # Codex P2 follow-up: nested bool in list must also raise.
+        wrx = _MockWrxlib()
+        with self.assertRaises(WrxlibError):
+            srv._apply_bulk_params(wrx, {"PN": [0.7, True]})
+
+    def test_rejects_bool_in_dict_value(self) -> None:
+        # Codex P2 follow-up: bool as dict value must raise.
+        wrx = _MockWrxlib()
+        with self.assertRaises(WrxlibError):
+            srv._apply_bulk_params(wrx, {"NCMIN": {1: True}})
+
+    def test_rejects_bool_dict_index(self) -> None:
+        # Codex P2 follow-up: bool key would be int()-coerced to 1.
+        wrx = _MockWrxlib()
+        with self.assertRaises(WrxlibError):
+            srv._apply_bulk_params(wrx, {"NCMIN": {True: 1}})
+
     def test_rejects_non_numeric_string_element(self) -> None:
         # MED-5: float() on a non-numeric list element maps to WrxlibError.
         wrx = _MockWrxlib()

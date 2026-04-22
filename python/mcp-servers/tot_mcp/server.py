@@ -349,6 +349,14 @@ def _apply_bulk_params(tot: Tot, params: Dict[str, SupportedValue]) -> List[str]
                 )
             for i, v in enumerate(value, start=1):
                 key = f"{ns}:{bare}[{i}]"
+                # Nested bool: subclass of int would be coerced to 1.0
+                # by float() — reject before float() so the top-level
+                # bool contract also holds inside bulk arrays.
+                if isinstance(v, bool):
+                    raise TotlibError(
+                        f"unsupported value type for '{key}': "
+                        f"bool (use 0/1)"
+                    )
                 try:
                     coerced = float(v)
                 except (TypeError, ValueError) as exc:
@@ -363,6 +371,11 @@ def _apply_bulk_params(tot: Tot, params: Dict[str, SupportedValue]) -> List[str]
                 # Same fall-through as the list case: let Tot raise.
                 if value:
                     first_idx, first_val = next(iter(value.items()))
+                    if isinstance(first_val, bool):
+                        raise TotlibError(
+                            f"unsupported value type for '{name}': "
+                            f"bool (use 0/1)"
+                        )
                     try:
                         coerced = float(first_val)
                     except (TypeError, ValueError) as exc:
@@ -374,6 +387,17 @@ def _apply_bulk_params(tot: Tot, params: Dict[str, SupportedValue]) -> List[str]
                     applied.append(name)
                 continue
             for idx, v in value.items():
+                # Reject bool keys AND bool values up-front; int(True)
+                # == 1 would otherwise silently land in NAME[1].
+                if isinstance(idx, bool):
+                    raise TotlibError(
+                        f"invalid index for '{ns}:{bare}': bool (use 0/1)"
+                    )
+                if isinstance(v, bool):
+                    raise TotlibError(
+                        f"unsupported value type for '{ns}:{bare}[{idx}]': "
+                        f"bool (use 0/1)"
+                    )
                 try:
                     int_idx = int(idx)
                 except (TypeError, ValueError) as exc:
