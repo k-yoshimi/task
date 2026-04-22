@@ -299,6 +299,31 @@ class TestHandlersWithMockedState(unittest.TestCase):
         self.assertIn("scalars", out)
         self.assertIn("rays", out)
 
+    def test_handle_run_and_get_state_force_closes_prior(self) -> None:
+        """Codex MCP audit 2026-04-22 (HIGH) fix: prior STATE.wrx must
+        be finalized before the one-shot run, so left-over MODELG /
+        RFIN / NRAYMAX / mesh from earlier tool calls cannot leak
+        into the supposedly-isolated run.
+
+        Verified by patching STATE.close() and asserting it is called
+        exactly once during handle_run_and_get_state. The WRX_RUN_OK
+        gate must be set so the call is not refused before reaching
+        the close+ensure_open path.
+        """
+        env = dict(os.environ)
+        env["WRX_RUN_OK"] = "1"
+        with mock.patch.dict(os.environ, env, clear=True):
+            with mock.patch.object(srv.STATE, "close") as mock_close:
+                srv.handle_run_and_get_state(
+                    params={"RR": 3.2}, nray_request=0,
+                )
+                self.assertEqual(
+                    mock_close.call_count, 1,
+                    "run_and_get_state must STATE.close() to finalize "
+                    "prior Wrxlib before opening a fresh handle "
+                    "(Codex MCP audit 2026-04-22).",
+                )
+
 
 # =====================================================================
 # WRX_RUN_OK gate tests.

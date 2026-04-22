@@ -338,6 +338,24 @@ class TestHandlersWithMockedState(unittest.TestCase):
         self.assertIn("NT", out)
         self.assertEqual(self.mock_ti.run_calls, [0])
 
+    def test_handle_run_and_get_state_force_closes_prior(self) -> None:
+        """Codex MCP audit 2026-04-22 (HIGH) fix: prior STATE.ti must
+        be finalized before the one-shot run, so left-over MODELG /
+        mesh / NSMAX / MODEL_BND from earlier tool calls cannot leak
+        into the supposedly-isolated run.
+
+        Verified by patching STATE.close() and asserting it is called
+        exactly once during handle_run_and_get_state.
+        """
+        with mock.patch.object(srv.STATE, "close") as mock_close:
+            srv.handle_run_and_get_state(params={"RR": 3.2}, ntmax=1)
+            self.assertEqual(
+                mock_close.call_count, 1,
+                "run_and_get_state must STATE.close() to finalize "
+                "prior Tilib before opening a fresh handle "
+                "(Codex MCP audit 2026-04-22).",
+            )
+
 
 class TestMainCliFlags(unittest.TestCase):
     """--help and --print-tools should work without mcp or libtiapi.so."""

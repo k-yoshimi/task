@@ -436,7 +436,22 @@ def handle_run_and_get_state(
     params: Optional[Dict[str, SupportedValue]] = None,
     ntmax: int = 1,
 ) -> Dict[str, Any]:
+    """One-shot init -> set_params -> run -> get_state.
+
+    Codex MCP audit 2026-04-22 (HIGH) fix: force-close any prior
+    :class:`Fplib` handle before opening a fresh one so this call is
+    genuinely isolated. Without the close, prior tool calls in the
+    same MCP server process leak their parameter mutations (NSMAX,
+    NRMAX, mesh sizes, etc.) into the one-shot run because libfpapi.so
+    holds singleton Fortran state -- the user-facing contract
+    ("init + set + run + get_state") requires a fresh init each call.
+    Mirrors the canonical fix in ``eq_mcp.server.handle_run_and_get_state``.
+    """
     try:
+        # Force a fresh handle: STATE.close() finalizes any prior Fplib,
+        # then ensure_open() opens a new one. Mirrors the documented
+        # init step of the one-shot contract.
+        STATE.close()
         fp = STATE.ensure_open()
         if params:
             _apply_bulk_params(fp, params)

@@ -468,6 +468,31 @@ class TestHandlersWithMockedState(unittest.TestCase):
         self.assertEqual(self.mock_tot.run_calls, [0])
         self.assertIn("NT", out)
 
+    def test_handle_run_and_get_state_force_closes_prior(self) -> None:
+        """Codex MCP audit 2026-04-22 (HIGH) fix: prior STATE.tot must
+        be finalized before the one-shot run, so left-over per-namespace
+        mutations (eq:MODELG, tr:DT, fp:NSMAX, etc.) from earlier tool
+        calls cannot leak into the supposedly-isolated run.
+
+        ``Tot.close()`` cascades ``tot_finalize`` to every sub-library
+        in the Fortran layer, so a single ``STATE.close()`` resets all
+        5 sub-modules in one shot.
+
+        Verified by patching STATE.close() and asserting it is called
+        exactly once during handle_run_and_get_state.
+        """
+        with mock.patch.object(srv.STATE, "close") as mock_close:
+            srv.handle_run_and_get_state(
+                params={"eq:RR": 7.0}, ntmax=1,
+            )
+            self.assertEqual(
+                mock_close.call_count, 1,
+                "run_and_get_state must STATE.close() to finalize "
+                "prior Tot (and cascade to all 5 sub-libraries) "
+                "before opening a fresh handle "
+                "(Codex MCP audit 2026-04-22).",
+            )
+
 
 # =====================================================================
 # Namespace prefix guard (delegated to totlib but worth covering here

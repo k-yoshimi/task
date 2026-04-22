@@ -576,7 +576,29 @@ def handle_run_and_get_state(
     params: Optional[Dict[str, SupportedValue]] = None,
     ntmax: int = 1,
 ) -> Dict[str, Any]:
+    """One-shot init -> set_params -> run -> get_state.
+
+    Codex MCP audit 2026-04-22 (HIGH) fix: force-close any prior
+    :class:`Tot` handle before opening a fresh one so this call is
+    genuinely isolated. Without the close, prior tool calls in the
+    same MCP server process leak their parameter mutations across the
+    five backing modules (eq / tr / fp / ti / wr / wrx — namespaced as
+    ``<ns>:NAME``) into the supposedly-isolated one-shot run because
+    libtotapi.so holds singleton Fortran state for the orchestrator
+    AND each sub-module's COMMON blocks.
+
+    The cascade is correct: ``Tot.close()`` calls ``tot_finalize`` in
+    the Fortran layer, which finalises every sub-module in turn — so
+    a single ``STATE.close()`` here resets every namespace, not just
+    the orchestrator. The user-facing contract
+    ("init + set + run + get_state") requires a fresh init each call.
+    Mirrors the canonical fix in ``eq_mcp.server.handle_run_and_get_state``.
+    """
     try:
+        # Force a fresh handle: STATE.close() finalizes any prior Tot
+        # (which cascades tot_finalize to all 5 sub-libraries), then
+        # ensure_open() opens a new one.
+        STATE.close()
         tot = STATE.ensure_open()
         if params:
             _apply_bulk_params(tot, params)
