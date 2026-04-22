@@ -19,25 +19,9 @@ safe to run on a developer machine that has not built the orchestrator.
 """
 from __future__ import annotations
 
-import os
 import sys
 import unittest
 from pathlib import Path
-
-import pytest
-
-# Same BPSD plasmaf_out heap-reuse / uninit issue as #148 (trlib/totlib
-# equivalence). Surfaces as `Index '1' of dimension 1 of array
-# 'plasmaf_out%rho' above upper bound of 0` → SIGABRT in the forked
-# worker. Apply CI-only since the local dev host runs the same path
-# successfully today (heap layout dependent).
-#
-# DOCUMENTED EXCEPTION to CLAUDE.md §Test-suite discipline (strict=True
-# rule): strict=False because the underlying #148 bug is heap-layout-
-# flaky — strict=True would FAIL CI on every clean-pass run via
-# XPASS(strict). Removal pressure shifts to the
-# `XFAIL_REMOVE_WITH_148` grep string + #148 link.
-_CI = os.environ.get("CI", "").lower() == "true"
 
 HERE = Path(__file__).resolve()
 TOT_MCP_ROOT = HERE.parents[1]
@@ -101,17 +85,6 @@ class TestL6Integration(unittest.TestCase):
         with self.subTest("finalize"):
             self.assertIn("finalized", srv.handle_finalize())
 
-    # XFAIL_REMOVE_WITH_148: same BPSD plasmaf_out uninit-struct path as
-    # #148 — bpsd_plasmaf.f90:202 reads a struct that only got default-
-    # initialized, not allocate'd, so `plasmaf_out%rho` has size 0 and
-    # the lookup at index 1 trips the bounds check. Local dev host
-    # happens to land in already-zeroed heap so the test passes; CI's
-    # heap reproduces the bug. Marker removed when #148 fixes BPSD.
-    @pytest.mark.xfail(
-        condition=_CI, strict=False,
-        reason="BPSD plasmaf_out%rho uninit-struct in tot fan-out — "
-               "tracked in #148; marker must be removed once that lands.",
-    )
     def test_run_and_get_state_oneshot(self) -> None:
         """``handle_run_and_get_state`` bundles init + set_params + run
         + get_state in one call. After L-6 it must return a populated
