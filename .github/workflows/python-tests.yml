@@ -136,6 +136,14 @@ jobs:
           pip install pytest pytest-mock pytest-subtests pytest-forked pytest-timeout
           # tomli is needed only on <3.11; keep installed for safety on 3.11 too.
           pip install tomli
+          # mcp = Anthropic's official Python MCP SDK. Required by the
+          # build_server / TestBuildServer classes in
+          # python/mcp-servers/<mod>/tests/test_server.py — without it
+          # 9 tests across 6 modules silently skipUnless'd
+          # (MCP_AVAILABLE = False). See server.py's optional-import
+          # block; CI now exercises the FastMCP construction path that
+          # production users hit.
+          pip install mcp
 
       - name: Build PIC support libraries (bpsd, lib, mtxp, pl, eq, dp, ob)
         # Pre-build all shared support libraries so each module Makefile
