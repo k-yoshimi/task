@@ -19,11 +19,47 @@ Usage::
 from __future__ import annotations
 
 import ctypes
-from typing import Any, Mapping, Optional
+from dataclasses import dataclass
+from enum import IntEnum
+from typing import Any, List, Mapping, Optional
 
 from . import _ffi
-from .errors import EqlibError, raise_for_rc
+from .errors import EqlibError, EqlibNotInitializedError, raise_for_rc
 from .state import EqState
+
+
+class EqDiagCode(IntEnum):
+    """Diagnostic category codes returned by :py:meth:`Eq.validate`.
+
+    Mirrors ``enum eq_diag_code`` in ``eq/eq_api.h``. Use the integer
+    value of the enum when comparing against :attr:`EqDiagEntryPy.code`,
+    or compare directly: ``entry.code == EqDiagCode.OUT_OF_RANGE``.
+    """
+
+    OUT_OF_RANGE           = _ffi.EQ_DIAG_OUT_OF_RANGE
+    INCONSISTENT_PAIR      = _ffi.EQ_DIAG_INCONSISTENT_PAIR
+    OUT_OF_RANGE_AFTER_DEP = _ffi.EQ_DIAG_OUT_OF_RANGE_AFTER_DEP
+    FILE_MISSING           = _ffi.EQ_DIAG_FILE_MISSING
+    MISSING_REQUIRED       = _ffi.EQ_DIAG_MISSING_REQUIRED
+
+
+@dataclass(frozen=True)
+class EqDiagEntryPy:
+    """One pre-run validation diagnostic.
+
+    User-facing return type for :py:meth:`Eq.validate`. Strings are
+    decoded from the underlying CHARACTER arrays with trailing NUL
+    padding stripped — no ctypes objects leak through this dataclass.
+
+    Attributes:
+        param:   parameter name the diagnostic refers to (e.g. ``NRMAX``)
+        code:    diagnostic category (compare against :class:`EqDiagCode`)
+        message: human-readable description suitable for surfacing to UI
+    """
+
+    param: str
+    code: int
+    message: str
 
 
 class Eq:
@@ -188,5 +224,70 @@ class Eq:
         raise_for_rc("eq_get_state", rc)
         return EqState.from_c(c)
 
+    # --- validation (Issue #143) ---------------------------------------
+    def validate(self) -> List[EqDiagEntryPy]:
+        """Run pre-run cross-parameter validation.
 
-__all__ = ["Eq"]
+        Returns the list of diagnostics produced by ``eq_validate``
+        (read-only against the current eq state). The recommended
+        workflow is::
+
+            eq.set_params(...)
+            diags = eq.validate()
+            if diags:
+                # surface / fix / re-validate, then run
+                ...
+            eq.run()
+
+        Return-code mapping (``eq_api_validate`` contract):
+
+        * ``EQ_OK`` (0)            -> empty list (clean state)
+        * ``EQ_ERR_INVALID`` (1)   -> non-empty list (the diagnostics
+          themselves are the payload; ``rc == 1`` only signals
+          "diagnostics present" so callers do not need to inspect the
+          C-level return code)
+        * ``EQ_ERR_NOT_INIT`` (2)  -> :class:`EqlibNotInitializedError`
+
+        Older builds without ``eq_validate`` raise :class:`EqlibError`
+        (rebuild via ``make -C eq libeqapi.so``). The method does not
+        modify any eq state.
+        """
+        if self._closed:
+            raise EqlibError("validate on closed Eq")
+        try:
+            fn = self._lib.eq_validate
+        except AttributeError as exc:
+            raise EqlibError(
+                "libeqapi.so does not export eq_validate; "
+                "rebuild the shared library after the #143 PR."
+            ) from exc
+
+        cap = _ffi.EQ_DIAG_DEFAULT_CAP
+        buf = (_ffi.EqDiagEntry * cap)()
+        ndiag = ctypes.c_int(0)
+        rc = fn(buf, cap, ctypes.byref(ndiag))
+
+        # Contract: rc==2 (NOT_INIT) is the only one that maps to an
+        # exception; rc==0 and rc==1 both return the list (empty / not).
+        if rc == _ffi.EQ_ERR_NOT_INIT:
+            raise EqlibNotInitializedError(f"eq_validate: rc={rc}")
+        if rc not in (_ffi.EQ_OK, _ffi.EQ_ERR_INVALID):
+            # Defensive: future codes should not silently masquerade
+            # as success. Reuse the central rc -> exception mapping.
+            raise_for_rc("eq_validate", rc)
+
+        n = int(ndiag.value)
+        out: List[EqDiagEntryPy] = []
+        for i in range(n):
+            entry = buf[i]
+            param = entry.param.decode("ascii", errors="replace").rstrip("\x00")
+            message = entry.msg.decode("ascii", errors="replace").rstrip("\x00")
+            out.append(EqDiagEntryPy(
+                param=param,
+                code=int(entry.code),
+                message=message,
+            ))
+        return out
+
+
+__all__ = ["Eq", "EqDiagCode", "EqDiagEntryPy"]

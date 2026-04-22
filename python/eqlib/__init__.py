@@ -19,7 +19,7 @@ Example::
         state = eq.get_state()
         print(state.scalars["raxis"])
 """
-from .eqlib import Eq
+from .eqlib import Eq, EqDiagCode, EqDiagEntryPy
 from .state import EqState
 from .errors import (
     EqlibError,
@@ -39,6 +39,8 @@ from .errors import (
 
 __all__ = [
     "Eq",
+    "EqDiagCode",
+    "EqDiagEntryPy",
     "EqState",
     "EqlibError",
     "EqlibInitError",

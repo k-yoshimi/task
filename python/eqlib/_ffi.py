@@ -53,6 +53,29 @@ EQ_ERR_NOT_IMPL = 4
 
 
 # ---------------------------------------------------------------------
+# Issue #143 pre-run parameter validation API constants. Must mirror
+# eq_api.h (EQ_DIAG_PARAM_LEN / EQ_DIAG_MSG_LEN) and the enum
+# eq_diag_code values; eq_state.f90::eq_diag_entry_c is the matching
+# Fortran-side struct.
+# ---------------------------------------------------------------------
+EQ_DIAG_PARAM_LEN = 64
+EQ_DIAG_MSG_LEN = 128
+
+EQ_DIAG_OUT_OF_RANGE           = 1
+EQ_DIAG_INCONSISTENT_PAIR      = 2
+EQ_DIAG_OUT_OF_RANGE_AFTER_DEP = 3
+EQ_DIAG_FILE_MISSING           = 4
+EQ_DIAG_MISSING_REQUIRED       = 5
+
+# Default capacity for the validate-buffer that the high-level wrapper
+# allocates. eq_api_validate currently emits at most ~11 entries; 32 is
+# a conservative head-room allowing future categories to grow without
+# breaking the wrapper. Mirrors the EQ_DIAG_CAP_HINT note in
+# eq_api.f90::push_diag.
+EQ_DIAG_DEFAULT_CAP = 32
+
+
+# ---------------------------------------------------------------------
 # ctypes mirror of eq_state_t from eq/eq_api.h.
 #
 # Phase L-2/L-3 ABI populates 6 grid counters, 12 plasma scalars, and
@@ -66,6 +89,22 @@ EQ_ERR_NOT_IMPL = 4
 # guaranteed identical when compiled with the same iso_c_binding
 # kinds (C_INT == c_int, C_DOUBLE == c_double).
 # ---------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# ctypes mirror of eq_diag_entry_t from eq/eq_api.h (Issue #143).
+#
+# Layout: param[64], code (int), msg[128]. Must match
+# eq_state.f90::eq_diag_entry_c byte-for-byte. Fortran fills param /
+# msg via TRIM + appended C_NULL_CHAR; the high-level wrapper strips
+# trailing NULs on decode (see EqDiagEntryPy in eqlib.py).
+# ---------------------------------------------------------------------
+class EqDiagEntry(ctypes.Structure):
+    _fields_ = [
+        ("param", ctypes.c_char * EQ_DIAG_PARAM_LEN),
+        ("code",  ctypes.c_int),
+        ("msg",   ctypes.c_char * EQ_DIAG_MSG_LEN),
+    ]
+
+
 class EqStateC(ctypes.Structure):
     _fields_ = [
         # --- grid counters (active runtime values, not EQ_MAX_*) ---
@@ -170,6 +209,19 @@ def _apply_prototypes(lib: ctypes.CDLL) -> ctypes.CDLL:
     lib.eq_get_state.restype = ctypes.c_int
     lib.eq_get_state.argtypes = [ctypes.POINTER(EqStateC)]
 
+    # eq_validate (Issue #143). Best-effort: older builds without the
+    # symbol leave lib.eq_validate as an AttributeError on first access,
+    # matching the handling for eq_set_param_str above.
+    try:
+        lib.eq_validate.restype = ctypes.c_int
+        lib.eq_validate.argtypes = [
+            ctypes.POINTER(EqDiagEntry),
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_int),
+        ]
+    except AttributeError:  # pragma: no cover - only on pre-#143 builds
+        pass
+
     lib.eq_finalize.restype = ctypes.c_int
     lib.eq_finalize.argtypes = []
     return lib
@@ -221,6 +273,15 @@ __all__ = [
     "EQ_ERR_NOT_INIT",
     "EQ_ERR_CALC_FAILED",
     "EQ_ERR_NOT_IMPL",
+    "EQ_DIAG_PARAM_LEN",
+    "EQ_DIAG_MSG_LEN",
+    "EQ_DIAG_DEFAULT_CAP",
+    "EQ_DIAG_OUT_OF_RANGE",
+    "EQ_DIAG_INCONSISTENT_PAIR",
+    "EQ_DIAG_OUT_OF_RANGE_AFTER_DEP",
+    "EQ_DIAG_FILE_MISSING",
+    "EQ_DIAG_MISSING_REQUIRED",
+    "EqDiagEntry",
     "EqStateC",
     "HAS_NUMPY",
     "load_library",
