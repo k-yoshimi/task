@@ -255,7 +255,19 @@
       ENDIF
       NSW=3
       NRMAX=NRAMAX
-      CALL TR_COEF_DECIDE(NRL,NSW,DV53)
+      ! #142 B4: TR_COEF_DECIDE now returns IERR. In TRGLOB this is a
+      ! result-aggregation context (output power computation) — not a
+      ! critical path. Log and continue rather than abort, so a single
+      ! bad cell does not halt the diagnostic post-step.
+      BLOCK
+         INTEGER :: tcd_ierr
+         CALL TR_COEF_DECIDE(NRL,NSW,DV53,tcd_ierr)
+         IF(tcd_ierr.NE.0) THEN
+            WRITE(6,'(A,I3,A,I3)') &
+                 '## TRGLOB: TR_COEF_DECIDE returned IERR=', tcd_ierr, &
+                 ' at NRL=', NRL
+         END IF
+      END BLOCK
       NRMAX=NROMAX
       NMK=2
       DRH=DR/DVRHO(NRL)**(2.D0/3.D0)

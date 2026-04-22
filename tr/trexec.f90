@@ -59,7 +59,8 @@ CONTAINS
 
 !     /* Calcualte matrix coefficients */
 
-      CALL TRMTRX(NEQRMAX)
+      CALL TRMTRX(NEQRMAX,IERR)
+      IF(IERR.NE.0) RETURN  ! #142 B4: TRMTRX propagates TR_COEF_DECIDE / TR_BANDREDUCE failures
 
 !     /* Solve matrix equation */
 
@@ -432,7 +433,7 @@ CONTAINS
 
 !     ***********************************************************
 
-      SUBROUTINE TRMTRX(NEQRMAX)
+      SUBROUTINE TRMTRX(NEQRMAX,IERR)
 
       USE TRCOMM, ONLY : AEE, AKDW, AMZ, AX, AY, AZ, DD, DI, DT, &
      &                   DVRHOG, EPS0, LDAB, MDLCD, MDLEQB, MDLPCK, MDLUF, &
@@ -444,9 +445,12 @@ CONTAINS
       USE TRCOM1, ONLY : A, B, C, D, PPA, PPB, PPC, RD
       IMPLICIT NONE
       INTEGER, INTENT(INOUT):: NEQRMAX
+      INTEGER, INTENT(OUT)  :: IERR  ! #142 B4: propagated from TR_COEF_DECIDE / TR_BAND_GEN
       INTEGER:: KL, MV, MVV, MW, MWMAX, NEQ, NEQ1, NR, NS, NS1, NSTN, NSW, &
      &             NV, NW
       REAL(rkind)   :: ADV, C1, COEF, COULOG, DV53, FADV, PRV, RDPA, RLP
+
+      IERR=0
 
 ! Boundary condition for magnetic diffusion equation
 
@@ -502,7 +506,8 @@ CONTAINS
 
       NR=1
       NSW=1
-      CALL TR_COEF_DECIDE(NR,NSW,DV53)
+      CALL TR_COEF_DECIDE(NR,NSW,DV53,IERR)
+      IF(IERR.NE.0) RETURN
 
       DO NV=1,NEQMAX
       DO NW=1,NEQMAX
@@ -562,7 +567,8 @@ CONTAINS
 
       NSW=2
       DO NR=2,NRMAX-1
-         CALL TR_COEF_DECIDE(NR,NSW,DV53)
+         CALL TR_COEF_DECIDE(NR,NSW,DV53,IERR)
+         IF(IERR.NE.0) RETURN
 
          DO NV=1,NEQMAX
          DO NW=1,NEQMAX
@@ -625,7 +631,8 @@ CONTAINS
 
       NR=NRMAX
       NSW=3
-      CALL TR_COEF_DECIDE(NR,NSW,DV53)
+      CALL TR_COEF_DECIDE(NR,NSW,DV53,IERR)
+      IF(IERR.NE.0) RETURN
 
       DO NV=1,NEQMAX
       DO NW=1,NEQMAX
@@ -682,7 +689,8 @@ CONTAINS
 
 !     ***** Band Matrix *****
 
-      CALL TR_BAND_GEN(NEQRMAX,ADV)
+      CALL TR_BAND_GEN(NEQRMAX,ADV,IERR)
+      IF(IERR.NE.0) RETURN
       IF(MDLPCK.NE.0) CALL TR_BAND_LAPACK(A,B,C,AX,NRMAX,NEQRMAX,NVM,LDAB,MLM)
 
 !     ***** RHS Vector Reduce *****
@@ -744,15 +752,17 @@ CONTAINS
 
 !     ***********************************************************
 
-      SUBROUTINE TR_BAND_GEN(NEQRMAX,ADV)
+      SUBROUTINE TR_BAND_GEN(NEQRMAX,ADV,IERR)
 
       USE TRCOMM, ONLY : AX, MDLPCK, NEQM, NEQMAX, NRMAX, XV, rkind
       USE TRCOM1, ONLY : A, B, C, PPA, PPB, PPC, RD
       IMPLICIT NONE
       INTEGER,INTENT(INOUT):: NEQRMAX
       REAL(rkind)   ,INTENT(IN)   :: ADV
+      INTEGER,INTENT(OUT)  :: IERR  ! #142 B4: propagated from TR_BANDREDUCE
       INTEGER:: NEQ, NR, NV, NW
 
+      IERR=0
       DO NR=1,NRMAX
 
          A(1:NEQMAX,1:NEQMAX,NR) = -ADV*A(1:NEQMAX,1:NEQMAX,NR)
@@ -764,15 +774,22 @@ CONTAINS
          ENDDO
 
          IF(NR.EQ.1) THEN
-            CALL TR_BANDREDUCE(B,XV,PPB,NR,NR,  NEQRMAX)
-            CALL TR_BANDREDUCE(C,XV,PPC,NR,NR+1,NEQRMAX)
+            CALL TR_BANDREDUCE(B,XV,PPB,NR,NR,  NEQRMAX,IERR)
+            IF(IERR.NE.0) RETURN
+            CALL TR_BANDREDUCE(C,XV,PPC,NR,NR+1,NEQRMAX,IERR)
+            IF(IERR.NE.0) RETURN
          ELSEIF(NR.EQ.NRMAX) THEN
-            CALL TR_BANDREDUCE(A,XV,PPA,NR,NR-1,NEQRMAX)
-            CALL TR_BANDREDUCE(B,XV,PPB,NR,NR,  NEQRMAX)
+            CALL TR_BANDREDUCE(A,XV,PPA,NR,NR-1,NEQRMAX,IERR)
+            IF(IERR.NE.0) RETURN
+            CALL TR_BANDREDUCE(B,XV,PPB,NR,NR,  NEQRMAX,IERR)
+            IF(IERR.NE.0) RETURN
          ELSE
-            CALL TR_BANDREDUCE(A,XV,PPA,NR,NR-1,NEQRMAX)
-            CALL TR_BANDREDUCE(B,XV,PPB,NR,NR,  NEQRMAX)
-            CALL TR_BANDREDUCE(C,XV,PPC,NR,NR+1,NEQRMAX)
+            CALL TR_BANDREDUCE(A,XV,PPA,NR,NR-1,NEQRMAX,IERR)
+            IF(IERR.NE.0) RETURN
+            CALL TR_BANDREDUCE(B,XV,PPB,NR,NR,  NEQRMAX,IERR)
+            IF(IERR.NE.0) RETURN
+            CALL TR_BANDREDUCE(C,XV,PPC,NR,NR+1,NEQRMAX,IERR)
+            IF(IERR.NE.0) RETURN
          ENDIF
 
          IF(MDLPCK.EQ.0) THEN
@@ -836,7 +853,7 @@ CONTAINS
 
 !     ***********************************************************
 
-      SUBROUTINE TR_BANDREDUCE(A,XR,P,NR,NR1,NEQRMAX)
+      SUBROUTINE TR_BANDREDUCE(A,XR,P,NR,NR1,NEQRMAX,IERR)
 
 
       USE TRCOMM, ONLY : NEQM, NEQMAX, NEQMAXM, NNS, NRMAX, NST, rkind
@@ -846,10 +863,12 @@ CONTAINS
       REAL(rkind),DIMENSION(NEQMAXM,NRMAX)     ,INTENT(INOUT):: P
       INTEGER                     ,INTENT(IN)  :: NR,NR1
       INTEGER                     ,INTENT(OUT)  :: NEQRMAX
+      INTEGER                     ,INTENT(OUT)  :: IERR  ! #142 B4: 0=OK, 2=NNS not monotone
       INTEGER :: L, LOOP, NBSIZE, NEQ, NNSN, NNSN1, NNSOLD, NV, NW
       REAL(rkind),DIMENSION(NEQMAXM,NEQMAXM) :: AA, AL
       REAL(rkind),DIMENSION(NEQMAXM)         :: AM
 
+      IERR=0
       DO NV=1,NEQMAX
          DO NW=1,NEQMAX
             AA(NV,NW)=A(NV,NW,NR)
@@ -873,7 +892,11 @@ CONTAINS
                NNSN=NNSN-LOOP
                NNSOLD=NNSN
             ELSE
-               STOP 'XX TR_BANDREDUCE: ERROR'
+               WRITE(6,'(A,4I5)') &
+                    'XX TR_BANDREDUCE: NNS not monotone: NR,NEQ,NNSN,NNSOLD=', &
+                    NR,NEQ,NNSN,NNSOLD
+               IERR=2   ! #142 B4: was STOP — NNS monotonicity violation
+               RETURN
             ENDIF
          ENDIF
          LOOP=LOOP+1
@@ -1172,7 +1195,7 @@ CONTAINS
 
 !     ***********************************************************
 
-      SUBROUTINE TR_COEF_DECIDE(NR,NSW,DV53)
+      SUBROUTINE TR_COEF_DECIDE(NR,NSW,DV53,IERR)
 
       USE trcomm
       USE TRCOM1, ONLY : D, RD
@@ -1180,6 +1203,7 @@ CONTAINS
       IMPLICIT NONE
       INTEGER,INTENT(IN) :: NR, NSW
       REAL(rkind)   , INTENT(OUT)::DV53
+      INTEGER,INTENT(OUT) :: IERR  ! #142 B4: 0=OK, 1=NSVN out of {1,2,3} when NSSN not in {0,5,6,7,8}
       INTEGER:: &
            IND, NEQ, NEQ1, NEQLMAX, NF, NI, NJ, NMK, NMKL, NO, NRF, NRJ, &
            NSSN, NSSN1, NSVN, NSVN1, NV, NW
@@ -1190,6 +1214,7 @@ CONTAINS
       REAL(rkind),DIMENSION(4) :: SIG, FCB
 
 
+      IERR=0
       DV11=DVRHO(NR)
       DV23=DVRHO(NR)**(2.D0/3.D0)
       DV53=DVRHO(NR)**(5.D0/3.D0)
@@ -1486,7 +1511,11 @@ CONTAINS
                ELSEIF(NSVN.EQ.3) THEN
                   D(NEQ,NR) = VOID
                ELSE
-                  STOP 'XX TR_COEF_DECIDE: must be NSSV=0 if NSSN=0'
+                  WRITE(6,'(A,4I5)') &
+                       'XX TR_COEF_DECIDE: NSVN must be in {1,2,3} when NSSN not in {0,5,6,7,8}: NR,NSW,NEQ,NSVN=', &
+                       NR,NSW,NEQ,NSVN
+                  IERR=1   ! #142 B4: was STOP — NSVN/NSSN enum violation
+                  RETURN
                ENDIF
             ENDIF
 
@@ -1535,7 +1564,11 @@ CONTAINS
                ELSEIF(NSVN.EQ.3) THEN
                   D(NEQ,NR) = VOID
                ELSE
-                  STOP 'XX TR_COEF_DECIDE: must be NSSV=0 if NSSN=0'
+                  WRITE(6,'(A,4I5)') &
+                       'XX TR_COEF_DECIDE: NSVN must be in {1,2,3} when NSSN not in {0,5,6,7,8}: NR,NSW,NEQ,NSVN=', &
+                       NR,NSW,NEQ,NSVN
+                  IERR=1   ! #142 B4: was STOP — NSVN/NSSN enum violation
+                  RETURN
                ENDIF
             ENDIF
 !     *
@@ -1559,7 +1592,11 @@ CONTAINS
                ELSEIF(NSVN.EQ.3) THEN
                   D(NEQ,NR) = VOID
                ELSE
-                  STOP 'XX TR_COEF_DECIDE: must be NSSV=0 if NSSN=0'
+                  WRITE(6,'(A,4I5)') &
+                       'XX TR_COEF_DECIDE: NSVN must be in {1,2,3} when NSSN not in {0,5,6,7,8}: NR,NSW,NEQ,NSVN=', &
+                       NR,NSW,NEQ,NSVN
+                  IERR=1   ! #142 B4: was STOP — NSVN/NSSN enum violation
+                  RETURN
                ENDIF
             ENDIF
          ENDIF
