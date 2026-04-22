@@ -288,9 +288,12 @@ def _apply_bulk_params(tot: Tot, params: Dict[str, SupportedValue]) -> List[str]
 
     * scalar (``float`` / ``int``)   — plain :py:meth:`Tot.set_param`.
     * ``list`` / ``tuple``           — element at 1-origin index ``i``
-      is applied as ``"<ns>:NAME[i]"``.
+      is applied as ``"<ns>:NAME[i]"``. **Rejected for ``eq:PSIB``**
+      because that array is 0-origin (``PSIB[0]..PSIB[5]``); use the
+      dict form below.
     * ``dict[int, float]``           — sparse {index: value}, applied as
-      ``"<ns>:NAME[index]"``; indices must be 1-origin.
+      ``"<ns>:NAME[index]"``; indices are 1-origin for most arrays
+      but ``eq:PSIB`` is 0-origin.
     * ``str``                        — forwarded to
       :py:meth:`Tot.set_param_str`.
 
@@ -330,6 +333,20 @@ def _apply_bulk_params(tot: Tot, params: Dict[str, SupportedValue]) -> List[str]
                 tot.set_param(name, coerced)
                 applied.append(name)
                 continue
+            # eq:PSIB is 0-origin (REAL(8) :: PSIB(0:5)). A list would
+            # be enumerated from 1 and silently write to PSIB[1..N],
+            # missing PSIB[0] and overshooting past PSIB[5]. Mirror the
+            # eq_mcp guard: force the dict form for sparse-indexed
+            # 0-origin arrays. (This matches the policy Codex flagged
+            # against PR b6d23243 once PSIB was documented as 0-origin
+            # at tot_mcp/server.py:148.)
+            if ns == "eq" and bare == "PSIB":
+                raise TotlibError(
+                    "eq:PSIB is a 0-origin array (PSIB[0]..PSIB[5]); "
+                    "pass a dict {0: v0, 1: v1, ...} instead of a list "
+                    "(a list would silently start at index 1 and miss "
+                    "index 0)."
+                )
             for i, v in enumerate(value, start=1):
                 key = f"{ns}:{bare}[{i}]"
                 try:
@@ -620,7 +637,10 @@ def build_server() -> Any:
         values may be:
         * a number (scalar)
         * a list/tuple (1-origin array, all elements applied)
-        * a dict ``{index: value}`` (1-origin sparse array)
+        * a dict ``{index: value}`` (sparse array; 1-origin for most
+          arrays but the ``eq:PSIB`` array is 0-origin and MUST use the
+          dict form — a list is rejected because it would silently
+          start at index 1 and skip ``eq:PSIB[0]``)
         * a string (only the ``tr:`` and ``eq:`` namespaces back
           string setters today; other namespaces will reject strings)
 

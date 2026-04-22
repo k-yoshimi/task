@@ -295,6 +295,35 @@ class TestBulkParamDispatch(unittest.TestCase):
         self.assertIn("eq:RR", scalar_names)
         self.assertNotIn("eq:BB", scalar_names)
 
+    def test_rejects_list_for_eq_psib(self) -> None:
+        # Codex review (P2 on PR b6d23243): eq:PSIB is 0-origin, so a
+        # list form would silently skip index 0 and overshoot past
+        # PSIB[5]. Mirror the eq_mcp guard — list must be rejected so
+        # LLMs explicitly use the dict form.
+        tot = _MockTot()
+        with self.assertRaises(TotlibError) as ctx:
+            srv._apply_bulk_params(
+                tot, {"eq:PSIB": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]}
+            )
+        self.assertIn("0-origin", str(ctx.exception))
+        # And no partial writes leak through when the guard trips.
+        scalar_names = [n for n, _ in tot.scalar_calls]
+        for bad in ("eq:PSIB[1]", "eq:PSIB[2]", "eq:PSIB[6]"):
+            self.assertNotIn(bad, scalar_names)
+
+    def test_accepts_dict_for_eq_psib(self) -> None:
+        # Paired with the list-rejection test: dict form routes through
+        # verbatim, preserving the caller's explicit 0-origin indices.
+        tot = _MockTot()
+        applied = srv._apply_bulk_params(
+            tot,
+            {"eq:PSIB": {0: 0.0, 1: 0.1, 5: 0.5}},
+        )
+        scalar_names = [n for n, _ in tot.scalar_calls]
+        for expected in ("eq:PSIB[0]", "eq:PSIB[1]", "eq:PSIB[5]"):
+            self.assertIn(expected, scalar_names)
+        self.assertEqual(len(applied), 3)
+
 
 class TestSiblingRegistryFallback(unittest.TestCase):
     """LOW-3: sibling-import failure should yield an empty namespace."""
