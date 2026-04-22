@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eq-mcp"
+version = "0.1.0"
+description = "Model Context Protocol (MCP) server for the TASK/EQ equilibrium code (wraps python/eqlib)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Same as TASK repository" }
+authors = [
+    { name = "TASK contributors" }
+]
+keywords = ["mcp", "model-context-protocol", "task", "plasma", "equilibrium", "fortran", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
+dependencies = [
+    # Python MCP SDK (https://github.com/modelcontextprotocol/python-sdk).
+    # FastMCP decorator API lives in mcp.server.fastmcp from 0.9 onward.
+    "mcp>=0.9",
+    # eqlib は同一リポジトリ内 path dep (本 pyproject から見て ../../eqlib).
+    # pip install 時は repo root を PYTHONPATH に通すか、path install する:
+    #   pip install -e .
+    #   (eqlib 自体は pure-Python なので site-packages への install は不要)
+    # ここではハード依存として列挙しない (eqlib は repo 付属で配布されるため)。
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7",
+]
+
+[project.scripts]
+eq-mcp = "eq_mcp.server:main"
+
+# pyproject.toml sits inside the eq_mcp/ package dir itself (flat layout),
+# so find_packages can't discover an "eq_mcp" subdirectory. Map the package
+# name explicitly to "." instead.
+[tool.setuptools]
+packages = ["eq_mcp"]
+
+[tool.setuptools.package-dir]
+eq_mcp = "."
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
