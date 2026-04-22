@@ -23,7 +23,12 @@ MODULE eq_state
   PRIVATE
   PUBLIC :: eq_state_c, &
             EQ_MAX_NRGM, EQ_MAX_NZGM, EQ_MAX_NPSM, &
-            EQ_MAX_NRM,  EQ_MAX_NTHM, EQ_MAX_NSUM
+            EQ_MAX_NRM,  EQ_MAX_NTHM, EQ_MAX_NSUM, &
+            eq_diag_entry_c, &
+            EQ_DIAG_PARAM_LEN, EQ_DIAG_MSG_LEN, &
+            EQ_DIAG_OUT_OF_RANGE, EQ_DIAG_INCONSISTENT_PAIR, &
+            EQ_DIAG_OUT_OF_RANGE_AFTER_DEP, EQ_DIAG_FILE_MISSING, &
+            EQ_DIAG_MISSING_REQUIRED
 
   ! Upper bounds for the C-visible arrays. Match the eqcom0.inc compile-time
   ! maxima (NRGM=513, NZGM=513, NPSM=513, NRVM=1001, NTVM=1025, NSUM=1343,
@@ -85,5 +90,23 @@ MODULE eq_state
      REAL(C_DOUBLE)  :: profile_vps(EQ_MAX_NRM)
      REAL(C_DOUBLE)  :: profile_rst(EQ_MAX_NRM)
   END TYPE eq_state_c
+
+  ! Issue #143: pre-run parameter validation. Diagnostic record returned
+  ! by eq_validate. Must match eq_api.h::eq_diag_entry_t byte-for-byte.
+  INTEGER(C_INT), PARAMETER :: EQ_DIAG_PARAM_LEN = 64
+  INTEGER(C_INT), PARAMETER :: EQ_DIAG_MSG_LEN   = 128
+
+  ! Diagnostic category codes. Must match eq_api.h::eq_diag_code.
+  INTEGER(C_INT), PARAMETER :: EQ_DIAG_OUT_OF_RANGE           = 1
+  INTEGER(C_INT), PARAMETER :: EQ_DIAG_INCONSISTENT_PAIR      = 2
+  INTEGER(C_INT), PARAMETER :: EQ_DIAG_OUT_OF_RANGE_AFTER_DEP = 3
+  INTEGER(C_INT), PARAMETER :: EQ_DIAG_FILE_MISSING           = 4
+  INTEGER(C_INT), PARAMETER :: EQ_DIAG_MISSING_REQUIRED       = 5
+
+  TYPE, BIND(C) :: eq_diag_entry_c
+     CHARACTER(KIND=C_CHAR) :: param(EQ_DIAG_PARAM_LEN)
+     INTEGER(C_INT)         :: code
+     CHARACTER(KIND=C_CHAR) :: msg(EQ_DIAG_MSG_LEN)
+  END TYPE eq_diag_entry_c
 
 END MODULE eq_state

@@ -109,6 +109,56 @@ int eq_set_param_str(const char* name, const char* value);
 int eq_get_state(eq_state_t* state);
 int eq_finalize(void);
 
+/*
+ * Issue #143: pre-run parameter validation API. Pilot module = eq.
+ *
+ * Diagnostic categories. Wider numeric range than eq_error so the
+ * code field never collides with eq_error in callers that aggregate.
+ */
+enum eq_diag_code {
+    EQ_DIAG_OUT_OF_RANGE           = 1,
+    EQ_DIAG_INCONSISTENT_PAIR      = 2,
+    EQ_DIAG_OUT_OF_RANGE_AFTER_DEP = 3,
+    EQ_DIAG_FILE_MISSING           = 4,
+    EQ_DIAG_MISSING_REQUIRED       = 5,
+};
+
+#define EQ_DIAG_PARAM_LEN 64
+#define EQ_DIAG_MSG_LEN   128
+
+/*
+ * Single diagnostic record. param[] and msg[] are NUL-terminated
+ * Fortran-padded strings (the Fortran side fills them via TRIM and
+ * appends C_NULL_CHAR). Must match eq_state.f90::eq_diag_entry_c
+ * byte-for-byte.
+ */
+typedef struct {
+    char param[EQ_DIAG_PARAM_LEN];
+    int  code;
+    char msg[EQ_DIAG_MSG_LEN];
+} eq_diag_entry_t;
+
+/*
+ * Run cross-parameter validation against the current eq state and
+ * fill diag[0..ndiag-1] with up to diag_cap diagnostics.
+ *
+ *   diag      : OUT — caller-allocated diagnostic array
+ *   diag_cap  : IN  — capacity of diag (entries beyond ndiag are
+ *                     left untouched)
+ *   ndiag_out : OUT — number of diagnostics actually produced
+ *                     (0..diag_cap)
+ *
+ * Return values:
+ *   EQ_OK           — no diagnostics produced (ndiag_out == 0)
+ *   EQ_ERR_INVALID  — one or more diagnostics produced (ndiag_out > 0)
+ *   EQ_ERR_NOT_INIT — eq_init has not been called yet
+ *
+ * The validation is read-only: it does not modify any eq state.
+ * Caller workflow: validate → fix any reported issues → validate again
+ * → run.
+ */
+int eq_validate(eq_diag_entry_t* diag, int diag_cap, int* ndiag_out);
+
 #ifdef __cplusplus
 }
 #endif

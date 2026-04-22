@@ -42,7 +42,10 @@ MODULE eq_api
   USE, INTRINSIC :: ISO_C_BINDING
   USE eq_state, ONLY: eq_state_c, &
                       EQ_MAX_NRGM, EQ_MAX_NZGM, EQ_MAX_NPSM, &
-                      EQ_MAX_NRM,  EQ_MAX_NTHM, EQ_MAX_NSUM
+                      EQ_MAX_NRM,  EQ_MAX_NTHM, EQ_MAX_NSUM, &
+                      eq_diag_entry_c, &
+                      EQ_DIAG_PARAM_LEN, EQ_DIAG_MSG_LEN, &
+                      EQ_DIAG_OUT_OF_RANGE, EQ_DIAG_FILE_MISSING
   USE eq_param_registry, ONLY: eq_param_set, eq_param_set_str
   ! Rename equnit::eq_init / eq_load away from the C-visible eq_init /
   ! eq_run symbols.
@@ -54,7 +57,8 @@ MODULE eq_api
   IMPLICIT NONE
   PRIVATE
   PUBLIC :: eq_api_init, eq_api_run, eq_api_get_state, &
-            eq_api_set_param, eq_api_set_param_str, eq_api_finalize
+            eq_api_set_param, eq_api_set_param_str, eq_api_finalize, &
+            eq_api_validate
 
   ! Error codes. Must match eq_api.h.
   INTEGER(C_INT), PARAMETER :: EQ_OK              = 0
@@ -343,5 +347,121 @@ CONTAINS
     g_initialized = .FALSE.
     ierr = EQ_OK
   END FUNCTION eq_api_finalize
+
+  !-------------------------------------------------------------------
+  ! Issue #143 pilot: pre-run cross-parameter validation.
+  !
+  ! Returns up to diag_cap diagnostics in diag(0..ndiag-1). Read-only:
+  ! does NOT modify any eq state. Caller workflow:
+  !   eq_init -> eq_set_param(...) -> eq_validate -> fix -> eq_run
+  !
+  ! Categories covered:
+  !   OUT_OF_RANGE  : 10 EQCHEK overflow guards (NSGMAX/NTGMAX/NUGMAX/
+  !                   NRGMAX/NZGMAX/NPSMAX/NRMAX/NTHMAX/NSUMAX/NRVMAX
+  !                   vs the eqcom0_mod compile-time maxima).
+  !   FILE_MISSING  : MODELG in {3,5,8} requires non-blank KNAMEQ.
+  !
+  ! Future categories (left for follow-up PRs as the validation surface
+  ! grows): INCONSISTENT_PAIR, OUT_OF_RANGE_AFTER_DEP, MISSING_REQUIRED.
+  !-------------------------------------------------------------------
+  FUNCTION eq_api_validate(diag, diag_cap, ndiag) &
+           RESULT(ierr) BIND(C, NAME="eq_validate")
+    USE eqcom0_mod, ONLY: NRGM, NZGM, NPSM, NSGM, NTGM, NUGM, &
+                          NRM, NTHM, NSUM, NRVM
+    USE eqcom1_mod, ONLY: NSGMAX, NTGMAX, NUGMAX, NRGMAX, NZGMAX, &
+                          NPSMAX, NRMAX, NTHMAX, NSUMAX, NRVMAX
+    TYPE(eq_diag_entry_c), INTENT(OUT) :: diag(diag_cap)
+    INTEGER(C_INT), VALUE, INTENT(IN)  :: diag_cap
+    INTEGER(C_INT),        INTENT(OUT) :: ndiag
+    INTEGER(C_INT) :: ierr
+    INTEGER :: nlocal
+
+    IF (.NOT. g_initialized) THEN
+       ndiag = 0
+       ierr  = EQ_ERR_NOT_INIT
+       RETURN
+    END IF
+
+    nlocal = 0
+
+    ! ---- OUT_OF_RANGE: grid-overflow guards (port from EQCHEK in
+    !      eqinit.f90:509-548; same checks the binary path runs at
+    !      EQPARM time, missing from libeqapi.so callers). ---------
+    CALL push_oor("NSGMAX", NSGMAX, NSGM)
+    CALL push_oor("NTGMAX", NTGMAX, NTGM)
+    CALL push_oor("NUGMAX", NUGMAX, NUGM)
+    CALL push_oor("NRGMAX", NRGMAX, NRGM)
+    CALL push_oor("NZGMAX", NZGMAX, NZGM)
+    CALL push_oor("NPSMAX", NPSMAX, NPSM)
+    CALL push_oor("NRMAX",  NRMAX,  NRM)
+    CALL push_oor("NTHMAX", NTHMAX, NTHM)
+    CALL push_oor("NSUMAX", NSUMAX, NSUM)
+    CALL push_oor("NRVMAX", NRVMAX, NRVM)
+
+    ! ---- FILE_MISSING: MODELG in {3,5,8} requires non-blank KNAMEQ.
+    !      eq_run(1) -> equnit_eq_load otherwise opens "" silently
+    !      and fills the post-load grid with garbage.
+    IF (MODELG == 3 .OR. MODELG == 5 .OR. MODELG == 8) THEN
+       IF (LEN_TRIM(KNAMEQ) == 0) THEN
+          CALL push_diag("KNAMEQ", EQ_DIAG_FILE_MISSING, &
+               "MODELG=3/5/8 requires non-blank KNAMEQ (eqdata file)")
+       END IF
+    END IF
+
+    ndiag = nlocal
+    IF (nlocal == 0) THEN
+       ierr = EQ_OK
+    ELSE
+       ierr = EQ_ERR_INVALID
+    END IF
+
+  CONTAINS
+
+    !---------------------------------------------------------------
+    ! Helper: emit a single OUT_OF_RANGE diagnostic if requested
+    ! grid count exceeds the compile-time maximum. Idempotent w.r.t.
+    ! diag_cap exhaustion (extra diagnostics are silently dropped).
+    !---------------------------------------------------------------
+    SUBROUTINE push_oor(name_str, requested, max_value)
+      CHARACTER(LEN=*), INTENT(IN) :: name_str
+      INTEGER, INTENT(IN)          :: requested, max_value
+      CHARACTER(LEN=EQ_DIAG_MSG_LEN) :: m
+      IF (requested <= max_value) RETURN
+      WRITE(m, '(A,I0,A,I0)') &
+           "value ", requested, " exceeds compile-time maximum ", max_value
+      CALL push_diag(name_str, EQ_DIAG_OUT_OF_RANGE, m)
+    END SUBROUTINE push_oor
+
+    !---------------------------------------------------------------
+    ! Helper: append (param, code, msg) to diag(). Skips if diag_cap
+    ! is exhausted but still increments nlocal so caller can detect
+    ! truncation by ndiag > diag_cap (NOTE: callers should size
+    ! diag_cap >= EQ_DIAG_CAP_HINT == 32 to avoid this).
+    !---------------------------------------------------------------
+    SUBROUTINE push_diag(name_str, code_in, msg_in)
+      CHARACTER(LEN=*), INTENT(IN) :: name_str, msg_in
+      INTEGER(C_INT),   INTENT(IN) :: code_in
+      INTEGER :: i, n
+      nlocal = nlocal + 1
+      IF (nlocal > diag_cap) RETURN
+      ! Zero-fill, then copy + NUL-terminate.
+      DO i = 1, EQ_DIAG_PARAM_LEN
+         diag(nlocal)%param(i) = C_NULL_CHAR
+      END DO
+      n = MIN(LEN_TRIM(name_str), EQ_DIAG_PARAM_LEN - 1)
+      DO i = 1, n
+         diag(nlocal)%param(i) = name_str(i:i)
+      END DO
+      DO i = 1, EQ_DIAG_MSG_LEN
+         diag(nlocal)%msg(i) = C_NULL_CHAR
+      END DO
+      n = MIN(LEN_TRIM(msg_in), EQ_DIAG_MSG_LEN - 1)
+      DO i = 1, n
+         diag(nlocal)%msg(i) = msg_in(i:i)
+      END DO
+      diag(nlocal)%code = code_in
+    END SUBROUTINE push_diag
+
+  END FUNCTION eq_api_validate
 
 END MODULE eq_api
