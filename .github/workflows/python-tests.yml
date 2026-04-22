@@ -226,13 +226,20 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: "1"
           PYTHONPATH: python
-          # Don't default WRX_RUN_OK / WRX_REINIT_OK on: CI gfortran is
-          # stricter than the local toolchain and tests that actually
-          # invoke lib_run() trip SIGABRT (signal 6) on several modules.
-          # Root cause is a pre-existing latent uninit / array-bounds
-          # issue tracked for follow-up; not a blocker for the CI build
-          # of lib<mod>api.so + the ctypes-layer / state-struct tests
-          # that cover the C ABI shape.
+          # WRX_RUN_OK default ON (2026-04-22): the original SIGABRT
+          # cause was libgrf::grd1d from wr_calc_pwr walking an
+          # uninitialized grf_attr_type; PR #123 set WRX_NO_GRAPHICS=1
+          # inside wrx_api_init to suppress the libgrf path, and
+          # PR #163 added EQFINI to rearm the eq_bpsd_init_flag SAVE
+          # so suite-level reinit cycles no longer SEGV. With both
+          # fixes in place the original CI rationale for gating is
+          # obsolete, and defaulting the gate ON lets CI exercise the
+          # full lib_run() surface — crucial because "skip in CI"
+          # silently hides regressions (CLAUDE.md §Test-suite discipline).
+          # WRX_REINIT_OK was retired at the Fortran level (see
+          # wrx/wrcomm.f90:214) and is no longer read by any test —
+          # not setting it here.
+          WRX_RUN_OK: "1"
         run: |
           # Full test surface. No --ignore-glob or --deselect per
           # MEMORY.md feedback_never_skip_tests + feedback_
