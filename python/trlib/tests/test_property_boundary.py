@@ -27,43 +27,26 @@ from pathlib import Path
 
 import pytest
 
-# TEMPORARY (revert immediately after #141 lands, once #142 fixes the
-# library-reachable Fortran STOPs in tr/trexec.f90 and tr/trprep.f90).
+# TEMPORARY (remove once #142 batch B4 lands and migrates the remaining
+# tr/trexec.f90 STOPs to IERR returns).
 #
-# The STOP path in tr/trexec.f90 / trprep.f90 aborts the pytest-forked
-# worker — pytest-forked's waitfinish() then raises
-# `EOFError: EOF read where object expected` as INTERNALERROR, which
-# halts the whole session and fails CI with exit 3. xfail(strict=False)
-# does NOT rescue this (the warning "pytest-forked xfail support is
-# incomplete" is the upstream admission) — only `skip` prevents the
-# session-aborting fork-crash.
+# The STOP path in tr/trexec.f90 still aborts the pytest-forked worker —
+# pytest-forked's waitfinish() then raises `EOFError: EOF read where
+# object expected` as INTERNALERROR, which halts the whole session and
+# fails CI with exit 3. Only `skip` prevents the session-aborting
+# fork-crash; xfail(strict=False) does NOT rescue this (the warning
+# "pytest-forked xfail support is incomplete" is the upstream admission).
 #
 # test_NSMAX_in_range is the confirmed deterministic INTERNALERROR
-# source in CI (run 24750819997); marked `skip` so CI survives. The
-# remaining sweeps that crash locally but xpass in CI keep xfail so a
-# future #142 regression still surfaces.
+# source (CI run 24750819997); marked `skip` so CI survives.
 #
-# DO NOT extend either marker to new tests. DO NOT forget to delete
-# both once #142 lands — search-strings `XFAIL_REMOVE_WITH_142` and
-# `SKIP_REMOVE_WITH_142` find every call-site.
-_REASON_152 = (
-    "non-finite output in trlib BB/DT/RR sweeps after PR #152 removed "
-    "the tr/trprep.f90 STOPs (#142 B Batch 1) — tracked in #152; "
-    "marker must be removed once that physics/numerical bug is fixed."
-)
+# DO NOT extend the marker to new tests. DO NOT forget to delete it
+# once #142 B4 lands — search-string `SKIP_REMOVE_WITH_142` finds every
+# call-site.
 _REASON_142 = (
     "tr/trexec.f90 STOP abort the forked worker (signal-0 INTERNALERROR) "
     "— tracked in #142; marker must be removed once trexec STOPs land "
     "(separate batch from PR #152 which fixed trprep)."
-)
-# XFAIL_REMOVE_WITH_152: applied UNCONDITIONALLY (was condition-gated to
-# local-only when the bug was a STOP that pytest-forked handled
-# differently across environments). Now both local and CI exhibit the
-# non-finite assertion-fail mode.
-# strict=False per CLAUDE.md narrow exception: heap/state-flaky failure;
-# strict=True would false-flag clean-pass runs.
-_XFAIL_TR_NONFINITE_152 = pytest.mark.xfail(
-    strict=False, reason=_REASON_152,
 )
 _SKIP_TR_STOP_ISSUE_142 = pytest.mark.skip(reason=_REASON_142)
 
@@ -229,7 +212,6 @@ class TestTrlibBoundaryValues(unittest.TestCase):
                         with self.assertRaises(TrlibParamError):
                             tr.set_param("NRMAX", float(nrmax))
 
-    @_XFAIL_TR_NONFINITE_152    # XFAIL_REMOVE_WITH_152
     def test_DT_sweep(self):
         """Vary DT over 4 decades; tiny DT may not advance but must not NaN."""
         from trlib import Trlib
@@ -247,7 +229,6 @@ class TestTrlibBoundaryValues(unittest.TestCase):
                             continue
                         self._assert_finite_state(state)
 
-    @_XFAIL_TR_NONFINITE_152    # XFAIL_REMOVE_WITH_152
     def test_RR_sweep(self):
         from trlib import Trlib
         from trlib.errors import TrlibError
@@ -263,7 +244,6 @@ class TestTrlibBoundaryValues(unittest.TestCase):
                             continue
                         self._assert_finite_state(state)
 
-    @_XFAIL_TR_NONFINITE_152    # XFAIL_REMOVE_WITH_152
     def test_BB_sweep(self):
         from trlib import Trlib
         from trlib.errors import TrlibError
