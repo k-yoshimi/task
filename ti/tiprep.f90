@@ -96,7 +96,8 @@ CONTAINS
           WRITE(6,'(A,2I5)') &
                'XX ti_prep: Undefined ID_NS(NS): ID_NS,NS:', &
                ID_NS(NS),NS
-          STOP
+          IERR=1   ! #142: was STOP — undefined ID_NS enum
+          RETURN
        END SELECT
     END DO
     nsa_max=NSA
@@ -106,7 +107,7 @@ CONTAINS
     CALL allocate_ticomm(IERR)
     IF(IERR.NE.0) THEN
        WRITE(6,*) 'XX tiprep: allocate_ticomm ERROR: IERR=',IERR
-       STOP
+       RETURN   ! #142: was STOP — IERR already set by callee
     END IF
 
 !   *** Define NSA variables ***
@@ -157,7 +158,8 @@ CONTAINS
     END DO
     IF(NSA.GT.nsa_max) THEN
        WRITE(6,'(A)') 'XX ti_prep: INCONSISTENT nsa_max'
-       STOP
+       IERR=2   ! #142: was STOP — NSA exceeds preallocated nsa_max
+       RETURN
     ELSE IF(NSA.LT.nsa_max) THEN
        IF(nrank.EQ.0) THEN
           WRITE(6,'(A,I5)') &
@@ -201,7 +203,7 @@ CONTAINS
     CALL allocate_neqmax(IERR)
     IF(IERR.NE.0) THEN
        WRITE(6,*) 'XX ti_prep: allocate_neqmax ERROR: IERR=',IERR
-       STOP
+       RETURN   ! #142: was STOP — IERR already set by callee
     END IF
 
 !   *** Define NEQ variables ***
@@ -253,7 +255,8 @@ CONTAINS
     END DO
     IF(NEQ.NE.NEQMAX) THEN
        WRITE(6,*) 'XX ti_prep: INCONSISTENT NEQMAX'
-       STOP
+       IERR=3   ! #142: was STOP — final NEQ count mismatches NEQMAX
+       RETURN
     END IF
 
     NEQ_NVNSA(1:3,0:nsa_max)=0.D0
