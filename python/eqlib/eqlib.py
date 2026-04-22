@@ -277,6 +277,20 @@ class Eq:
             raise_for_rc("eq_validate", rc)
 
         n = int(ndiag.value)
+        # Fortran push_diag increments nlocal past diag_cap but skips the
+        # write (eq_api.f90:393-395), so ndiag_out can exceed cap. Clamp
+        # and warn so the caller knows results are truncated instead of
+        # IndexError-ing off the end of the ctypes buffer.
+        if n > cap:
+            import warnings
+            warnings.warn(
+                f"eq_validate produced {n} diagnostics but buffer capacity "
+                f"is {cap}; results are truncated. Increase "
+                f"eqlib._ffi.EQ_DIAG_DEFAULT_CAP.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            n = cap
         out: List[EqDiagEntryPy] = []
         for i in range(n):
             entry = buf[i]
