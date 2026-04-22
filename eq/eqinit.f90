@@ -371,6 +371,24 @@
       RETURN
       END SUBROUTINE EQINIT
 !
+!     ****** FINALIZE EQ MODULE STATE ******
+!
+!     Issue #110: reset SAVE-state guards in eqbpsd so a subsequent
+!     EQINIT-cycle re-zeroes the bpsd descriptors. Called from
+!     `wrx_api_finalize` (and sister `*_api_finalize` shims) to break
+!     the state-leak that caused suite-level SEGV in
+!     test_reinit_divergence.
+!
+!     This is intentionally minimal — eq has no heap allocations to
+!     free, just SAVE flags that need rearming for the next init cycle.
+!
+      SUBROUTINE EQFINI
+      USE eqbpsd, ONLY: eq_bpsd_reset
+      IMPLICIT NONE
+      CALL eq_bpsd_reset
+      RETURN
+      END SUBROUTINE EQFINI
+!
 !     ****** INPUT PARAMETERS ******
 !
       SUBROUTINE EQPARM(MODE,KIN,IERR)

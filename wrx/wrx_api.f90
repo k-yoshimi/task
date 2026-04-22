@@ -74,7 +74,7 @@ MODULE wrx_api
   LOGICAL, SAVE :: g_initialized = .FALSE.
   LOGICAL, SAVE :: g_run_called  = .FALSE.
 
-  EXTERNAL EQINIT, EQCHEK, GSOPEN, GSCLOS
+  EXTERNAL EQINIT, EQCHEK, EQFINI, GSOPEN, GSCLOS
 
 CONTAINS
 
@@ -379,6 +379,16 @@ CONTAINS
     IF (g_run_called .AND. ALLOCATED(pwr_nray)) THEN
        CALL wr_deallocate
     END IF
+
+    ! Issue #110: rearm eqbpsd's SAVE init-flag so the next
+    ! wrx_api_init -> EQINIT cycle re-zeroes equ1D%nrmax /
+    ! metric1D%nrmax. Without this, suite-level reinit cycles inherit
+    ! stale `nrmax` from a prior cycle and SEGV in bpsd_adjust_array1D.
+    ! pl has no SAVE state to reset (pl_init unconditionally
+    ! overwrites all scalars). dp's SAVE-guard reset is left for a
+    ! follow-up PR (dpfp_allocate's local SAVE :: init needs to be
+    ! refactored to module-level before it can be reset from outside).
+    CALL EQFINI
 
     ! Close the graphics subsystem (opened by wrx_api_init); pair
     ! with the mtx_finalize below to mirror wrmain.f90 shutdown.

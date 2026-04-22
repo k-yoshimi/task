@@ -14,7 +14,7 @@
       module eqbpsd
 ! interface module with TASK/TR new version
       use bpsd
-      public eq_bpsd_init, eq_bpsd_put, eq_bpsd_get
+      public eq_bpsd_init, eq_bpsd_put, eq_bpsd_get, eq_bpsd_reset
       private
 
       type(bpsd_device_type),  private,save :: device
@@ -199,5 +199,19 @@
       mdleqf=9
 
       END SUBROUTINE eq_bpsd_get
+
+!=======================================================================
+      subroutine eq_bpsd_reset
+!=======================================================================
+! Issue #110: reset the SAVE init-flag so a subsequent eq_bpsd_init
+! re-zeroes equ1D%nrmax / metric1D%nrmax. Without this, library
+! reinit cycles (init -> finalize -> init) skip the zero-init branch
+! and inherit stale `nrmax` from the previous cycle, causing
+! `bpsd_adjust_array1D` to leave `rho` descriptor corrupt → SEGV
+! in the wrx_mcp suite-level test_reinit_divergence.
+! Called from EQFINI in eqinit.f90 (and from sister *_api_finalize
+! shims that mirror this teardown).
+      eq_bpsd_init_flag = .TRUE.
+      end subroutine eq_bpsd_reset
 
       END MODULE eqbpsd

@@ -467,19 +467,11 @@ class TestIntegration(unittest.TestCase):
         heap-reuse leaks of the class fixed in tr's
         ``trcomm_profile.f90`` zero-init sweep on 2026-04-20.
 
-        2026-04-20: wrcomm got the defensive zero-init sweep. The test
-        passes when run in isolation (`pytest <this test>` alone) but
-        still SEGVs when prior tests in the same process leave residue
-        in the wr/wrx / dp / eq state. Tracked as task #110 follow-up;
-        env-gated so the suite stays green while the partial fix is
-        completed.
+        Issue #110 fully resolved 2026-04-22: wrx_api_finalize now calls
+        EQFINI which rearms eq_bpsd_init_flag, so the suite-level SEGV
+        in cycle 2 (caused by stale equ1D%nrmax in bpsd_adjust_array1D)
+        no longer occurs.
         """
-        if os.environ.get("WRX_REINIT_OK") != "1":
-            self.skipTest(
-                "wrx reinit suite-level SEGV (partial fix landed; "
-                "isolated PASS, suite SEGV — task #110 follow-up). "
-                "Set WRX_REINIT_OK=1 to force-exercise."
-            )
         # self.fail() is used below for readable divergence output.
 
         # wrx_run is gated behind WRX_RUN_OK=1 (see server.py:358).
