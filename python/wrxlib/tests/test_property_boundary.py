@@ -27,14 +27,16 @@ import pytest
 
 # XFAIL_REMOVE_WITH_144: SIGABRT (signal 6) in wrx_heap_reuse_bug_class
 # (#110 family) surfaces on mutated-parameter sweeps. Tracked in #144.
-# Applied CI-only because the crash is heap-layout dependent and this
-# dev host does not reproduce it. strict=True per CLAUDE.md — when
-# #144 lands in CI, XPASS → FAILED → CI red → marker removal forced.
-# pytest-forked reports SIGABRT worker exits as FAILED (not
-# INTERNALERROR), so xfail catches it cleanly.
+# DOCUMENTED EXCEPTION to CLAUDE.md §Test-suite discipline:
+# strict=False. The crash is heap-layout flaky (run 24753105813
+# demonstrated fplib's equivalent test xpassing cleanly on one run
+# and SIGABRT'ing on the previous), so strict=True would FAIL CI on
+# clean-pass runs via XPASS(strict). Removal pressure relies on the
+# grep string + #144 link + the follow-up PR that deletes this
+# marker alongside the Fortran fix.
 _CI = os.environ.get("CI", "").lower() == "true"
 _XFAIL_WRX_HEAP_144 = pytest.mark.xfail(
-    condition=_CI, strict=True,
+    condition=_CI, strict=False,
     reason="SIGABRT in wrx heap-reuse path — tracked in #144; "
            "marker must be removed once that lands.",
 )

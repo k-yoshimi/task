@@ -29,6 +29,14 @@ changes — re-review and re-marker.
   `@pytest.mark.xfail(strict=True, reason="#<issue>")`. `strict=True`
   makes XPASS fail CI red, which automates marker removal once the fix
   lands.
+  - **Narrow exception: heap-layout-flaky crashes under `pytest-forked`.**
+    If a test is SIGABRT/SEGV-flaky (crashes some runs, passes others
+    in the same environment), `strict=True` causes `[XPASS(strict)]`
+    FAILs on clean-pass runs. Use `strict=False` WITH (a) a
+    `XFAIL_REMOVE_WITH_#<issue>` grep string in the comment, (b) a
+    linked issue, and (c) a commit message note that the deletion
+    PR is expected alongside the #issue fix. Do NOT use this exception
+    for deterministic failures.
 - **Equivalence tests at 1e-10 tolerance MUST pass.** A SKIPped
   equivalence test is not verification — it is invisibility.
 - **Commit a minimal fixture (≤100 KB) if CI cannot generate it**,
