@@ -25,31 +25,6 @@ import sys
 import unittest
 from pathlib import Path
 
-import pytest
-
-# TEMPORARY (remove once #142 batch B4 lands and migrates the remaining
-# tr/trexec.f90 STOPs to IERR returns).
-#
-# The STOP path in tr/trexec.f90 still aborts the pytest-forked worker —
-# pytest-forked's waitfinish() then raises `EOFError: EOF read where
-# object expected` as INTERNALERROR, which halts the whole session and
-# fails CI with exit 3. Only `skip` prevents the session-aborting
-# fork-crash; xfail(strict=False) does NOT rescue this (the warning
-# "pytest-forked xfail support is incomplete" is the upstream admission).
-#
-# test_NSMAX_in_range is the confirmed deterministic INTERNALERROR
-# source (CI run 24750819997); marked `skip` so CI survives.
-#
-# DO NOT extend the marker to new tests. DO NOT forget to delete it
-# once #142 B4 lands — search-string `SKIP_REMOVE_WITH_142` finds every
-# call-site.
-_REASON_142 = (
-    "tr/trexec.f90 STOP abort the forked worker (signal-0 INTERNALERROR) "
-    "— tracked in #142; marker must be removed once trexec STOPs land "
-    "(separate batch from PR #152 which fixed trprep)."
-)
-_SKIP_TR_STOP_ISSUE_142 = pytest.mark.skip(reason=_REASON_142)
-
 HERE = Path(__file__).resolve()
 REPO = HERE.parents[3]
 PYTHON_ROOT = REPO / "python"
@@ -146,7 +121,6 @@ class TestTrlibBoundaryValues(unittest.TestCase):
             )
 
     # --- sweeps -----------------------------------------------------------
-    @_SKIP_TR_STOP_ISSUE_142    # SKIP_REMOVE_WITH_142
     def test_NSMAX_in_range(self):
         """NSMAX in {1..4} should either run cleanly or raise TrlibError.
 

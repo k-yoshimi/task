@@ -82,13 +82,17 @@ CONTAINS
     CASE ("PHIA");  PHIA  = value
     CASE ("MODELG");  MODELG = INT(value)
     ! --- plasma scalars --------------------------------------------
-    ! NSMAX range: [1, TR_MAX_NSMAX=8]. Early-reject at the registry
-    ! so property-based callers (fuzz sweeps, misconfigured clients)
-    ! get a clean ierr=1 INVALID instead of a later SEGV / TrlibRunError
-    ! deep inside tr_prep or tr_get_state. The upper bound matches the
-    ! C ABI struct capacity declared in tr/tr_state.f90::TR_MAX_NSMAX.
+    ! NSMAX range: [2, TR_MAX_NSMAX=8]. Lower bound is 2 (electrons +
+    ! at least one ion species) — NSMAX=1 would make `PZ(2:NSMAX)`
+    ! a zero-size slice in tr_prof_impurity (trprof.f90:303), causing
+    ! `ANI=SUM(PZ(2:1)*RN(NR,2:1))=0`, then `DILUTE=1-ANZ/0=-Inf`,
+    ! triggering an unconditional STOP at trprof.f90:310 that aborts
+    ! the host process. Early-reject at the registry so property-based
+    ! callers (fuzz sweeps, misconfigured clients) get a clean ierr=1
+    ! INVALID instead of a deep-Fortran abort. The upper bound matches
+    ! the C ABI struct capacity declared in tr/tr_state.f90::TR_MAX_NSMAX.
     CASE ("NSMAX")
-       IF (INT(value) < 1 .OR. INT(value) > 8) THEN; ierr = 1; RETURN; END IF
+       IF (INT(value) < 2 .OR. INT(value) > 8) THEN; ierr = 1; RETURN; END IF
        NSMAX = INT(value)
     ! --- plasma arrays (1..NSMM, 1-origin; NSMM=100 per tr/trcom0.f90)
     !     SIZE(arr) keeps the bound check correct if the declared
