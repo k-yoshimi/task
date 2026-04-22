@@ -40,6 +40,7 @@ MODULE ti_api
   USE tiinit,            ONLY: tiinit_fortran => ti_init
   USE tiprep,            ONLY: ti_prep
   USE tiexec,            ONLY: ti_exec
+  USE libmtx,            ONLY: mtx_initialize, mtx_finalize
   IMPLICIT NONE
   PRIVATE
   PUBLIC :: ti_api_init, ti_api_run, ti_api_get_state, &
@@ -74,6 +75,29 @@ CONTAINS
        ierr = TI_OK
        RETURN
     END IF
+
+    ! libmtxnompi globals (nrank, nsize) must be populated before any
+    ! mtx_allgather_real8 call (libmtxnompi.f90:704). Without this,
+    ! `nsize` reads as garbage and `vtot(ndata*nsize)` becomes a
+    ! negative-bound array → "Index '1' above upper bound of -888800"
+    ! Fortran runtime error during run(). Mirrors wrx_api.f90:99 +
+    ! fp_api.f90:86. Harmless under nompi (sets nrank=0, nsize=1).
+    CALL mtx_initialize
+
+    ! Mirror timain.f90:28 — open the scratch unit that lib/libkio.f90
+    ! hard-codes (WRITE(7)/REWIND(7)) for inline-namelist parsing in
+    ! TASK_PARM MODE=2 (used by tiparm/eqinit chains). Same fix pattern
+    ! as tr/tr_api.f90 + fp/fp_api.f90:93; without it, future MODELG=3
+    ! tilib fixtures would hit a Fortran runtime error on the unopened
+    ! unit.
+    BLOCK
+       INTEGER :: ios
+       OPEN(7, STATUS='SCRATCH', FORM='FORMATTED', IOSTAT=ios)
+       IF (ios /= 0) THEN
+          ierr = TI_ERR_CALC_FAILED
+          RETURN
+       END IF
+    END BLOCK
 
     ! Initialize parameter defaults through the standard stack used by
     ! timain.f90: pl_init, eq_init, ti_init (Fortran) all set their own
@@ -279,6 +303,15 @@ CONTAINS
     END IF
 
     CALL deallocate_ticomm
+    ! Mirror wrx_api / fp_api shutdown: balance the mtx_initialize done
+    ! in ti_api_init.
+    CALL mtx_finalize
+    ! Pair with the OPEN(7) in ti_api_init so re-init after finalize
+    ! does not try to OPEN an already-open unit.
+    BLOCK
+       INTEGER :: cierr
+       CLOSE(7, IOSTAT=cierr)
+    END BLOCK
     g_initialized = .FALSE.
     g_prepared    = .FALSE.
     ierr = TI_OK
