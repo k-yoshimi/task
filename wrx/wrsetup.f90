@@ -75,10 +75,11 @@ CONTAINS
              END DO
           CASE DEFAULT
              WRITE(6,'(A,I4)') 'XX wr_setup_rays: UNKNOWN mdlwri:',mdlwri
-             STOP
+             ierr=1   ! #142: was STOP — undefined mdlwri/10 enum (ray-trace)
+             RETURN
           END SELECT
        END IF
-       
+
     CASE(1)  ! --- beam tracing ---
 
        IF(mdlwri.GT.100) THEN
@@ -147,12 +148,14 @@ CONTAINS
              END DO
           CASE DEFAULT
              WRITE(6,'(A,I4)') 'XX wr_setup: UNKNOWN mdlwri:',mdlwri
-             STOP
+             ierr=2   ! #142: was STOP — undefined mdlwri/10 enum (beam-trace)
+             RETURN
           END SELECT
        END IF
     CASE DEFAULT
        WRITE(6,'(A,I4)') 'XX wr_setup: UNKNOWN mode_beam:',mode_beam
-       STOP
+       ierr=3   ! #142: was STOP — undefined mode_beam enum
+       RETURN
     END SELECT
     
     ! --- conversion from rnz -> angp ---
@@ -212,7 +215,7 @@ CONTAINS
 
     RETURN
 9000 CONTINUE
-    ierr=1
+    ierr=4   ! #142: bumped from 1 to disambiguate from new enum-guard codes 1/2/3
     RETURN
   END SUBROUTINE wr_setup
     
