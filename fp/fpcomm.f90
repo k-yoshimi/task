@@ -344,6 +344,7 @@ module fpcomm
           integer,save:: NRSTART_save=0,NREND_save=0,NRMAX_save=0
           integer,save:: NTHMAX_save=0,NPMAX_save=0
           integer,save:: NSAMAX_save=0,NSBMAX_save=0
+          integer,save:: NSMAX_save=0
           integer,save:: init=0
 
           if(init.eq.0) then
@@ -360,6 +361,14 @@ module fpcomm
              ! minimum-diff fix; binary fp runs once per process so it
              ! never hits this path either way. Matches the fix landed
              ! for ti/ticomm.f90 and wrx/wrcomm.f90 on 2026-04-20.
+             !
+             ! NSMAX is in the guard list because PG/PM/DELP/VOLP/PG2/PM2
+             ! are sized by NSMAX (not NSAMAX). Without it, mutating
+             ! NSMAX between calls (e.g., the property_boundary sweep
+             ! 1..4) would early-return with the previous-NSMAX-sized
+             ! arrays and write past the end in fp_mesh / fp_prep
+             ! (valgrind: invalid write at fpprep.f90:181-206; tracked
+             ! in #144).
              if((NPMAX.eq.NPMAX_save).and. &
                 (NTHMAX.eq.NTHMAX_save).and. &
                 (NRMAX.eq.NRMAX_save).and. &
@@ -367,6 +376,7 @@ module fpcomm
                 (NREND.eq.NREND_save).and. &
                 (NSAMAX.eq.NSAMAX_save).and. &
                 (NSBMAX.eq.NSBMAX_save).and. &
+                (NSMAX.eq.NSMAX_save).and. &
                 ALLOCATED(F)) return
 
              ! Same heap-reuse hazard on the deallocate side: when
@@ -685,6 +695,7 @@ module fpcomm
           NREND_save=NREND
           NSAMAX_save=NSAMAX
           NSBMAX_save=NSBMAX
+          NSMAX_save=NSMAX
 
           ! Defensive zero-init of every allocatable array in this scope.
           ! Mirrors the tr/trcomm_profile.f90 (PR #121) and wrx/wrcomm.f90
