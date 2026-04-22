@@ -1,0 +1,26 @@
+diff --git a/bpsd_plasmaf.f90 b/bpsd_plasmaf.f90
+index 066c3f52..ec9a25b4 100644
+--- a/bpsd_plasmaf.f90
++++ b/bpsd_plasmaf.f90
+@@ -169,6 +169,21 @@ contains
+     integer :: nr, nd, ns, mode
+     real(dp), dimension(:), ALLOCATABLE :: v
+ 
++    ! Defensive zero-init of the scalar fields. INTENT(OUT) on a
++    ! derived type with allocatable components leaves scalar fields
++    ! UNDEFINED on entry per Fortran 2003+; the body below tests
++    ! `plasmaf_out%nrmax.eq.0` at line 186 to choose mode 0 vs 1.
++    ! Without this reset that test reads heap garbage and dispatches
++    ! to mode=1 with stale nrmax → bpsd_adjust_array1D leaves rho's
++    ! descriptor in a corrupt state → "Index '1' below lower bound of
++    ! <garbage>" SIGABRT in callers (libtotapi.so via tr_loop ->
++    ! tr_bpsd_get). Confirmed via file-based dump showing
++    ! `ALLOC(rho)=F` AND `out%nrmax=<stale>` at entry. Tracked in
++    ! task-private issue #148.
++    plasmaf_out%nrmax = 0
++    plasmaf_out%nsmax = 0
++    plasmaf_out%time  = 0.0_dp
++
+     if(bpsd_plasmafx_init_flag) call bpsd_init_plasmafx
+ 
+     if(plasmafx%status.eq.0) then
