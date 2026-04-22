@@ -478,7 +478,11 @@
           ENDIF
         ENDIF
         WRITE(6,*) 'XX NCLASS_CHECK: non zero iflag',iflag
-        STOP
+        ! #142 followup: was STOP. iflag is already an argument
+        ! propagated to the caller (see trncls.f90:286-291 where
+        ! NCLASS_CHK_NR rejects iflag /= -1 and sets IERR=1 / RETURN).
+        ! No need to abort — just return so the caller can dispatch.
+        RETURN
       ENDIF
 !Check for optional output
       IF(k_out.gt.1) THEN

@@ -265,13 +265,16 @@ CONTAINS
     END SUBROUTINE tr_prof
 
 
-    SUBROUTINE tr_prof_impurity
+    SUBROUTINE tr_prof_impurity(ierr)
 
       USE trcomm
       IMPLICIT NONE
+      INTEGER, INTENT(OUT) :: ierr   ! #142 followup: 0=OK, 1=DILUTE<0
       REAL(rkind)   :: ANEAVE, ANI, ANZ, DILUTE, TE, TRZEC,TRZEFE
       INTEGER NR
       EXTERNAL TRZEC,TRZEFE
+
+      ierr=0
       
 !     *** CALCULATE ANEAVE and ANC, ANFE ***
 
@@ -306,8 +309,12 @@ CONTAINS
             ANZ = PZFE(NR)*ANFE(NR)+PZC(NR)*ANC(NR)   ! imputity ion charge den
             DILUTE = 1.D0-ANZ/ANI                     ! dilution factor
             IF(DILUTE.LT.0.D0) THEN
-               WRITE(6,*) 'XX trprof: negative DILUTE: reduce PNC/PNFE'
-               STOP
+               WRITE(6,'(A,I5,3ES12.4)') &
+                    'XX trprof: negative DILUTE: NR,ANI,ANZ,DILUTE=', &
+                    NR, ANI, ANZ, DILUTE
+               WRITE(6,*) '   reduce PNC/PNFE so impurity charge < ion charge'
+               ierr=1   ! #142 followup: was STOP — DILUTE<0 (impurity > main ion)
+               RETURN
             END IF
             RN(NR,2:NSMAX) = RN(NR,2:NSMAX)*DILUTE    ! main ions diluted
          ENDDO

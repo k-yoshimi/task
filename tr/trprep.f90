@@ -88,7 +88,11 @@ CONTAINS
       
 !     *** CALCULATE ANEAVE and ANC, ANFE ***
 
-      CALL tr_prof_impurity
+      CALL tr_prof_impurity(ierr)
+      IF(ierr.NE.0) THEN
+         WRITE(6,'(A,I5)') 'XX tr_prof_impurity in tr_prep: ierr=',ierr
+         RETURN   ! #142 followup: was unconditional STOP in tr_prof_impurity
+      END IF
 
 !     *** CALCULATE AJ, QP, BP, EZ ***
 
