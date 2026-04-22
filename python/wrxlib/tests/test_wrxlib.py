@@ -10,12 +10,10 @@ Covers:
 * Context-manager lifecycle (``__enter__``/``__exit__``).
 * Negative tests for invalid params / double-close / closed handle.
 
-.. note:: The ``.run()`` lifecycle tests are gated behind the
-   ``WRX_RUN_OK=1`` environment variable. On the current L-4 build,
-   ``wrx_run`` pulls in ``libgrf::grd1d`` via ``wrcalpwr`` and may
-   segfault inside the shared library; ``test_run_so.c`` (L-4) skips
-   for the same reason. Set ``WRX_RUN_OK=1`` only when you have
-   verified the segfault is fixed in your build.
+.. note:: The ``.run()`` lifecycle tests run by default. Set
+   ``WRX_RUN_OK=0`` to opt out (legacy escape hatch, no longer
+   needed now that ``wrx_api_init`` sets ``WRX_NO_GRAPHICS=1`` to
+   suppress the ``libgrf::grd1d`` path inside ``wrcalpwr.f90``).
 """
 from __future__ import annotations
 
@@ -45,18 +43,13 @@ from wrxlib import _ffi  # noqa: E402
 
 REPO = HERE.parents[3]
 DEFAULT_SO = REPO / "wrx" / "libwrxapi.so"
-# Historical gate: libwrxapi.so used to SEGV inside wrcalpwr -> grd1d
-# unless `WRX_RUN_OK=1` was set. The 2026-04-20 fix (wrcalpwr.f90
-# WRX_NO_GRAPHICS gate + wr_allocate per-species pwrmax allocations)
-# resolved the SEGV, so the gate is now defaulted ON. Setting
-# WRX_RUN_OK=0 explicitly still suppresses the run-dependent tests so
-# bisect/CI bring-up scripts retain a kill-switch.
-# 2026-04-20: wr_calc_pwr SEGV fixed + wrcomm zero-init sweep landed.
-# wrx.run() itself is stable. wrx.get_state() still SEGVs in suite
-# context due to wrx_state.f90 schema mismatch (tracked via
-# WRX_EQUIV_OK gate). test_run_and_get_state calls get_state, so it
-# remains opt-in behind WRX_RUN_OK=1 until the schema extension lands.
-RUN_OK = os.environ.get("WRX_RUN_OK") == "1"
+# Run-dependent tests default ON. Set WRX_RUN_OK=0 to opt out
+# (legacy escape hatch, no longer needed): the historical
+# libwrxapi.so SEGV inside wrcalpwr -> grd1d was fixed in PR #123
+# by setenv'ing WRX_NO_GRAPHICS=1 inside wrx_api_init, which
+# suppresses the libgrf path. Matches the sibling pattern used in
+# test_equivalence.py / test_sweep.py / test_property_boundary.py.
+RUN_OK = os.environ.get("WRX_RUN_OK", "1") != "0"
 
 
 # =====================================================================
@@ -336,11 +329,11 @@ class TestWrxlibLifecycle(unittest.TestCase):
 
 @unittest.skipUnless(
     DEFAULT_SO.exists() and RUN_OK,
-    "wrx_run skipped: set WRX_RUN_OK=1 to enable (libgrf segfault risk; "
-    "see README.md Known limitation). Also requires libwrxapi.so.",
+    "wrx_run skipped: requires libwrxapi.so (set WRX_RUN_OK=0 to opt out, "
+    "legacy escape hatch -- no longer needed since PR #123).",
 )
 class TestWrxlibRun(unittest.TestCase):
-    """wrx_run-dependent tests (gated behind WRX_RUN_OK=1)."""
+    """wrx_run-dependent tests (default-on; opt out with WRX_RUN_OK=0)."""
 
     def test_run_and_get_state(self):
         with Wrxlib() as wrx:
