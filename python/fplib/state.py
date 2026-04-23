@@ -10,12 +10,32 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
+from . import _ffi
 from ._ffi import FpStateC
+from .errors import FplibNotInitError
 
 
 # Profile array names in canonical order. These are the 6 2-D arrays
 # declared in fp_state_t: RNT, RWT, RTT, RJT, RPCT, RPWT.
 PROFILE_FIELDS = ("RNT", "RWT", "RTT", "RJT", "RPCT", "RPWT")
+_DIM_BOUNDS = (
+    ("nrmax", "FP_MAX_NRMAX", _ffi.FP_MAX_NRMAX),
+    ("nsamax", "FP_MAX_NSAMAX", _ffi.FP_MAX_NSAMAX),
+)
+
+
+def _checked_dim(s: FpStateC, field_name: str, max_name: str, max_value: int) -> int:
+    value = int(getattr(s, field_name))
+    if value < 0:
+        raise FplibNotInitError(
+            f"FpState.from_c dimension {field_name}={value} is negative"
+        )
+    if value > max_value:
+        raise FplibNotInitError(
+            f"FpState.from_c dimension {field_name}={value} exceeds "
+            f"{max_name}={max_value}"
+        )
+    return value
 
 
 @dataclass
@@ -54,8 +74,12 @@ class FpState:
         Only the ``[0:nsamax][0:nrmax]`` slice is copied out; the trailing
         padding (up to FP_MAX_*) is ignored.
         """
-        nr = int(s.nrmax)
-        nsa = int(s.nsamax)
+        dims = {
+            field_name: _checked_dim(s, field_name, max_name, max_value)
+            for field_name, max_name, max_value in _DIM_BOUNDS
+        }
+        nr = dims["nrmax"]
+        nsa = dims["nsamax"]
 
         def _slice(arr_2d):
             # arr_2d shape: [FP_MAX_NSAMAX][FP_MAX_NRMAX].

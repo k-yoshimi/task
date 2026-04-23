@@ -30,15 +30,46 @@ methods today, while ``set_param`` / ``set_param_str`` work in full.
 from __future__ import annotations
 
 import ctypes
+import weakref
 from typing import Any, Iterable, Mapping, Optional, Tuple, Union
 
 from . import _ffi
-from .errors import TotlibError, TotlibInvalidParamError, raise_for_rc
+from .errors import (
+    TotlibError,
+    TotlibInvalidParamError,
+    TotlibNotInitializedError,
+    raise_for_rc,
+)
 from .state import TotState
 
 
 # Type alias for the items accepted by ``set_params``.
 ParamItem = Union[Mapping[str, Any], Iterable[Tuple[str, Any]]]
+_MAX_C_STRING_BYTES = 63
+
+
+def _encode_name(s: str) -> bytes:
+    """Encode a C string argument accepted by the TOT registry."""
+    if not isinstance(s, str):
+        raise TotlibInvalidParamError(
+            f"TOT C string arguments must be str, got {type(s).__name__}"
+        )
+    try:
+        encoded = s.encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise TotlibInvalidParamError(
+            f"TOT C string {s!r} contains non-ASCII characters"
+        ) from exc
+    if b"\x00" in encoded:
+        raise TotlibInvalidParamError(
+            f"TOT C string {s!r} contains an embedded NUL byte"
+        )
+    if len(encoded) > _MAX_C_STRING_BYTES:
+        raise TotlibInvalidParamError(
+            f"TOT C string {s!r} is {len(encoded)} bytes; "
+            f"maximum is {_MAX_C_STRING_BYTES}"
+        )
+    return encoded
 
 
 class Tot:
@@ -51,13 +82,37 @@ class Tot:
     contract used by trlib / eqlib / tilib.
     """
 
+    _live_instance = None
+
     def __init__(self, lib_path: Optional[str] = None) -> None:
-        self._lib = _ffi.load_library(lib_path)
         # Start closed so _open() can transition to open.
         self._closed = True
-        self._open()
+        self._claim_live_instance()
+        try:
+            self._lib = _ffi.load_library(lib_path)
+            self._open()
+        except Exception:
+            self._release_live_instance()
+            raise
 
     # --- lifecycle ------------------------------------------------------
+    def _claim_live_instance(self) -> None:
+        cls = self.__class__
+        ref = cls._live_instance
+        live = ref() if ref is not None else None
+        if live is not None:
+            raise TotlibNotInitializedError(
+                "another live Tot() instance exists; COMMON-block backend "
+                "cannot be safely shared"
+            )
+        cls._live_instance = weakref.ref(self)
+
+    def _release_live_instance(self) -> None:
+        cls = self.__class__
+        ref = cls._live_instance
+        if ref is not None and ref() is self:
+            cls._live_instance = None
+
     def _open(self) -> None:
         if not self._closed:
             return
@@ -73,10 +128,12 @@ class Tot:
     def close(self) -> None:
         """Finalise the library. Idempotent."""
         if self._closed:
+            self._release_live_instance()
             return
         rc = self._lib.tot_finalize()
         # Mark closed before raising so __del__ doesn't retry.
         self._closed = True
+        self._release_live_instance()
         if rc not in (_ffi.TOT_OK, _ffi.TOT_ERR_NOT_IMPL):
             raise_for_rc("tot_finalize", rc)
 
@@ -152,9 +209,10 @@ class Tot:
         """
         if self._closed:
             raise TotlibError("set_param on closed Tot")
+        name_b = _encode_name(name)
         self._validate_namespaced_name(name)
         rc = self._lib.tot_set_param(
-            name.encode("ascii"), ctypes.c_double(float(value))
+            name_b, ctypes.c_double(float(value))
         )
         raise_for_rc(f"tot_set_param('{name}', {value})", rc)
 
@@ -172,6 +230,8 @@ class Tot:
         """
         if self._closed:
             raise TotlibError("set_param_str on closed Tot")
+        name_b = _encode_name(name)
+        value_b = _encode_name(value)
         self._validate_namespaced_name(name)
         try:
             fn = self._lib.tot_set_param_str
@@ -180,7 +240,7 @@ class Tot:
                 "libtotapi.so does not export tot_set_param_str; "
                 "rebuild the shared library from the L-3 registry PR."
             ) from exc
-        rc = fn(name.encode("ascii"), value.encode("ascii"))
+        rc = fn(name_b, value_b)
         raise_for_rc(f"tot_set_param_str('{name}', '{value}')", rc)
 
     def set_params(self, *args: ParamItem, **kwargs: Any) -> None:

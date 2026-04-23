@@ -11,7 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
+from . import _ffi
 from ._ffi import TotStateC
+from .errors import TotlibNotInitializedError
 
 
 # Scalar field names in canonical order. Matches the scalar members of
@@ -25,6 +27,25 @@ SCALAR_FIELDS = (
     "TAUE1", "TAUE2", "ZEFF0",
     "ALI", "RQ1",
 )
+
+_DIM_BOUNDS = (
+    ("nrmax", "TOT_MAX_NRMAX", _ffi.TOT_MAX_NRMAX),
+    ("nsmax", "TOT_MAX_NSMAX", _ffi.TOT_MAX_NSMAX),
+)
+
+
+def _checked_dim(s: TotStateC, field_name: str, max_name: str, max_value: int) -> int:
+    value = int(getattr(s, field_name))
+    if value < 0:
+        raise TotlibNotInitializedError(
+            f"TotState.from_c dimension {field_name}={value} is negative"
+        )
+    if value > max_value:
+        raise TotlibNotInitializedError(
+            f"TotState.from_c dimension {field_name}={value} exceeds "
+            f"{max_name}={max_value}"
+        )
+    return value
 
 
 @dataclass
@@ -69,8 +90,12 @@ class TotState:
         profile. At L-3 / L-4 stub scope ``nrmax`` and ``nsmax`` are 0
         and the profiles come back as empty lists, which is correct.
         """
-        nr = int(s.nrmax)
-        ns = int(s.nsmax)
+        dims = {
+            field_name: _checked_dim(s, field_name, max_name, max_value)
+            for field_name, max_name, max_value in _DIM_BOUNDS
+        }
+        nr = dims["nrmax"]
+        ns = dims["nsmax"]
         scalars = {k: float(getattr(s, k)) for k in SCALAR_FIELDS}
         rn = [[float(s.RN[i][j]) for j in range(ns)] for i in range(nr)]
         rt = [[float(s.RT[i][j]) for j in range(ns)] for i in range(nr)]

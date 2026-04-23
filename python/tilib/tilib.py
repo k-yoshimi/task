@@ -17,10 +17,11 @@ Usage::
 from __future__ import annotations
 
 import ctypes
+import weakref
 from typing import Optional
 
 from . import _ffi
-from .errors import TilibError, raise_for_ierr
+from .errors import TilibError, TilibStateError, raise_for_ierr
 from .state import TiState
 
 
@@ -33,13 +34,37 @@ class TiLib:
     shared state. This matches the design-spec contract.
     """
 
+    _live_instance = None
+
     def __init__(self, lib_path: Optional[str] = None) -> None:
-        self._lib = _ffi.load_library(lib_path)
         # Start closed so _open() can transition to open.
         self._closed = True
-        self._open()
+        self._claim_live_instance()
+        try:
+            self._lib = _ffi.load_library(lib_path)
+            self._open()
+        except Exception:
+            self._release_live_instance()
+            raise
 
     # --- lifecycle ------------------------------------------------------
+    def _claim_live_instance(self) -> None:
+        cls = self.__class__
+        ref = cls._live_instance
+        live = ref() if ref is not None else None
+        if live is not None:
+            raise TilibStateError(
+                "another live TiLib() instance exists; COMMON-block backend "
+                "cannot be safely shared"
+            )
+        cls._live_instance = weakref.ref(self)
+
+    def _release_live_instance(self) -> None:
+        cls = self.__class__
+        ref = cls._live_instance
+        if ref is not None and ref() is self:
+            cls._live_instance = None
+
     def _open(self) -> None:
         if not self._closed:
             return
@@ -50,10 +75,12 @@ class TiLib:
     def close(self) -> None:
         """Finalise the library. Idempotent."""
         if self._closed:
+            self._release_live_instance()
             return
         ierr = self._lib.ti_finalize()
         # Mark closed before raising so __del__ doesn't retry.
         self._closed = True
+        self._release_live_instance()
         raise_for_ierr("ti_finalize", ierr)
 
     def __enter__(self) -> "TiLib":

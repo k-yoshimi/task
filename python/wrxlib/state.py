@@ -19,11 +19,34 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
+from . import _ffi
 from ._ffi import WRX_MAX_NSAMAX, WrxStateC
+from .errors import WrxlibStateError
 
 
 # Scalar (global) field names in canonical order.
 SCALAR_FIELDS = ("pwr_tot",)
+_DIM_BOUNDS = (
+    ("nraymax", "WRX_MAX_NRAYMAX", _ffi.WRX_MAX_NRAYMAX),
+    ("nsamax", "WRX_MAX_NSAMAX", _ffi.WRX_MAX_NSAMAX),
+    ("nsmax", "WRX_MAX_NSAMAX", _ffi.WRX_MAX_NSAMAX),
+    ("nrsmax", "WRX_MAX_NRSMAX", _ffi.WRX_MAX_NRSMAX),
+    ("nrlmax", "WRX_MAX_NRLMAX", _ffi.WRX_MAX_NRLMAX),
+)
+
+
+def _checked_dim(s: WrxStateC, field_name: str, max_name: str, max_value: int) -> int:
+    value = int(getattr(s, field_name))
+    if value < 0:
+        raise WrxlibStateError(
+            f"WrxState.from_c dimension {field_name}={value} is negative"
+        )
+    if value > max_value:
+        raise WrxlibStateError(
+            f"WrxState.from_c dimension {field_name}={value} exceeds "
+            f"{max_name}={max_value}"
+        )
+    return value
 
 
 @dataclass
@@ -74,10 +97,14 @@ class WrxState:
         slices are copied out; trailing padding (up to ``WRX_MAX_*``) is
         ignored so zero-padded struct tails do not leak into the view.
         """
-        nray = int(s.nraymax)
-        nsa = int(s.nsamax)
-        nrs = int(s.nrsmax)
-        nrl = int(s.nrlmax)
+        dims = {
+            field_name: _checked_dim(s, field_name, max_name, max_value)
+            for field_name, max_name, max_value in _DIM_BOUNDS
+        }
+        nray = dims["nraymax"]
+        nsa = dims["nsamax"]
+        nrs = dims["nrsmax"]
+        nrl = dims["nrlmax"]
         scalars = {k: float(getattr(s, k)) for k in SCALAR_FIELDS}
         # 1D slices
         nstp_end = [int(s.nstpmax_nray[i]) for i in range(nray)]
@@ -109,7 +136,7 @@ class WrxState:
             nraymax=nray,
             nstpmax=int(s.nstpmax),
             nsamax=nsa,
-            nsmax=int(s.nsmax),
+            nsmax=dims["nsmax"],
             nrsmax=nrs,
             nrlmax=nrl,
             modelg=int(s.modelg),

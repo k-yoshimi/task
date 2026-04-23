@@ -9,7 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
+from . import _ffi
 from ._ffi import EqStateC
+from .errors import EqlibNotInitializedError
 
 
 # Scalar field names in canonical order. Matches the scalar members of
@@ -23,6 +25,29 @@ SCALAR_FIELDS = (
     "betat", "betap",
     "pvol", "raave", "ripx",
 )
+
+_DIM_BOUNDS = (
+    ("nrgmax", "EQ_MAX_NRGM", _ffi.EQ_MAX_NRGM),
+    ("nzgmax", "EQ_MAX_NZGM", _ffi.EQ_MAX_NZGM),
+    ("npsmax", "EQ_MAX_NPSM", _ffi.EQ_MAX_NPSM),
+    ("nrmax", "EQ_MAX_NRM", _ffi.EQ_MAX_NRM),
+    ("nthmax", "EQ_MAX_NTHM", _ffi.EQ_MAX_NTHM),
+    ("nsumax", "EQ_MAX_NSUM", _ffi.EQ_MAX_NSUM),
+)
+
+
+def _checked_dim(s: EqStateC, field_name: str, max_name: str, max_value: int) -> int:
+    value = int(getattr(s, field_name))
+    if value < 0:
+        raise EqlibNotInitializedError(
+            f"EqState.from_c dimension {field_name}={value} is negative"
+        )
+    if value > max_value:
+        raise EqlibNotInitializedError(
+            f"EqState.from_c dimension {field_name}={value} exceeds "
+            f"{max_name}={max_value}"
+        )
+    return value
 
 
 @dataclass
@@ -73,11 +98,15 @@ class EqState:
         the trailing zero-padding (up to EQ_MAX_*) is ignored so
         callers never see fake zeros at the tail of a profile.
         """
-        nrg = int(s.nrgmax)
-        nzg = int(s.nzgmax)
-        nps = int(s.npsmax)
+        dims = {
+            field_name: _checked_dim(s, field_name, max_name, max_value)
+            for field_name, max_name, max_value in _DIM_BOUNDS
+        }
+        nrg = dims["nrgmax"]
+        nzg = dims["nzgmax"]
+        nps = dims["npsmax"]
         scalars = {k: float(getattr(s, k)) for k in SCALAR_FIELDS}
-        nrmax_i = int(s.nrmax)
+        nrmax_i = dims["nrmax"]
         profile = [
             {
                 "NR":   i + 1,
@@ -96,8 +125,8 @@ class EqState:
             nzgmax=nzg,
             npsmax=nps,
             nrmax=nrmax_i,
-            nthmax=int(s.nthmax),
-            nsumax=int(s.nsumax),
+            nthmax=dims["nthmax"],
+            nsumax=dims["nsumax"],
             nrvmax=int(s.nrvmax),
             nsgmax=int(s.nsgmax),
             ntgmax=int(s.ntgmax),

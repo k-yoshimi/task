@@ -9,7 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
+from . import _ffi
 from ._ffi import TiStateC
+from .errors import TilibStateError
 
 
 # Scalar field names in canonical order. ``nt/nrmax/nsa_max/nsmax`` are
@@ -27,6 +29,26 @@ SCALAR_INT_FIELDS = (
     "icount_loop_max",
     "icount_mat_max",
 )
+
+_DIM_BOUNDS = (
+    ("nrmax", "TI_MAX_NRMAX", _ffi.TI_MAX_NRMAX),
+    ("nsa_max", "TI_MAX_NSA_MAX", _ffi.TI_MAX_NSA_MAX),
+    ("nsmax", "TI_MAX_NSA_MAX", _ffi.TI_MAX_NSA_MAX),
+)
+
+
+def _checked_dim(s: TiStateC, field_name: str, max_name: str, max_value: int) -> int:
+    value = int(getattr(s, field_name))
+    if value < 0:
+        raise TilibStateError(
+            f"TiState.from_c dimension {field_name}={value} is negative"
+        )
+    if value > max_value:
+        raise TilibStateError(
+            f"TiState.from_c dimension {field_name}={value} exceeds "
+            f"{max_name}={max_value}"
+        )
+    return value
 
 
 @dataclass
@@ -78,8 +100,12 @@ class TiState:
         Only the ``[0:nrmax]`` / ``[0:nsa_max]`` slice is copied out;
         the trailing padding (up to TI_MAX_*) is ignored.
         """
-        nr = int(s.nrmax)
-        nsa = int(s.nsa_max)
+        dims = {
+            field_name: _checked_dim(s, field_name, max_name, max_value)
+            for field_name, max_name, max_value in _DIM_BOUNDS
+        }
+        nr = dims["nrmax"]
+        nsa = dims["nsa_max"]
         rna = [[float(s.RNA[i][j]) for j in range(nsa)] for i in range(nr)]
         rta = [[float(s.RTA[i][j]) for j in range(nsa)] for i in range(nr)]
         rua = [[float(s.RUA[i][j]) for j in range(nsa)] for i in range(nr)]
@@ -93,7 +119,7 @@ class TiState:
             nt=int(s.nt),
             nrmax=nr,
             nsa_max=nsa,
-            nsmax=int(s.nsmax),
+            nsmax=dims["nsmax"],
             T=float(s.T),
             residual_loop_max=float(s.residual_loop_max),
             icount_loop_max=int(s.icount_loop_max),

@@ -11,7 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
+from . import _ffi
 from ._ffi import TrStateC
+from .errors import TrlibStateError
 
 
 # Scalar field names in canonical order. Matches the scalar members of
@@ -23,6 +25,25 @@ SCALAR_FIELDS = (
     "TAUE1", "TAUE2", "ZEFF0",
     "ALI", "RQ1",
 )
+
+_DIM_BOUNDS = (
+    ("nrmax", "TR_MAX_NRMAX", _ffi.TR_MAX_NRMAX),
+    ("nsmax", "TR_MAX_NSMAX", _ffi.TR_MAX_NSMAX),
+)
+
+
+def _checked_dim(s: TrStateC, field_name: str, max_name: str, max_value: int) -> int:
+    value = int(getattr(s, field_name))
+    if value < 0:
+        raise TrlibStateError(
+            f"TrState.from_c dimension {field_name}={value} is negative"
+        )
+    if value > max_value:
+        raise TrlibStateError(
+            f"TrState.from_c dimension {field_name}={value} exceeds "
+            f"{max_name}={max_value}"
+        )
+    return value
 
 
 @dataclass
@@ -56,8 +77,12 @@ class TrState:
         Only the ``[0:nrmax]`` / ``[0:nsmax]`` slice is copied out; the
         trailing padding (up to TR_MAX_*) is ignored.
         """
-        nr = int(s.nrmax)
-        ns = int(s.nsmax)
+        dims = {
+            field_name: _checked_dim(s, field_name, max_name, max_value)
+            for field_name, max_name, max_value in _DIM_BOUNDS
+        }
+        nr = dims["nrmax"]
+        ns = dims["nsmax"]
         scalars = {k: float(getattr(s, k)) for k in SCALAR_FIELDS}
         rn = [[float(s.RN[i][j]) for j in range(ns)] for i in range(nr)]
         rt = [[float(s.RT[i][j]) for j in range(ns)] for i in range(nr)]

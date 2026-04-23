@@ -19,13 +19,46 @@ Usage::
 from __future__ import annotations
 
 import ctypes
+import weakref
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import Any, List, Mapping, Optional
 
 from . import _ffi
-from .errors import EqlibError, EqlibNotInitializedError, raise_for_rc
+from .errors import (
+    EqlibError,
+    EqlibInvalidParamError,
+    EqlibNotInitializedError,
+    raise_for_rc,
+)
 from .state import EqState
+
+
+_MAX_C_STRING_BYTES = 63
+
+
+def _encode_name(s: str) -> bytes:
+    """Encode a C string argument accepted by the EQ registry."""
+    if not isinstance(s, str):
+        raise EqlibInvalidParamError(
+            f"EQ C string arguments must be str, got {type(s).__name__}"
+        )
+    try:
+        encoded = s.encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise EqlibInvalidParamError(
+            f"EQ C string {s!r} contains non-ASCII characters"
+        ) from exc
+    if b"\x00" in encoded:
+        raise EqlibInvalidParamError(
+            f"EQ C string {s!r} contains an embedded NUL byte"
+        )
+    if len(encoded) > _MAX_C_STRING_BYTES:
+        raise EqlibInvalidParamError(
+            f"EQ C string {s!r} is {len(encoded)} bytes; "
+            f"maximum is {_MAX_C_STRING_BYTES}"
+        )
+    return encoded
 
 
 class EqDiagCode(IntEnum):
@@ -71,13 +104,37 @@ class Eq:
     ``eq_init`` again and reset the shared state.
     """
 
+    _live_instance = None
+
     def __init__(self, lib_path: Optional[str] = None) -> None:
-        self._lib = _ffi.load_library(lib_path)
         # Start closed so _open() can transition to open.
         self._closed = True
-        self._open()
+        self._claim_live_instance()
+        try:
+            self._lib = _ffi.load_library(lib_path)
+            self._open()
+        except Exception:
+            self._release_live_instance()
+            raise
 
     # --- lifecycle ------------------------------------------------------
+    def _claim_live_instance(self) -> None:
+        cls = self.__class__
+        ref = cls._live_instance
+        live = ref() if ref is not None else None
+        if live is not None:
+            raise EqlibNotInitializedError(
+                "another live Eq() instance exists; COMMON-block backend "
+                "cannot be safely shared"
+            )
+        cls._live_instance = weakref.ref(self)
+
+    def _release_live_instance(self) -> None:
+        cls = self.__class__
+        ref = cls._live_instance
+        if ref is not None and ref() is self:
+            cls._live_instance = None
+
     def _open(self) -> None:
         if not self._closed:
             return
@@ -88,10 +145,12 @@ class Eq:
     def close(self) -> None:
         """Finalise the library. Idempotent."""
         if self._closed:
+            self._release_live_instance()
             return
         rc = self._lib.eq_finalize()
         # Mark closed before raising so __del__ doesn't retry.
         self._closed = True
+        self._release_live_instance()
         raise_for_rc("eq_finalize", rc)
 
     def __enter__(self) -> "Eq":
@@ -129,7 +188,7 @@ class Eq:
         if self._closed:
             raise EqlibError("set_param on closed Eq")
         rc = self._lib.eq_set_param(
-            name.encode("ascii"), ctypes.c_double(float(value))
+            _encode_name(name), ctypes.c_double(float(value))
         )
         raise_for_rc(f"eq_set_param('{name}', {value})", rc)
 
@@ -152,7 +211,7 @@ class Eq:
                 "libeqapi.so does not export eq_set_param_str; "
                 "rebuild the shared library after the L-3 registry PR."
             ) from exc
-        rc = fn(name.encode("ascii"), value.encode("ascii"))
+        rc = fn(_encode_name(name), _encode_name(value))
         raise_for_rc(f"eq_set_param_str('{name}', '{value}')", rc)
 
     def set_params(self, *args: Mapping[str, Any], **kwargs: Any) -> None:

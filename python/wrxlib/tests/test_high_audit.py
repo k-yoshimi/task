@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import pytest
+
+HERE = Path(__file__).resolve()
+PYTHON_ROOT = HERE.parents[2]
+if str(PYTHON_ROOT) not in sys.path:
+    sys.path.insert(0, str(PYTHON_ROOT))
+
+import wrxlib.wrxlib as wrxlib_module  # noqa: E402
+from wrxlib import WrxState, Wrxlib  # noqa: E402
+from wrxlib import _ffi  # noqa: E402
+from wrxlib.errors import WrxlibStateError  # noqa: E402
+
+
+class FakeWrxLib:
+    def wrx_init(self) -> int:
+        return 0
+
+    def wrx_finalize(self) -> int:
+        return 0
+
+
+@pytest.fixture(autouse=True)
+def reset_live_instance():
+    Wrxlib._live_instance = None
+    yield
+    Wrxlib._live_instance = None
+
+
+@pytest.fixture
+def fake_lib(monkeypatch) -> FakeWrxLib:
+    lib = FakeWrxLib()
+    monkeypatch.setattr(wrxlib_module._ffi, "load_library", lambda lib_path=None: lib)
+    return lib
+
+
+def test_double_construction_raises_and_close_reopens(fake_lib):
+    wrx = Wrxlib()
+    with pytest.raises(WrxlibStateError, match=r"another live Wrxlib\(\)"):
+        Wrxlib()
+    wrx.close()
+
+    reopened = Wrxlib()
+    reopened.close()
+
+
+def test_from_c_oversized_dimension_raises():
+    c = _ffi.WrxStateC()
+    c.nraymax = _ffi.WRX_MAX_NRAYMAX + 1
+    with pytest.raises(WrxlibStateError, match="nraymax.*WRX_MAX_NRAYMAX"):
+        WrxState.from_c(c)

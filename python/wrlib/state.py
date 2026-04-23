@@ -12,7 +12,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
+from . import _ffi
 from ._ffi import WrStateC
+from .errors import WrlibStateError
 
 
 # Scalar (global) pwrmax field names in canonical order. These are the
@@ -23,6 +25,26 @@ SCALAR_FIELDS = (
     "pos_pwrmax_rs", "pwrmax_rs",
     "pos_pwrmax_rl", "pwrmax_rl",
 )
+
+_DIM_BOUNDS = (
+    ("nraymax", "WR_MAX_NRAYMAX", _ffi.WR_MAX_NRAYMAX),
+    ("nrsmax", "WR_MAX_NRSMAX", _ffi.WR_MAX_NRSMAX),
+    ("nrlmax", "WR_MAX_NRLMAX", _ffi.WR_MAX_NRLMAX),
+)
+
+
+def _checked_dim(s: WrStateC, field_name: str, max_name: str, max_value: int) -> int:
+    value = int(getattr(s, field_name))
+    if value < 0:
+        raise WrlibStateError(
+            f"WrState.from_c dimension {field_name}={value} is negative"
+        )
+    if value > max_value:
+        raise WrlibStateError(
+            f"WrState.from_c dimension {field_name}={value} exceeds "
+            f"{max_name}={max_value}"
+        )
+    return value
 
 
 @dataclass
@@ -67,9 +89,13 @@ class WrState:
         slice is copied out; trailing padding (up to WR_MAX_*) is
         ignored.
         """
-        nray = int(s.nraymax)
-        nrs = int(s.nrsmax)
-        nrl = int(s.nrlmax)
+        dims = {
+            field_name: _checked_dim(s, field_name, max_name, max_value)
+            for field_name, max_name, max_value in _DIM_BOUNDS
+        }
+        nray = dims["nraymax"]
+        nrs = dims["nrsmax"]
+        nrl = dims["nrlmax"]
         scalars = {k: float(getattr(s, k)) for k in SCALAR_FIELDS}
         # nray-sized arrays
         nstp_end = [int(s.nstp_end[i]) for i in range(nray)]
