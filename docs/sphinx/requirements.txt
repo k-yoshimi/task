@@ -1,0 +1,35 @@
+# Dependencies for building the TASK library manual under docs/sphinx/.
+#
+# Install with:
+#   pip install -r docs/sphinx/requirements.txt
+#
+# Pins are *upper bounds* chosen to work around a compatibility break
+# between myst-parser >= 4 and Sphinx >= 8.2: myst-parser 4.x/5.x calls
+# `app.registry.transforms.remove(SphinxUnreferencedFootnotesDetector)`,
+# which raises ValueError on current Sphinx because the detector isn't
+# registered at load time. Pin to myst-parser 3.x + Sphinx 7.x until
+# the upstream workaround ships (see myst-parser main.py:46, "TODO once
+# sphinx PR #12730 is merged, remove this").
+
+# Core Sphinx + HTML theme
+sphinx>=7.0,<8
+sphinx-rtd-theme>=2.0
+
+# MyST Markdown + notebook backend. myst-nb transitively installs
+# myst-parser; do NOT list myst_parser in conf.py extensions, only
+# myst_nb (listing both crashes with "setting already registered").
+myst-parser>=3.0,<4
+myst-nb>=1.1,<2
+
+# Quality-of-life extensions
+sphinx-copybutton>=0.5
+sphinx-design>=0.6
+
+# Pre-staged for future gettext i18n migration (currently unused — we use
+# parallel en/ja trees).
+sphinx-intl>=2.2
+
+# Jupyter stack required by myst-nb at build time
+ipykernel>=6.29
+nbformat>=5.10
+nbclient>=0.10

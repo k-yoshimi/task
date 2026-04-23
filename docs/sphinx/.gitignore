@@ -1,0 +1,10 @@
+# Sphinx build output (rebuilt on demand; never committed).
+_build/
+.jupyter_cache/
+.doctrees/
+
+# Jupyter checkpoints (accidentally left by local editing).
+**/.ipynb_checkpoints/
+
+# MyST-NB / jupyter-cache side files.
+.nb-link
