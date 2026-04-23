@@ -274,13 +274,14 @@ class Eq:
     def run(self, mode: int = 1) -> None:
         """Run the EQ solver.
 
-        Modes:
-            1 (default) - real EQDSK load via ``equnit::eq_load`` using
-                the current ``MODELG`` + ``KNAMEQ``. This is currently
-                the only implemented mode.
-            0 - reserved for EQCALQ-style direct solve, returns
-                ``EQ_ERR_NOT_IMPL`` (pending future implementation).
-            other - returns ``EQ_ERR_NOT_IMPL``.
+        Args:
+            mode: Solver mode. ``1`` (default) triggers a real EQDSK
+                load via ``equnit::eq_load`` using the current
+                ``MODELG`` and ``KNAMEQ`` — this is currently the only
+                implemented mode. ``0`` is reserved for an
+                EQCALQ-style direct solve and currently returns
+                ``EQ_ERR_NOT_IMPL``. Any other value also returns
+                ``EQ_ERR_NOT_IMPL``.
         """
         if self._closed:
             raise EqlibError("run on closed Eq")
