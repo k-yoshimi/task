@@ -20,8 +20,33 @@ import weakref
 from typing import Optional
 
 from . import _ffi
-from .errors import WrxlibError, WrxlibStateError, raise_for_ierr
+from .errors import WrxlibError, WrxlibParamError, WrxlibStateError, raise_for_ierr
 from .state import WrxState
+
+
+_MAX_C_STRING_BYTES = 63              # name buffer is CHARACTER(LEN=64)
+
+
+def _encode_name(s: str, max_bytes: int = _MAX_C_STRING_BYTES) -> bytes:
+    """Encode a C string argument accepted by the WRX registry."""
+    if not isinstance(s, str):
+        raise WrxlibParamError(
+            f"WRX C string arguments must be str, got {type(s).__name__}"
+        )
+    try:
+        encoded = s.encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise WrxlibParamError(
+            f"WRX C string {s!r} contains non-ASCII characters"
+        ) from exc
+    if b"\x00" in encoded:
+        raise WrxlibParamError(f"WRX C string {s!r} contains an embedded NUL byte")
+    if len(encoded) > max_bytes:
+        raise WrxlibParamError(
+            f"WRX C string {s!r} is {len(encoded)} bytes; "
+            f"maximum is {max_bytes}"
+        )
+    return encoded
 
 
 class Wrxlib:
@@ -111,7 +136,7 @@ class Wrxlib:
         if self._closed:
             raise WrxlibError("set_param on closed Wrxlib")
         ierr = self._lib.wrx_set_param(
-            name.encode("ascii"), ctypes.c_double(float(value))
+            _encode_name(name), ctypes.c_double(float(value))
         )
         raise_for_ierr(f"wrx_set_param('{name}', {value})", ierr)
 

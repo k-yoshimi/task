@@ -24,11 +24,19 @@ from .errors import TrlibError, TrlibParamError, TrlibStateError, raise_for_ierr
 from .state import TrState
 
 
-_MAX_C_STRING_BYTES = 63
+_MAX_C_STRING_BYTES = 63              # name buffer is CHARACTER(LEN=64)
+_MAX_C_STRING_VALUE_BYTES = 128       # value buffer is CHARACTER(LEN=128);
+                                       # tr_api_set_param_str DO loop reads
+                                       # up to LEN(fvalue) chars so full 128 OK
 
 
-def _encode_name(s: str) -> bytes:
-    """Encode a C string argument accepted by the TR registry."""
+def _encode_name(s: str, max_bytes: int = _MAX_C_STRING_BYTES) -> bytes:
+    """Encode a C string argument accepted by the TR registry.
+
+    ``max_bytes`` is the Fortran buffer size minus 1 (for NUL). Names
+    use the default; values passed to ``set_param_str`` use
+    ``_MAX_C_STRING_VALUE_BYTES``.
+    """
     if not isinstance(s, str):
         raise TrlibParamError(
             f"TR C string arguments must be str, got {type(s).__name__}"
@@ -41,10 +49,10 @@ def _encode_name(s: str) -> bytes:
         ) from exc
     if b"\x00" in encoded:
         raise TrlibParamError(f"TR C string {s!r} contains an embedded NUL byte")
-    if len(encoded) > _MAX_C_STRING_BYTES:
+    if len(encoded) > max_bytes:
         raise TrlibParamError(
             f"TR C string {s!r} is {len(encoded)} bytes; "
-            f"maximum is {_MAX_C_STRING_BYTES}"
+            f"maximum is {max_bytes}"
         )
     return encoded
 
@@ -156,7 +164,10 @@ class Trlib:
                 "rebuild the shared library after the L-6 registry "
                 "extension PR."
             ) from exc
-        ierr = fn(_encode_name(name), _encode_name(value))
+        ierr = fn(
+            _encode_name(name),
+            _encode_name(value, _MAX_C_STRING_VALUE_BYTES),
+        )
         raise_for_ierr(f"tr_set_param_str('{name}', '{value}')", ierr)
 
     def set_params(self, **kwargs: float) -> None:

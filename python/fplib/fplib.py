@@ -31,11 +31,19 @@ from .errors import (
 from .state import FpState
 
 
-_MAX_C_STRING_BYTES = 63
+_MAX_C_STRING_BYTES = 63              # name buffer is CHARACTER(LEN=64)
+_MAX_C_STRING_VALUE_BYTES = 128       # value buffer is CHARACTER(LEN=128);
+                                       # fp_api_set_param_str DO loop reads
+                                       # up to LEN(fvalue) chars so full 128 OK
 
 
-def _encode_name(s: str) -> bytes:
-    """Encode a C string argument accepted by the FP registry."""
+def _encode_name(s: str, max_bytes: int = _MAX_C_STRING_BYTES) -> bytes:
+    """Encode a C string argument accepted by the FP registry.
+
+    ``max_bytes`` is the Fortran buffer size minus 1 (for NUL). Names
+    use the default; values passed to ``set_param_str`` use
+    ``_MAX_C_STRING_VALUE_BYTES``.
+    """
     if not isinstance(s, str):
         raise FplibInvalidParamError(
             f"FP C string arguments must be str, got {type(s).__name__}"
@@ -50,10 +58,10 @@ def _encode_name(s: str) -> bytes:
         raise FplibInvalidParamError(
             f"FP C string {s!r} contains an embedded NUL byte"
         )
-    if len(encoded) > _MAX_C_STRING_BYTES:
+    if len(encoded) > max_bytes:
         raise FplibInvalidParamError(
             f"FP C string {s!r} is {len(encoded)} bytes; "
-            f"maximum is {_MAX_C_STRING_BYTES}"
+            f"maximum is {max_bytes}"
         )
     return encoded
 
@@ -160,13 +168,16 @@ class Fplib:
         """
         if self._closed:
             raise FplibError("set_param_str on closed Fplib")
-        if not hasattr(self._lib, "fp_set_param_str"):
+        try:
+            fn = self._lib.fp_set_param_str
+        except AttributeError as exc:
             raise FplibError(
                 "fp_set_param_str not available in libfpapi.so "
                 "(rebuild fp/libfpapi.so to pick up the symbol)"
-            )
-        rc = self._lib.fp_set_param_str(
-            _encode_name(name), _encode_name(value)
+            ) from exc
+        rc = fn(
+            _encode_name(name),
+            _encode_name(value, _MAX_C_STRING_VALUE_BYTES),
         )
         raise_for_rc(f"fp_set_param_str('{name}', '{value}')", rc)
 

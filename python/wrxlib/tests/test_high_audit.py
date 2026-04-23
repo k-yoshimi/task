@@ -13,7 +13,7 @@ if str(PYTHON_ROOT) not in sys.path:
 import wrxlib.wrxlib as wrxlib_module  # noqa: E402
 from wrxlib import WrxState, Wrxlib  # noqa: E402
 from wrxlib import _ffi  # noqa: E402
-from wrxlib.errors import WrxlibStateError  # noqa: E402
+from wrxlib.errors import WrxlibParamError, WrxlibStateError  # noqa: E402
 
 
 class FakeWrxLib:
@@ -21,6 +21,9 @@ class FakeWrxLib:
         return 0
 
     def wrx_finalize(self) -> int:
+        return 0
+
+    def wrx_set_param(self, name, value) -> int:
         return 0
 
 
@@ -53,3 +56,23 @@ def test_from_c_oversized_dimension_raises():
     c.nraymax = _ffi.WRX_MAX_NRAYMAX + 1
     with pytest.raises(WrxlibStateError, match="nraymax.*WRX_MAX_NRAYMAX"):
         WrxState.from_c(c)
+
+
+# Issue #148 review H-1: set_param name must go through _encode_name
+# even though wrxlib has no set_param_str.
+@pytest.mark.parametrize("bad", ["bad\x00name", "é", "x" * 64])
+def test_set_param_rejects_bad_c_strings(fake_lib, bad):
+    wrx = Wrxlib()
+    try:
+        with pytest.raises(WrxlibParamError):
+            wrx.set_param(bad, 1.0)
+    finally:
+        wrx.close()
+
+
+def test_set_param_accepts_normal_ascii(fake_lib):
+    wrx = Wrxlib()
+    try:
+        wrx.set_param("RR", 6.2)
+    finally:
+        wrx.close()

@@ -45,11 +45,26 @@ from .state import TotState
 
 # Type alias for the items accepted by ``set_params``.
 ParamItem = Union[Mapping[str, Any], Iterable[Tuple[str, Any]]]
-_MAX_C_STRING_BYTES = 63
+_MAX_C_STRING_BYTES = 63              # intentional: tot_api_set_param name
+                                       # buffer is CHARACTER(LEN=128), but
+                                       # we share the 63-byte name cap with
+                                       # the sibling packages (eq/tr/fp) so
+                                       # the same param-name conventions
+                                       # apply across modules.
+_MAX_C_STRING_VALUE_BYTES = 256       # value buffer is CHARACTER(LEN=256);
+                                       # tot_api_set_param_str DO loop reads
+                                       # up to LEN(fvalue) chars so full 256
+                                       # OK (accommodates long KNAMEQ paths)
 
 
-def _encode_name(s: str) -> bytes:
-    """Encode a C string argument accepted by the TOT registry."""
+def _encode_name(s: str, max_bytes: int = _MAX_C_STRING_BYTES) -> bytes:
+    """Encode a C string argument accepted by the TOT registry.
+
+    ``max_bytes`` is the Fortran buffer size minus 1 (for NUL). Names
+    use the default; values passed to ``set_param_str`` use
+    ``_MAX_C_STRING_VALUE_BYTES`` (e.g. file-path values up to 255
+    bytes fit the 256-byte Fortran buffer).
+    """
     if not isinstance(s, str):
         raise TotlibInvalidParamError(
             f"TOT C string arguments must be str, got {type(s).__name__}"
@@ -64,10 +79,10 @@ def _encode_name(s: str) -> bytes:
         raise TotlibInvalidParamError(
             f"TOT C string {s!r} contains an embedded NUL byte"
         )
-    if len(encoded) > _MAX_C_STRING_BYTES:
+    if len(encoded) > max_bytes:
         raise TotlibInvalidParamError(
             f"TOT C string {s!r} is {len(encoded)} bytes; "
-            f"maximum is {_MAX_C_STRING_BYTES}"
+            f"maximum is {max_bytes}"
         )
     return encoded
 
@@ -231,7 +246,7 @@ class Tot:
         if self._closed:
             raise TotlibError("set_param_str on closed Tot")
         name_b = _encode_name(name)
-        value_b = _encode_name(value)
+        value_b = _encode_name(value, _MAX_C_STRING_VALUE_BYTES)
         self._validate_namespaced_name(name)
         try:
             fn = self._lib.tot_set_param_str

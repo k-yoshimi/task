@@ -65,15 +65,23 @@ def test_from_c_oversized_dimension_raises():
         EqState.from_c(c)
 
 
-@pytest.mark.parametrize("bad", ["bad\x00name", "x" * 64, "é"])
-@pytest.mark.parametrize("field", ["name", "value"])
-def test_set_param_str_rejects_bad_c_strings(fake_lib, field, bad):
+@pytest.mark.parametrize("bad", ["bad\x00name", "é", "x" * 64])
+def test_set_param_str_rejects_bad_name(fake_lib, bad):
     eq = Eq()
     try:
-        name = bad if field == "name" else "KNAMEQ"
-        value = bad if field == "value" else "eqdata"
         with pytest.raises(EqlibInvalidParamError):
-            eq.set_param_str(name, value)
+            eq.set_param_str(bad, "eqdata")
+    finally:
+        eq.close()
+
+
+# Value buffer is CHARACTER(LEN=80) -> 80-byte Python limit; 81 fails.
+@pytest.mark.parametrize("bad", ["bad\x00value", "é", "x" * 81])
+def test_set_param_str_rejects_bad_value(fake_lib, bad):
+    eq = Eq()
+    try:
+        with pytest.raises(EqlibInvalidParamError):
+            eq.set_param_str("KNAMEQ", bad)
     finally:
         eq.close()
 
@@ -85,3 +93,16 @@ def test_set_param_str_accepts_normal_ascii(fake_lib):
     finally:
         eq.close()
     assert fake_lib.string_calls == [(b"KNAMEQ", b"eqdata")]
+
+
+def test_set_param_str_accepts_long_value(fake_lib):
+    """Regression for the #148 review P2: value buffer is 80 bytes, so
+    values of exactly 80 bytes must be accepted (they were rejected
+    when the 63-byte name limit was applied to values too)."""
+    long_value = "x" * 80
+    eq = Eq()
+    try:
+        eq.set_param_str("KNAMEQ", long_value)
+    finally:
+        eq.close()
+    assert fake_lib.string_calls == [(b"KNAMEQ", long_value.encode())]

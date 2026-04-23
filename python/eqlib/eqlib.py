@@ -34,11 +34,21 @@ from .errors import (
 from .state import EqState
 
 
-_MAX_C_STRING_BYTES = 63
+_MAX_C_STRING_BYTES = 63              # name buffer is CHARACTER(LEN=64);
+                                       # 63 leaves 1 conservative byte
+_MAX_C_STRING_VALUE_BYTES = 80        # value buffer is CHARACTER(LEN=80);
+                                       # eq_api_set_param_str reads up to
+                                       # LEN(fvalue) chars so full 80 is OK
 
 
-def _encode_name(s: str) -> bytes:
-    """Encode a C string argument accepted by the EQ registry."""
+def _encode_name(s: str, max_bytes: int = _MAX_C_STRING_BYTES) -> bytes:
+    """Encode a C string argument accepted by the EQ registry.
+
+    ``max_bytes`` is the Fortran buffer size minus 1 (for NUL). Names
+    use the default (``_MAX_C_STRING_BYTES``); values passed to
+    ``set_param_str`` use ``_MAX_C_STRING_VALUE_BYTES`` (e.g. KNAMEQ
+    file paths can be up to 79 bytes).
+    """
     if not isinstance(s, str):
         raise EqlibInvalidParamError(
             f"EQ C string arguments must be str, got {type(s).__name__}"
@@ -53,10 +63,10 @@ def _encode_name(s: str) -> bytes:
         raise EqlibInvalidParamError(
             f"EQ C string {s!r} contains an embedded NUL byte"
         )
-    if len(encoded) > _MAX_C_STRING_BYTES:
+    if len(encoded) > max_bytes:
         raise EqlibInvalidParamError(
             f"EQ C string {s!r} is {len(encoded)} bytes; "
-            f"maximum is {_MAX_C_STRING_BYTES}"
+            f"maximum is {max_bytes}"
         )
     return encoded
 
@@ -211,7 +221,10 @@ class Eq:
                 "libeqapi.so does not export eq_set_param_str; "
                 "rebuild the shared library after the L-3 registry PR."
             ) from exc
-        rc = fn(_encode_name(name), _encode_name(value))
+        rc = fn(
+            _encode_name(name),
+            _encode_name(value, _MAX_C_STRING_VALUE_BYTES),
+        )
         raise_for_rc(f"eq_set_param_str('{name}', '{value}')", rc)
 
     def set_params(self, *args: Mapping[str, Any], **kwargs: Any) -> None:

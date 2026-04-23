@@ -65,15 +65,23 @@ def test_from_c_oversized_dimension_raises():
         TotState.from_c(c)
 
 
-@pytest.mark.parametrize("bad", ["bad\x00name", "x" * 64, "é"])
-@pytest.mark.parametrize("field", ["name", "value"])
-def test_set_param_str_rejects_bad_c_strings(fake_lib, field, bad):
+@pytest.mark.parametrize("bad", ["bad\x00name", "é", "x" * 64])
+def test_set_param_str_rejects_bad_name(fake_lib, bad):
     tot = Tot()
     try:
-        name = bad if field == "name" else "eq:KNAMEQ"
-        value = bad if field == "value" else "eqdata"
         with pytest.raises(TotlibInvalidParamError):
-            tot.set_param_str(name, value)
+            tot.set_param_str(bad, "eqdata")
+    finally:
+        tot.close()
+
+
+# Value buffer is CHARACTER(LEN=256) -> 256-byte Python limit; 257 fails.
+@pytest.mark.parametrize("bad", ["bad\x00value", "é", "x" * 257])
+def test_set_param_str_rejects_bad_value(fake_lib, bad):
+    tot = Tot()
+    try:
+        with pytest.raises(TotlibInvalidParamError):
+            tot.set_param_str("eq:KNAMEQ", bad)
     finally:
         tot.close()
 
@@ -85,3 +93,15 @@ def test_set_param_str_accepts_normal_ascii(fake_lib):
     finally:
         tot.close()
     assert fake_lib.string_calls == [(b"eq:KNAMEQ", b"eqdata")]
+
+
+def test_set_param_str_accepts_long_value(fake_lib):
+    """Regression for #148 review P2: value buffer is 256 bytes;
+    values of exactly 256 bytes must be accepted (KNAMEQ paths etc.)."""
+    long_value = "x" * 256
+    tot = Tot()
+    try:
+        tot.set_param_str("eq:KNAMEQ", long_value)
+    finally:
+        tot.close()
+    assert fake_lib.string_calls == [(b"eq:KNAMEQ", long_value.encode())]
