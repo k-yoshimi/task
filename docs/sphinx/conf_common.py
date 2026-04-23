@@ -83,6 +83,61 @@ autoclass_content = "both"   # merge class + __init__ docstrings
 # block docs them, and autoclass ``:members:`` would register them again).
 napoleon_use_ivar = True
 
+# -- LaTeX / PDF output ------------------------------------------------------
+# Run `make pdf-en` or `make pdf-ja` to build; see Makefile for the xelatex
+# pipeline. Requires: xelatex + Noto Serif CJK JP fonts.
+#   Apt:     texlive-xetex texlive-lang-japanese fonts-noto-cjk
+#   TinyTeX: tlmgr install cmap fontspec polyglossia collection-latexrecommended \
+#                         fncychap tabulary titlesec varwidth wrapfig \
+#                         capt-of eqparbox needspace
+#   (`fontspec` is not part of collection-latexrecommended; it is required
+#   by the `fontpkg` block below.)
+latex_engine = "xelatex"
+
+# Sphinx picks `jsbook` as the document class when language='ja', which
+# requires (u)pLaTeX and is incompatible with xelatex. Force the English
+# `report` class so xelatex + xeCJK can render the Japanese build too.
+latex_docclass = {
+    "howto": "article",
+    "manual": "report",
+}
+
+latex_elements = {
+    "papersize": "a4paper",
+    "pointsize": "11pt",
+    # Override Sphinx's default font pins (which select FreeSerif etc. that
+    # aren't on minimal TeX Live installs). `fontpkg` is injected BEFORE
+    # Sphinx's own \setmainfont defaults, so we win.
+    "fontpkg": r"""
+\usepackage{fontspec}
+\setmainfont{DejaVu Serif}
+\setsansfont{DejaVu Sans}
+\setmonofont{DejaVu Sans Mono}
+""",
+    # Force polyglossia to treat English as the main language regardless of
+    # the Sphinx-level `language` setting. Otherwise the JA build asks
+    # polyglossia for Japanese, which then insists on a CJK-capable main
+    # roman font. Let a per-language preamble (in ja/conf.py) add xeCJK
+    # when CJK rendering is actually required — that way `make pdf-en`
+    # works without CJK fonts installed.
+    "babel": r"""
+\usepackage{polyglossia}
+\setdefaultlanguage{english}
+""",
+    # `preamble` is appended per-language in en/conf.py and ja/conf.py.
+    "preamble": "",
+    # fncychap's Bjornstrup style requires pzc (Zapf Chancery) metrics that
+    # aren't in minimal TeX installs; empty string lets Sphinx fall back to
+    # its default chapter style.
+    "fncychap": "",
+    "figure_align": "H",
+}
+
+latex_documents = [
+    ("index", "task_manual.tex", "TASK Plasma Library Manual",
+     author, "manual"),
+]
+
 # Intersphinx: link out to Python + numpy.
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),

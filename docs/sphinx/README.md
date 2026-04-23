@@ -36,6 +36,8 @@ gettext-driven flow later without re-architecting the project.
 
 ## Building
 
+### HTML
+
 ```bash
 pip install -r docs/sphinx/requirements.txt     # one-time
 cd docs/sphinx
@@ -45,6 +47,40 @@ make ja           # only the Japanese tree
 make linkcheck-en
 make clean
 ```
+
+### PDF (xelatex)
+
+```bash
+cd docs/sphinx
+make pdf-en       # -> _build/latex-en/task_manual.pdf
+make pdf-ja       # -> _build/latex-ja/task_manual.pdf
+make pdf          # both
+```
+
+The PDF path needs xelatex plus Japanese CJK fonts. On Debian / Ubuntu:
+
+```bash
+sudo apt-get install texlive-xetex texlive-lang-japanese \
+    texlive-latex-extra fonts-noto-cjk fonts-dejavu-core
+```
+
+On TinyTeX (the minimal distribution some users have):
+
+```bash
+tlmgr install cmap fontspec polyglossia collection-latexrecommended \
+              fncychap tabulary titlesec varwidth wrapfig \
+              capt-of eqparbox needspace
+```
+
+`fontspec` is **not** bundled with `collection-latexrecommended`, even
+though Sphinx's xelatex output requires it via our
+`latex_elements["fontpkg"]` block — list it explicitly here.
+
+Both builds drive xelatex twice (TOC and cross-refs) then convert the
+`.xdv` to PDF via `xdvipdfmx`.  The English build uses DejaVu Serif /
+DejaVu Sans Mono; the Japanese build additionally loads `xeCJK` with
+Noto Serif CJK JP, and polyglossia is clamped to English so it does
+not clash with `xeCJK` on the main roman font.
 
 The default `SPHINXOPTS = -W --keep-going` treats warnings as errors
 (CI-strict). Nitpicky mode (`-n`) is opt-in — many existing wrapper
