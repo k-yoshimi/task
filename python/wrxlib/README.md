@@ -87,17 +87,16 @@ Three companion fixes landed alongside the gate:
   early-return so a `wrx_finalize → wrx_init` cycle re-allocates rather
   than dereferencing freed pointers.
 
-Tests should no longer set `WRX_RUN_OK=1`; the gate is now a stale
-no-op. The previous `WRX_RUN_OK` env variable is still honoured by
-test fixtures for backwards compatibility but produces no behavioural
-difference.
+Tests need not explicitly set `WRX_RUN_OK=1`; PR #166 made `1` the
+default for the test-side gate (`os.environ.get("WRX_RUN_OK", "1")
+!= "0"`). The env var only affects the pytest suite — the library
+itself has no runtime gate.
 
 ## Quick start
 
 ```python
 from wrxlib import Wrxlib
 
-# WARNING: .run() requires WRX_RUN_OK=1 build (see above).
 with Wrxlib() as wrx:
     wrx.set_params(MODELG=2, RR=6.2, RA=2.0, BB=5.3,
                    NSMAX=2, NRAYMAX=1, NSTPMAX=2000,
@@ -123,17 +122,16 @@ print(f"per-species peak (rs) = {state.pwrmax_rs_nsa}")
 See `examples/` for runnable scripts:
 
 - `examples/quickstart.py` — smallest complete run (mirrors
-  `wrx_iter01`); requires `WRX_RUN_OK=1` for the actual `.run()` call.
+  `wrx_iter01`).
 - `examples/parameter_sweep.py` — 3×3 RFIN × ANGPIN grid; each cell
   re-opens a fresh `Wrxlib` context so the init/finalize cycle is
-  exercised 9 times. Requires `WRX_RUN_OK=1`.
+  exercised 9 times.
 - `examples/state_dump.py` — single run, full `WrxState.to_dict()` as
-  JSON. Requires `WRX_RUN_OK=1` for the run path; `--dry-run` works
-  without the gate.
+  JSON.
 
 All three accept `--dry-run` to validate argument parsing and import
-wiring without invoking the FFI (useful for CI on builds that have
-not yet patched the `grd1d` linkage).
+wiring without invoking the FFI (useful for smoke runs without the
+shared library present).
 
 ## API reference
 
@@ -161,9 +159,12 @@ Execute `wrx_setup → wrx_exec`. `nray_request > 0` overrides the
 namelist `NRAYMAX` before allocation; `nray_request <= 0` keeps
 whatever NRAYMAX is currently set.
 
-**Warning:** may segfault inside `wrcalpwr → libgrf::grd1d` on the
-shared-library build; see "WRX_RUN_OK gate" above. Tests gating
-behind `WRX_RUN_OK=1` is the recommended practice.
+The historical `libgrf::grd1d` SEGV was retired by PR #123
+(`WRX_NO_GRAPHICS=1` setenv inside `wrx_api_init` suppresses the
+libgrf path). The library itself has no runtime gate — `.run()`
+dispatches unconditionally. The test-side `WRX_RUN_OK` guard was
+flipped default-on by PR #166; set `WRX_RUN_OK=0` only to skip
+`.run()`-exercising tests when the shared library is absent.
 
 ### `Wrxlib.get_state() -> WrxState`
 
@@ -250,7 +251,7 @@ Spec-style aliases (`WrxLibInvalidParam`, `WrxLibNotInitialized`,
 | CLI step | `wrxlib` equivalent |
 |---|---|
 | edit `wrxparm` namelist | `wrx.set_param(...)` / `wrx.set_params(...)` |
-| menu option `R` (run) | `wrx.run(nray_request=...)` (gated on `WRX_RUN_OK`) |
+| menu option `R` (run) | `wrx.run(nray_request=...)` |
 | inspect output file | `wrx.get_state()` / `state.to_dict()` |
 | menu `Q` (quit) | exit context manager / `wrx.close()` |
 | batch parameter sweep | Python `for` loop (see `examples/parameter_sweep.py`) |
@@ -260,12 +261,14 @@ interactive menu — those live in `wrx/wrx` only.
 
 ## Known limitations
 
-- **`wrx_run` may segfault on the shared build.** The L-4
-  `libwrxapi.so` retains a reference to `libgrf::grd1d` through
-  `wrcalpwr.f90` that cannot be fully resolved through the regular
-  `.so` symbol graph. Tests gate `.run()` behind `WRX_RUN_OK=1`. See
-  the prominent "WRX_RUN_OK gate" section above and
-  [`docs/wrx-library/architecture.md`](../../docs/wrx-library/architecture.md).
+- **`wrx_run` SEGV in `libgrf::grd1d` (historical).** Earlier
+  `libwrxapi.so` builds could SEGV inside `wrcalpwr → libgrf::grd1d`;
+  the root cause was fixed in 2026-04-20 by gating the graphics block
+  behind a `WRX_NO_GRAPHICS` env var that `wrx_api_init` sets on
+  library startup. See the "WRX_RUN_OK gate (historical — now
+  retired)" section above and
+  [`docs/wrx-library/architecture.md`](../../docs/wrx-library/architecture.md)
+  for the full analysis. `.run()` is default-on as of PR #166.
 - **Single instance per process.** WRX backend uses COMMON blocks
   plus module-scope allocation flags. Two concurrent `Wrxlib()`
   instances share state; the second `wrx_init` resets globals. For
@@ -290,8 +293,10 @@ python3 -m unittest discover -v
 
 Tests that require `libwrxapi.so` are skipped when the shared library
 is absent; pure-Python tests (ctypes layout, error wiring,
-`WrxState.from_c`, `to_dict` shape) always run. Tests that require
-`.run()` are skipped unless `WRX_RUN_OK=1` is set.
+`WrxState.from_c`, `to_dict` shape) always run. The test-side
+`WRX_RUN_OK` gate on `.run()`-exercising tests was flipped default-on
+by PR #166 (`os.environ.get("WRX_RUN_OK", "1") != "0"`). The library
+itself has no such gate — `Wrxlib.run()` dispatches unconditionally.
 
 The Phase L-6 4-layer suite is wired into
 `test_run/test_definitions.conf`:
@@ -300,10 +305,9 @@ The Phase L-6 4-layer suite is wired into
   includes `test_smoke`, `test_param`, `test_run`, `test_run_so`,
   `test_negative`)
 - `wrxlib_ffi`, `wrxlib_wrapper` — Layer 3 Python wrapper
-- `wrxlib_equivalence` — Layer 1 vs Phase 0 baselines (tol `1e-10`,
-  `WRX_RUN_OK` gated) for `wrx_iter01`
-- `wrxlib_sweep` — Layer 4 3×3 RFIN × ANGPIN smoke (`WRX_RUN_OK`
-  gated)
+- `wrxlib_equivalence` — Layer 1 vs Phase 0 baselines (tol `1e-10`)
+  for `wrx_iter01`
+- `wrxlib_sweep` — Layer 4 3×3 RFIN × ANGPIN smoke
 
 ## Independence from `wrlib`
 

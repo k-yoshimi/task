@@ -7,14 +7,14 @@ Mirrors the Layer-4 ``wrxlib_sweep`` regression smoke
 case starts from a fresh ``wrx_init`` state and the init/finalize
 cycle is exercised 9 times back to back.
 
-**Requires WRX_RUN_OK=1.** The L-4 ``libwrxapi.so`` build pulls in
-``libgrf::grd1d`` via ``wrcalpwr``; this segfaults from the shared
-library unless explicitly fixed in your build. The example mirrors
-the test-suite gate exactly. Use ``--dry-run`` to skip the FFI cycle.
+``Wrxlib.run()`` has no env gate at the library level; the
+historical ``WRX_RUN_OK=1`` requirement applied only to the pytest
+suite and was flipped default-on by PR #166 (root-cause SEGV fixed
+in PR #123). Use ``--dry-run`` to skip the FFI cycle.
 
 Run from the repository root::
 
-    PYTHONPATH=python WRX_RUN_OK=1 \\
+    PYTHONPATH=python \\
         python3 python/wrxlib/examples/parameter_sweep.py
 """
 from __future__ import annotations
@@ -89,8 +89,7 @@ def _sweep(rf_vals: Sequence[float], ang_vals: Sequence[float]
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true",
-                        help="print the grid only; skip FFI calls "
-                             "(safe to run without WRX_RUN_OK=1)")
+                        help="print the grid only; skip FFI calls")
     args = parser.parse_args(argv)
 
     rf_vals = (140.0e3, 170.0e3, 200.0e3)   # MHz (EC frequency)
@@ -98,8 +97,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.dry_run:
         print(f"[dry-run] grid: RFIN={list(rf_vals)} x ANGPIN={list(ang_vals)}")
-        print("[dry-run] note: actual run requires WRX_RUN_OK=1; "
-              "see python/wrxlib/README.md")
         return 0
 
     rows = _sweep(rf_vals, ang_vals)

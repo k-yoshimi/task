@@ -6,13 +6,15 @@ the same ``rays`` / ``profile_rs`` / ``profile_rl`` shape used by
 ``wrlib.state``; here the profile axis is per-species rather than
 per-radius).
 
-Requires ``WRX_RUN_OK=1`` for the ``.run()`` cycle (libgrf::grd1d
-limitation; see ``python/wrxlib/README.md``). ``--dry-run`` validates
-argument parsing without invoking the FFI.
+``Wrxlib.run()`` has no env gate at the library level; the
+historical ``WRX_RUN_OK=1`` requirement applied only to the pytest
+suite and was flipped default-on by PR #166 (root-cause SEGV fixed
+in PR #123). ``--dry-run`` validates argument parsing without
+invoking the FFI.
 
 Run from the repository root::
 
-    PYTHONPATH=python WRX_RUN_OK=1 \\
+    PYTHONPATH=python \\
         python3 python/wrxlib/examples/state_dump.py \\
         --out /tmp/wrxlib_state.json
 """
@@ -67,8 +69,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--indent", type=int, default=2,
                         help="JSON indent (default: 2)")
     parser.add_argument("--dry-run", action="store_true",
-                        help="validate argument parsing only; skip FFI calls "
-                             "(safe to run without WRX_RUN_OK=1)")
+                        help="validate argument parsing only; skip FFI calls")
     args = parser.parse_args(argv)
 
     if args.dry_run:

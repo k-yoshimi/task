@@ -4,7 +4,7 @@
 
 本ドキュメントは MCP や WRX が初めての方向けに書かれています。手順に沿って進めていけば、Claude のチャット欄で「WRX を初期化して、現在の状態を教えて」とお願いするだけで、WRX を動かして結果を受け取れる状態になります。
 
-本サーバは姉妹パッケージ `tr_mcp` の設計をそのまま踏襲しており、ツール名・挙動・登録方法はほぼ共通です。大きな違いは **(A) パラメータレジストリが WRX 専用**、**(B) 状態構造体 (`get_state`) の形が WRX 専用**、**(C) `wrx_run` に `WRX_RUN_OK=1` ゲートが必須** の 3 点です。
+本サーバは姉妹パッケージ `tr_mcp` の設計をそのまま踏襲しており、ツール名・挙動・登録方法はほぼ共通です。大きな違いは **(A) パラメータレジストリが WRX 専用**、**(B) 状態構造体 (`get_state`) の形が WRX 専用**、**(C) `wrx_run` / `run_and_get_state` が `WRX_RUN_OK=1` 明示 opt-in ゲートで保護されている（歴史的には SEGV 対策、現在は defence-in-depth）** の 3 点です。
 
 ---
 
@@ -17,7 +17,7 @@
 5. [Claude Desktop / Claude Code への登録](#5-claude-desktop--claude-code-への登録)
 6. [使い方の例](#6-使い方の例)
 7. [提供ツール一覧](#7-提供ツール一覧)
-8. [重要: `WRX_RUN_OK` ゲートについて](#8-重要-wrx_run_ok-ゲートについて)
+8. [`WRX_RUN_OK` ゲートについて](#8-wrx_run_ok-ゲートについて)
 9. [FAQ / トラブルシューティング](#9-faq--トラブルシューティング)
 10. [参考資料](#10-参考資料)
 
@@ -239,13 +239,13 @@ WRX で設定できるパラメータのうち、ray_init グループのもの�
 
 LLM は `describe_parameters` を呼び、`group == "ray_init"` を抽出して返してくれます。
 
-### 6.5. 実際に実行する (WRX_RUN_OK=1 が必要)
+### 6.5. 実際に実行する (`WRX_RUN_OK=1` で opt-in)
 
 ```
 RR=6.2, BB=5.3, NRAYMAX=1 に設定して run して、pwr_tot を教えて。
 ```
 
-この呼び出しには **`WRX_RUN_OK=1` が必須** です。詳しくは次節を参照してください。
+`run` / `run_and_get_state` 系のツールは **環境変数 `WRX_RUN_OK=1` を明示的に設定することで opt-in** する方式になっています。歴史的には `wrx_run` が dlopen 経由で SEGV する問題の防衛ゲートでしたが、根本原因は PR #123 (`WRX_NO_GRAPHICS` 自動設定) および PR #163 (`EQFINI` rearm) で既に解消済みです。現在はレイトレの実行コストを LLM に誤って消費させない保険として残しています。詳しくは次節を参照してください。
 
 ## 7. 提供ツール一覧
 
@@ -254,28 +254,38 @@ RR=6.2, BB=5.3, NRAYMAX=1 に設定して run して、pwr_tot を教えて。
 | `init` | ライブラリ初期化 | なし | |
 | `set_param` | 単一パラメータ設定 | `name`, `value` (配列要素は `NAME[i]`) | |
 | `set_params` | まとめて設定 (scalar / list / dict) | `params` | 文字列パラメータは WRX には無し |
-| `run` | レイトレ実行 | `nray_request` (default=0) | **`WRX_RUN_OK=1` 必須** |
+| `run` | レイトレ実行 | `nray_request` (default=0) | **`WRX_RUN_OK=1` opt-in** (8 節参照) |
 | `get_state` | 現在の状態取得 | なし | |
 | `finalize` | リソース解放 | なし | |
 | `describe_parameters` | パラメータ一覧・型・説明 | なし | |
 | `describe_state_schema` | `get_state` の JSON schema | なし | |
-| `run_and_get_state` | init + set + run + get_state を一括 | `params`, `nray_request` | **`WRX_RUN_OK=1` 必須** |
+| `run_and_get_state` | init + set + run + get_state を一括 | `params`, `nray_request` | **`WRX_RUN_OK=1` opt-in** (8 節参照) |
 
-## 8. 重要: `WRX_RUN_OK` ゲートについて
+## 8. `WRX_RUN_OK` ゲートについて
 
-WRX の Phase L-4 build (`wrx/libwrxapi.so`) には、`wrcalpwr.f90` が `libgrf::grd1d` を USE している関係で **`dlopen` 経由で `wrx_run` を呼ぶと segfault する可能性がある** という既知の問題があります (詳細は `python/wrxlib/README.md` の "Known limitation: wrx_run in the shared build" を参照)。
-
-MCP サーバをクラッシュさせないために、`run` と `run_and_get_state` は **環境変数 `WRX_RUN_OK` が `"1"` に設定されていないと実行を拒否** します。
+`run` と `run_and_get_state` は **環境変数 `WRX_RUN_OK` が `"1"` に設定されていないと実行を拒否** します。
 
 ```text
 wrx_run is disabled because WRX_RUN_OK is not set to '1'. ...
 ```
 
-### 有効化して良いケース
+### 歴史的経緯 (resolved)
 
-- ローカルで `libwrxapi.so` を **グラフィクス依存を解消した (例: `libgrf.a` を静的リンクし直した) build に差し替えている**
-- 回帰テストで Layer-1 ドライバ (`wrx/wrxregress`) 経由で動作確認済み
-- segfault しても復帰可能な環境 (CI や使い捨てシェル) でしか使わない
+元々このゲートは、`wrx/libwrxapi.so` を `dlopen` 経由で呼ぶと `wrcalpwr.f90 → libgrf::grd1d` の関係で SEGV する既知問題から MCP サーバを守るためのものでした。ただしこの根本原因は既に次の 2 つの PR で解消しています:
+
+- **PR #123**: `wrx_api_init` が `setenv("WRX_NO_GRAPHICS", "1")` を発行することで、`libwrxapi.so` 起動時に `wrcalpwr` 内のグラフィクス経路が無効化される (SEGV 消滅)。
+- **PR #163**: `EQFINI` が `eq_bpsd_init_flag` などの SAVE 変数を rearm するので、`finalize → init` cycle での SEGV も解消。
+
+テスト側の `WRX_RUN_OK` ゲートも PR #166 で default-on (opt-out via `=0`) に flip されており、CI 上で `run` 経路は常時 exercise されています。
+
+### 現在の役割
+
+このゲートは **defence-in-depth / explicit opt-in** として残されています:
+
+- LLM が誤ってレイトレ計算を大量に発行することを防ぐ安全弁 (`init` / `set_param` / `get_state` 系は計算コスト数ミリ秒、`run` は数十秒〜数分)。
+- カスタムビルドや実験的ブランチで再発した SEGV を踏んだ場合にサーバごと巻き込まれにくくする保険。
+
+将来的に完全撤去する場合はこの節と `server.py` の gate コードを同時に削除する follow-up PR を想定しています (現時点では保留)。
 
 ### 有効化の方法
 
@@ -348,7 +358,7 @@ MCP サーバの標準エラー出力が LLM クライアントに渡ります�
 
 - MCP spec: <https://modelcontextprotocol.io/>
 - Python MCP SDK: <https://github.com/modelcontextprotocol/python-sdk>
-- wrxlib 本体の README: [`../../wrxlib/README.md`](../../wrxlib/README.md) (`WRX_RUN_OK` 詳細あり)
+- wrxlib 本体の README: [`../../wrxlib/README.md`](../../wrxlib/README.md) (ライブラリ層のテストゲート履歴あり)
 - tr_mcp リファレンス実装: [`../tr_mcp/README.md`](../tr_mcp/README.md)
 - MCP 共通設計計画: `docs/superpowers/plans/2026-04-18-module-mcp-servers.md`
 

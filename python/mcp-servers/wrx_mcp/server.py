@@ -15,13 +15,15 @@ Design notes
   JSON Schema advertised to the client automatically.
 * **Error mapping.** `wrxlib.WrxlibError` subclasses are re-raised as
   `ToolError` with a human-readable message.
-* **WRX_RUN_OK gate (CRITICAL).** The L-4 build of ``libwrxapi.so``
-  retains an unresolved reference to ``libgrf::grd1d`` via
-  ``wrcalpwr.f90``. Calling ``wrx_run`` through ``dlopen`` may
-  segfault. The ``run`` and ``run_and_get_state`` tools therefore
-  refuse to invoke ``wrx_run`` unless the caller has explicitly set
-  ``WRX_RUN_OK=1`` in the environment. See ``python/wrxlib/README.md``
-  "Known limitation: wrx_run in the shared build".
+* **WRX_RUN_OK gate (defence-in-depth / explicit opt-in).** The
+  historical ``libgrf::grd1d`` SEGV in ``wrcalpwr.f90`` was resolved
+  by PR #123 (``wrx_api_init`` sets ``WRX_NO_GRAPHICS=1``) and
+  PR #163 (``EQFINI`` rearm for reinit cycles). The ``run`` and
+  ``run_and_get_state`` tools still refuse to invoke ``wrx_run``
+  unless the caller has explicitly set ``WRX_RUN_OK=1`` — retained
+  as an explicit opt-in safeguard so an LLM does not accidentally
+  burn minutes on a ray-tracing run without the user authorising
+  it. See ``python/mcp-servers/wrx_mcp/README.md`` §8.
 
 This mirrors the ``tr_mcp`` reference implementation as closely as
 possible; the main wrx-specific additions are the WRX_RUN_OK gate and
@@ -391,20 +393,22 @@ def _wrap_wrxlib_error(exc: Exception) -> "ToolError":  # noqa: F821
 
 
 # =====================================================================
-# WRX_RUN_OK gate.
+# WRX_RUN_OK gate (defence-in-depth / explicit opt-in).
 #
-# libwrxapi.so (L-4 build) retains an unresolved libgrf::grd1d reference
-# via wrcalpwr.f90, so calling wrx_run through dlopen may segfault.
-# Gate wrx_run on WRX_RUN_OK=1 so an LLM gets a clear error instead of
-# crashing the whole server process.
+# Historically this gate blocked a libgrf::grd1d SEGV in wrcalpwr.f90
+# when wrx_run was called through dlopen. The root cause was fixed in
+# PR #123 (wrx_api_init sets WRX_NO_GRAPHICS=1 to suppress the libgrf
+# path) and PR #163 (EQFINI rearm for reinit cycles). The gate is
+# retained here as an explicit opt-in safeguard so an LLM does not
+# accidentally burn minutes on a ray-tracing run without the user
+# authorising it. See python/mcp-servers/wrx_mcp/README.md §8.
 # =====================================================================
 _WRX_RUN_GATE_MSG = (
     "wrx_run is disabled because WRX_RUN_OK is not set to '1'. "
-    "Calling wrx_run through the shared library can segfault due to an "
-    "unresolved libgrf::grd1d reference in wrcalpwr.f90 (see "
-    "python/wrxlib/README.md 'Known limitation: wrx_run in the shared "
-    "build'). Set WRX_RUN_OK=1 only if your local libwrxapi.so has been "
-    "patched to resolve grd1d."
+    "The historical libgrf::grd1d SEGV was resolved by PR #123 and "
+    "PR #163; this gate is retained as an explicit opt-in safeguard "
+    "so a ray-tracing run is not triggered accidentally. Set "
+    "WRX_RUN_OK=1 to enable; see wrx_mcp README §8."
 )
 
 
@@ -528,8 +532,9 @@ def build_server() -> Any:
             "*non-transactional* — on a partial failure, parameters "
             "applied before the failing key remain set. "
             "NOTE: `run` / `run_and_get_state` require WRX_RUN_OK=1 in "
-            "the environment because of a known libgrf::grd1d dlopen "
-            "issue; see README."
+            "the environment as an explicit opt-in safeguard (the "
+            "historical libgrf::grd1d SEGV was already fixed; see "
+            "README §8)."
         ),
     )
 
@@ -579,10 +584,11 @@ def build_server() -> Any:
         ``nray_request > 0`` overrides NRAYMAX set by the namelist /
         set_param. ``nray_request <= 0`` keeps the configured NRAYMAX.
 
-        NOTE: wrx_run through dlopen may segfault unless the build has
-        resolved the ``libgrf::grd1d`` dependency (see README). This
-        tool therefore refuses to proceed unless ``WRX_RUN_OK=1`` is
-        set in the server process environment.
+        NOTE: refuses to proceed unless ``WRX_RUN_OK=1`` is set in the
+        server process environment — an explicit opt-in safeguard so
+        an LLM does not accidentally trigger a ray-tracing run. The
+        historical ``libgrf::grd1d`` SEGV was resolved by PR #123 /
+        #163; see wrx_mcp README §8.
         """
         return handle_run(nray_request)
 
@@ -661,8 +667,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             "  WRXLIB_PATH  override path to libwrxapi.so\n"
             "  WRX_RUN_OK   set to '1' to allow the `run` / \n"
             "               `run_and_get_state` tools. Unset by default\n"
-            "               because libwrxapi.so may segfault inside\n"
-            "               wrx_run via libgrf::grd1d.\n"
+            "               as an explicit opt-in safeguard (the\n"
+            "               historical libgrf::grd1d SEGV is fixed;\n"
+            "               see wrx_mcp README §8).\n"
             "  PYTHONPATH   must include the repo's python/ directory\n"
             "               (set automatically when running in-tree)\n"
         )
