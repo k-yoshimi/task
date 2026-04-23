@@ -14,7 +14,7 @@ Example::
         tr.run(0)
         state = tr.get_state()
 """
-from .trlib import Trlib
+from .trlib import Trlib, TrDiagCode, TrDiagEntryPy
 from .state import TrState
 from .errors import (
     TrlibError,
@@ -34,6 +34,8 @@ from .errors import (
 
 __all__ = [
     "Trlib",
+    "TrDiagCode",
+    "TrDiagEntryPy",
     "TrState",
     "TrlibError",
     "TrlibInitError",

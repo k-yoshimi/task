@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import ctypes
 import weakref
-from typing import Optional
+from dataclasses import dataclass
+from enum import IntEnum
+from typing import List, Optional
 
 from . import _ffi
 from .errors import TrlibError, TrlibParamError, TrlibStateError, raise_for_ierr
@@ -55,6 +57,40 @@ def _encode_name(s: str, max_bytes: int = _MAX_C_STRING_BYTES) -> bytes:
             f"maximum is {max_bytes}"
         )
     return encoded
+
+
+class TrDiagCode(IntEnum):
+    """Diagnostic category codes returned by :py:meth:`Trlib.validate`.
+
+    Mirrors ``enum tr_diag_code`` in ``tr/tr_api.h``. Use the integer
+    value of the enum when comparing against :attr:`TrDiagEntryPy.code`,
+    or compare directly: ``entry.code == TrDiagCode.OUT_OF_RANGE``.
+    """
+
+    OUT_OF_RANGE           = _ffi.TR_DIAG_OUT_OF_RANGE
+    INCONSISTENT_PAIR      = _ffi.TR_DIAG_INCONSISTENT_PAIR
+    OUT_OF_RANGE_AFTER_DEP = _ffi.TR_DIAG_OUT_OF_RANGE_AFTER_DEP
+    FILE_MISSING           = _ffi.TR_DIAG_FILE_MISSING
+    MISSING_REQUIRED       = _ffi.TR_DIAG_MISSING_REQUIRED
+
+
+@dataclass(frozen=True)
+class TrDiagEntryPy:
+    """One pre-run validation diagnostic.
+
+    User-facing return type for :py:meth:`Trlib.validate`. Strings are
+    decoded from the underlying CHARACTER arrays with trailing NUL
+    padding stripped — no ctypes objects leak through this dataclass.
+
+    Attributes:
+        param:   parameter name the diagnostic refers to (e.g. ``NSMAX``)
+        code:    diagnostic category (compare against :class:`TrDiagCode`)
+        message: human-readable description suitable for surfacing to UI
+    """
+
+    param: str
+    code: int
+    message: str
 
 
 class Trlib:
@@ -213,5 +249,85 @@ class Trlib:
         raise_for_ierr("tr_get_state", ierr)
         return TrState.from_c(c)
 
+    # --- validation (Issue #143) ---------------------------------------
+    def validate(self) -> List[TrDiagEntryPy]:
+        """Run pre-run cross-parameter validation.
 
-__all__ = ["Trlib"]
+        Returns the list of diagnostics produced by ``tr_validate``
+        (read-only against the current tr state). The recommended
+        workflow is::
+
+            tr.set_params(...)
+            diags = tr.validate()
+            if diags:
+                # surface / fix / re-validate, then run
+                ...
+            tr.run(...)
+
+        Return-code mapping (``tr_api_validate`` contract):
+
+        * ``TR_OK`` (0)            -> empty list (clean state)
+        * ``TR_ERR_INVALID`` (1)   -> non-empty list (the diagnostics
+          themselves are the payload; ``ierr == 1`` only signals
+          "diagnostics present" so callers do not need to inspect the
+          C-level return code)
+        * ``TR_ERR_NOT_INIT`` (2)  -> :class:`TrlibStateError`
+
+        Older builds without ``tr_validate`` raise :class:`TrlibError`
+        (rebuild via ``make -C tr libtrapi.so``). The method does not
+        modify any tr state.
+        """
+        if self._closed:
+            raise TrlibError("validate on closed Trlib")
+        try:
+            fn = self._lib.tr_validate
+        except AttributeError as exc:
+            raise TrlibError(
+                "libtrapi.so does not export tr_validate; "
+                "rebuild the shared library after the #143 PR."
+            ) from exc
+
+        cap = _ffi.TR_DIAG_DEFAULT_CAP
+        buf = (_ffi.TrDiagEntry * cap)()
+        ndiag = ctypes.c_int(0)
+        ierr = fn(buf, cap, ctypes.byref(ndiag))
+
+        # Contract: ierr==2 (NOT_INIT) is the only one that maps to an
+        # exception; ierr==0 and ierr==1 both return the list (empty /
+        # not).
+        if ierr == _ffi.TR_ERR_NOT_INIT:
+            raise TrlibStateError(f"tr_validate: ierr={ierr}")
+        if ierr not in (_ffi.TR_OK, _ffi.TR_ERR_INVALID):
+            # Defensive: future codes should not silently masquerade
+            # as success. Reuse the central ierr -> exception mapping.
+            raise_for_ierr("tr_validate", ierr)
+
+        n = int(ndiag.value)
+        # Fortran push_diag increments nlocal past diag_cap but skips
+        # the write (tr_api.f90), so ndiag_out can exceed cap. Clamp
+        # and warn so the caller knows results are truncated instead
+        # of IndexError-ing off the end of the ctypes buffer.
+        if n > cap:
+            import warnings
+            warnings.warn(
+                f"tr_validate produced {n} diagnostics but buffer "
+                f"capacity is {cap}; results are truncated. Increase "
+                f"trlib._ffi.TR_DIAG_DEFAULT_CAP.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            n = cap
+        out: List[TrDiagEntryPy] = []
+        for i in range(n):
+            entry = buf[i]
+            param = entry.param.decode("ascii", errors="replace").rstrip("\x00")
+            message = entry.msg.decode("ascii", errors="replace").rstrip("\x00")
+            out.append(TrDiagEntryPy(
+                param=param,
+                code=int(entry.code),
+                message=message,
+            ))
+        return out
+
+
+__all__ = ["Trlib", "TrDiagCode", "TrDiagEntryPy"]

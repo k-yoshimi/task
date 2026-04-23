@@ -18,10 +18,27 @@ MODULE tr_state
   USE, INTRINSIC :: ISO_C_BINDING
   IMPLICIT NONE
   PRIVATE
-  PUBLIC :: tr_state_c, TR_MAX_NRMAX, TR_MAX_NSMAX
+  PUBLIC :: tr_state_c, TR_MAX_NRMAX, TR_MAX_NSMAX, &
+            tr_diag_entry_c, &
+            TR_DIAG_PARAM_LEN, TR_DIAG_MSG_LEN, &
+            TR_DIAG_OUT_OF_RANGE, TR_DIAG_INCONSISTENT_PAIR, &
+            TR_DIAG_OUT_OF_RANGE_AFTER_DEP, TR_DIAG_FILE_MISSING, &
+            TR_DIAG_MISSING_REQUIRED
 
   INTEGER(C_INT), PARAMETER :: TR_MAX_NRMAX = 500
   INTEGER(C_INT), PARAMETER :: TR_MAX_NSMAX = 8
+
+  ! Issue #143 pre-run validation infrastructure. Mirrors eq_state.f90.
+  ! Python-side constants in python/trlib/_ffi.py must match.
+  INTEGER(C_INT), PARAMETER :: TR_DIAG_PARAM_LEN = 64
+  INTEGER(C_INT), PARAMETER :: TR_DIAG_MSG_LEN   = 128
+
+  ! Diagnostic category codes — mirror enum tr_diag_code in tr_api.h.
+  INTEGER(C_INT), PARAMETER :: TR_DIAG_OUT_OF_RANGE           = 1
+  INTEGER(C_INT), PARAMETER :: TR_DIAG_INCONSISTENT_PAIR      = 2
+  INTEGER(C_INT), PARAMETER :: TR_DIAG_OUT_OF_RANGE_AFTER_DEP = 3
+  INTEGER(C_INT), PARAMETER :: TR_DIAG_FILE_MISSING           = 4
+  INTEGER(C_INT), PARAMETER :: TR_DIAG_MISSING_REQUIRED       = 5
 
   TYPE, BIND(C) :: tr_state_c
      INTEGER(C_INT)  :: nt
@@ -45,5 +62,12 @@ MODULE tr_state
      REAL(C_DOUBLE)  :: AJ(TR_MAX_NRMAX)
      REAL(C_DOUBLE)  :: QP(TR_MAX_NRMAX)
   END TYPE tr_state_c
+
+  ! One validation diagnostic entry. Mirrors tr_api.h::tr_diag_entry_t.
+  TYPE, BIND(C) :: tr_diag_entry_c
+     CHARACTER(KIND=C_CHAR) :: param(TR_DIAG_PARAM_LEN)
+     INTEGER(C_INT)         :: code
+     CHARACTER(KIND=C_CHAR) :: msg(TR_DIAG_MSG_LEN)
+  END TYPE tr_diag_entry_c
 
 END MODULE tr_state

@@ -25,9 +25,13 @@
 
 MODULE tr_api
   USE, INTRINSIC :: ISO_C_BINDING
-  USE tr_state, ONLY: tr_state_c, TR_MAX_NRMAX, TR_MAX_NSMAX
+  USE tr_state, ONLY: tr_state_c, TR_MAX_NRMAX, TR_MAX_NSMAX, &
+                      tr_diag_entry_c, &
+                      TR_DIAG_PARAM_LEN, TR_DIAG_MSG_LEN, &
+                      TR_DIAG_OUT_OF_RANGE, TR_DIAG_FILE_MISSING
+  USE TRCOM0,   ONLY: NSM
   USE trcomm,   ONLY: rkind, &
-       NRMAX, NSMAX, NT, T, NTMAX, &
+       NRMAX, NSMAX, NT, T, NTMAX, MODELG, KNAMEQ, &
        WPT, AJT, Q0, BETA0, BETAP0, BETAA, BETAN, &
        TAUE1, TAUE2, ZEFF0, ALI, RQ1, RN, RT, AJ, QP, &
        ALLOCATE_TRCOMM, DEALLOCATE_TRCOMM
@@ -40,7 +44,8 @@ MODULE tr_api
   IMPLICIT NONE
   PRIVATE
   PUBLIC :: tr_api_init, tr_api_run, tr_api_get_state, &
-            tr_api_set_param, tr_api_set_param_str, tr_api_finalize
+            tr_api_set_param, tr_api_set_param_str, tr_api_finalize, &
+            tr_api_validate
 
   ! Error codes (must match tr_api.h enum):
   !   0 = OK
@@ -344,5 +349,119 @@ CONTAINS
     g_prepared    = .FALSE.
     ierr = TR_OK
   END FUNCTION tr_api_finalize
+
+  !-------------------------------------------------------------------
+  ! Issue #143 pilot: pre-run cross-parameter validation.
+  !
+  ! Returns up to diag_cap diagnostics in diag(0..ndiag-1). Read-only:
+  ! does NOT modify any tr state. Caller workflow:
+  !   tr_init -> tr_set_param(...) -> tr_validate -> fix -> tr_run
+  !
+  ! Categories covered at L-3 pilot:
+  !   OUT_OF_RANGE: NSMAX overflow vs TRCOM0 compile-time NSM=4. The
+  !                 registry accepts NSMAX in [2, 8] (matching the C
+  !                 ABI TR_MAX_NSMAX capacity); values 5..8 then
+  !                 overflow the TRCOM0::NSM compile-time maximum used
+  !                 by several pl/ak imports, so trip this check
+  !                 before tr_run lets the mesh hit the mismatch.
+  !   FILE_MISSING: MODELG in {3,5,8} requires non-blank KNAMEQ. This
+  !                 mirrors the eq_api::eq_api_validate guard — without
+  !                 it, tr_run -> pl_prof_init -> equnit::eq_load opens
+  !                 "" silently and fills the post-load grid with garbage.
+  !
+  ! Future categories (follow-up PRs): INCONSISTENT_PAIR,
+  ! OUT_OF_RANGE_AFTER_DEP, MISSING_REQUIRED.
+  !
+  ! Note: NRMAX / NSZMAX / NSNMAX are NOT currently settable via
+  ! tr_set_param (the registry does not expose them), so runtime values
+  ! stay at their tr_init defaults and never exceed the compile-time
+  ! maxima. Follow-ups that extend the registry should add matching
+  ! checks here.
+  !-------------------------------------------------------------------
+  FUNCTION tr_api_validate(diag, diag_cap, ndiag) &
+           RESULT(ierr) BIND(C, NAME="tr_validate")
+    TYPE(tr_diag_entry_c), INTENT(OUT) :: diag(diag_cap)
+    INTEGER(C_INT), VALUE, INTENT(IN)  :: diag_cap
+    INTEGER(C_INT),        INTENT(OUT) :: ndiag
+    INTEGER(C_INT) :: ierr
+    INTEGER :: nlocal
+
+    IF (.NOT. g_initialized) THEN
+       ndiag = 0
+       ierr  = TR_ERR_NOT_INIT
+       RETURN
+    END IF
+
+    nlocal = 0
+
+    ! ---- OUT_OF_RANGE: NSMAX overflow vs TRCOM0::NSM=4. -----------
+    CALL push_oor("NSMAX", NSMAX, NSM)
+
+    ! ---- FILE_MISSING: MODELG in {3,5,7,8} requires non-blank KNAMEQ.
+    !      Without it, a subsequent tr_run path opens "" silently and
+    !      fills the post-load grid with garbage:
+    !        - MODELG 3/5/8: tr_run -> pl_prof_init -> equnit::eq_load
+    !        - MODELG 7:     tr_set_metric -> pl_vmec (VMEC reader,
+    !                        also takes KNAMEQ as the input filename)
+    !      --------------------------------------------------------
+    IF (MODELG == 3 .OR. MODELG == 5 .OR. MODELG == 7 .OR. MODELG == 8) THEN
+       IF (LEN_TRIM(KNAMEQ) == 0) THEN
+          CALL push_diag("KNAMEQ", TR_DIAG_FILE_MISSING, &
+               "MODELG=3/5/7/8 requires non-blank KNAMEQ (eq/VMEC file)")
+       END IF
+    END IF
+
+    ndiag = nlocal
+    IF (nlocal == 0) THEN
+       ierr = TR_OK
+    ELSE
+       ierr = TR_ERR_INVALID
+    END IF
+
+  CONTAINS
+
+    !---------------------------------------------------------------
+    ! Emit an OUT_OF_RANGE diagnostic if requested > max_value.
+    !---------------------------------------------------------------
+    SUBROUTINE push_oor(name_str, requested, max_value)
+      CHARACTER(LEN=*), INTENT(IN) :: name_str
+      INTEGER, INTENT(IN)          :: requested, max_value
+      CHARACTER(LEN=TR_DIAG_MSG_LEN) :: m
+      IF (requested <= max_value) RETURN
+      WRITE(m, '(A,I0,A,I0)') &
+           "value ", requested, " exceeds compile-time maximum ", max_value
+      CALL push_diag(name_str, TR_DIAG_OUT_OF_RANGE, m)
+    END SUBROUTINE push_oor
+
+    !---------------------------------------------------------------
+    ! Append (param, code, msg) to diag(). Skips storage if diag_cap
+    ! is exhausted but still increments nlocal so the caller can
+    ! detect truncation via ndiag_out > diag_cap.
+    !---------------------------------------------------------------
+    SUBROUTINE push_diag(name_str, code_in, msg_in)
+      CHARACTER(LEN=*), INTENT(IN) :: name_str, msg_in
+      INTEGER(C_INT),   INTENT(IN) :: code_in
+      INTEGER :: i, n
+      nlocal = nlocal + 1
+      IF (nlocal > diag_cap) RETURN
+      ! Zero-fill, then copy + NUL-terminate.
+      DO i = 1, TR_DIAG_PARAM_LEN
+         diag(nlocal)%param(i) = C_NULL_CHAR
+      END DO
+      n = MIN(LEN_TRIM(name_str), TR_DIAG_PARAM_LEN - 1)
+      DO i = 1, n
+         diag(nlocal)%param(i) = name_str(i:i)
+      END DO
+      DO i = 1, TR_DIAG_MSG_LEN
+         diag(nlocal)%msg(i) = C_NULL_CHAR
+      END DO
+      n = MIN(LEN_TRIM(msg_in), TR_DIAG_MSG_LEN - 1)
+      DO i = 1, n
+         diag(nlocal)%msg(i) = msg_in(i:i)
+      END DO
+      diag(nlocal)%code = code_in
+    END SUBROUTINE push_diag
+
+  END FUNCTION tr_api_validate
 
 END MODULE tr_api

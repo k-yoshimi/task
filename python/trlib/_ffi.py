@@ -47,6 +47,43 @@ TR_ERR_NOT_IMPL = 4
 
 
 # ---------------------------------------------------------------------
+# Issue #143 pre-run parameter validation API constants. Must mirror
+# tr_api.h (TR_DIAG_PARAM_LEN / TR_DIAG_MSG_LEN) and the enum
+# tr_diag_code values; tr_state.f90::tr_diag_entry_c is the matching
+# Fortran-side struct.
+# ---------------------------------------------------------------------
+TR_DIAG_PARAM_LEN = 64
+TR_DIAG_MSG_LEN = 128
+
+TR_DIAG_OUT_OF_RANGE           = 1
+TR_DIAG_INCONSISTENT_PAIR      = 2
+TR_DIAG_OUT_OF_RANGE_AFTER_DEP = 3
+TR_DIAG_FILE_MISSING           = 4
+TR_DIAG_MISSING_REQUIRED       = 5
+
+# Default capacity for the validate-buffer that the high-level wrapper
+# allocates. The L-3 pilot emits at most 5 entries; 32 is conservative
+# head-room so future categories can grow without breaking the wrapper.
+TR_DIAG_DEFAULT_CAP = 32
+
+
+# ---------------------------------------------------------------------
+# ctypes mirror of tr_diag_entry_t from tr/tr_api.h (Issue #143).
+#
+# Layout: param[64], code (int), msg[128]. Must match
+# tr_state.f90::tr_diag_entry_c byte-for-byte. Fortran fills param /
+# msg via TRIM + appended C_NULL_CHAR; the high-level wrapper strips
+# trailing NULs on decode (see TrDiagEntryPy in trlib.py).
+# ---------------------------------------------------------------------
+class TrDiagEntry(ctypes.Structure):
+    _fields_ = [
+        ("param", ctypes.c_char * TR_DIAG_PARAM_LEN),
+        ("code",  ctypes.c_int),
+        ("msg",   ctypes.c_char * TR_DIAG_MSG_LEN),
+    ]
+
+
+# ---------------------------------------------------------------------
 # ctypes mirror of tr_state_t from tr/tr_api.h.
 #
 # Memory-layout note (also in tr_api.h):
@@ -138,6 +175,19 @@ def _apply_prototypes(lib: ctypes.CDLL) -> ctypes.CDLL:
     lib.tr_get_state.restype = ctypes.c_int
     lib.tr_get_state.argtypes = [ctypes.POINTER(TrStateC)]
 
+    # tr_validate (Issue #143). Best-effort: older builds without the
+    # symbol leave lib.tr_validate as AttributeError on first access,
+    # matching the handling for tr_set_param_str above.
+    try:
+        lib.tr_validate.restype = ctypes.c_int
+        lib.tr_validate.argtypes = [
+            ctypes.POINTER(TrDiagEntry),
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_int),
+        ]
+    except AttributeError:  # pragma: no cover - only on pre-#143 builds
+        pass
+
     lib.tr_finalize.restype = ctypes.c_int
     lib.tr_finalize.argtypes = []
     return lib
@@ -188,6 +238,15 @@ __all__ = [
     "TR_ERR_NOT_INIT",
     "TR_ERR_CALC_FAILED",
     "TR_ERR_NOT_IMPL",
+    "TR_DIAG_PARAM_LEN",
+    "TR_DIAG_MSG_LEN",
+    "TR_DIAG_DEFAULT_CAP",
+    "TR_DIAG_OUT_OF_RANGE",
+    "TR_DIAG_INCONSISTENT_PAIR",
+    "TR_DIAG_OUT_OF_RANGE_AFTER_DEP",
+    "TR_DIAG_FILE_MISSING",
+    "TR_DIAG_MISSING_REQUIRED",
+    "TrDiagEntry",
     "TrStateC",
     "HAS_NUMPY",
     "load_library",
