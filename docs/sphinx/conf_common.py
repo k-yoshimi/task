@@ -117,18 +117,15 @@ latex_elements = {
     # Force polyglossia to treat English as the main language regardless of
     # the Sphinx-level `language` setting. Otherwise the JA build asks
     # polyglossia for Japanese, which then insists on a CJK-capable main
-    # roman font — colliding with xeCJK. Let xeCJK alone render CJK.
+    # roman font. Let a per-language preamble (in ja/conf.py) add xeCJK
+    # when CJK rendering is actually required — that way `make pdf-en`
+    # works without CJK fonts installed.
     "babel": r"""
 \usepackage{polyglossia}
 \setdefaultlanguage{english}
 """,
-    # Extra packages for CJK support (loaded after Sphinx's defaults).
-    "preamble": r"""
-\usepackage{xeCJK}
-\setCJKmainfont{Noto Serif CJK JP}
-\setCJKsansfont{Noto Sans CJK JP}
-\setCJKmonofont{Noto Sans Mono CJK JP}
-""",
+    # `preamble` is appended per-language in en/conf.py and ja/conf.py.
+    "preamble": "",
     # fncychap's Bjornstrup style requires pzc (Zapf Chancery) metrics that
     # aren't in minimal TeX installs; empty string lets Sphinx fall back to
     # its default chapter style.
