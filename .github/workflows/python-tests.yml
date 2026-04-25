@@ -73,13 +73,19 @@ jobs:
         #     (task-private #148, upstream emailed 2026-04-22)
         #
         # When upstream merges either fix, rebase develop onto upstream
-        # main — the corresponding commit drops out naturally. See
-        # memory/reference_bpsd_fork.md for the sync workflow.
+        # main — the corresponding commit drops out naturally. Full
+        # sync workflow + recovery procedure in
+        # docs/external-patches/bpsd-fork.md.
         run: |
           set -e
-          git clone --depth 1 --branch develop \
-            https://github.com/k-yoshimi/bpsd.git \
-            "$GITHUB_WORKSPACE/../bpsd"
+          if ! git clone --depth 1 --branch develop \
+                 https://github.com/k-yoshimi/bpsd.git \
+                 "$GITHUB_WORKSPACE/../bpsd"; then
+            echo "ERROR: Could not clone k-yoshimi/bpsd@develop." >&2
+            echo "       The fork or its develop branch may be missing." >&2
+            echo "       See docs/external-patches/bpsd-fork.md for recovery." >&2
+            exit 1
+          fi
           ls -la "$GITHUB_WORKSPACE/../bpsd" | head -5
 
       - name: Provision mtxp/make.mtxp from nompi template
@@ -221,10 +227,10 @@ jobs:
           # equivalence_must_pass: SKIPped tests do not count as
           # verification. BPSD heap-corruption root cause is fixed
           # by the patched fork k-yoshimi/bpsd@develop cloned above
-          # (PR #140, upstream emailed 2026-04-22). property_boundary /
-          # property_fanout are the
-          # remaining class; this PR adds NSMAX range guards (one of
-          # the three known-bug triplet) and un-ignores the property
+          # (PR #140, upstream emailed 2026-04-22). property_boundary
+          # and property_fanout are the remaining flaky class; the
+          # original NSMAX-range PR added range guards (one of the
+          # three known-bug triplet) and un-ignored the property
           # suites so CI verifies the guard in action. Follow-up PRs
           # will fix tr NRMAX registry gap + wr MDLWRI=2 to make the
           # property tests pass fully.
