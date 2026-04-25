@@ -51,13 +51,17 @@ copy at runtime (first-loaded wins under `dlopen`):
 
 ```bash
 cd /path/to/task-private
-for mod in tr fp ti wrx eq; do
+for mod in tr fp ti wr wrx eq; do
   rm -f $mod/obj/pic/bpsd/*.o $mod/mod_pic/bpsd/*.mod
   make -C $mod bpsd_pic
   make -C $mod lib${mod}api.so
 done
 make -C tot libtotapi.so
 ```
+
+(Module list matches the CI loop in `.github/workflows/python-tests.yml`
+"Build module shared libraries" step. `tot` is built last and has no
+`bpsd_pic` target — it links against the other modules' `.so` files.)
 
 ## Sync with upstream (fork maintainer workflow)
 
