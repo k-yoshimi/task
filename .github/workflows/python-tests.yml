@@ -60,51 +60,26 @@ jobs:
             gfortran gcc make valgrind
           gfortran --version | head -1
 
-      - name: Clone BPSD + apply upstream patches (#140 species-kid, #148 plasmaf)
+      - name: Clone BPSD (patched fork k-yoshimi/bpsd@develop)
         # All module Makefiles reference BPSD_SRC=../../bpsd; the BPSD
-        # source lives at https://github.com/ats-fukuyama/bpsd and is
-        # not vendored into this repo. Two independent fixes layered:
+        # source is not vendored into this repo. We clone the `develop`
+        # branch of https://github.com/k-yoshimi/bpsd which is a personal
+        # fork of https://github.com/ats-fukuyama/bpsd carrying two
+        # patches on top of upstream main:
         #
-        # (1) bpsd-species-kid-oob-fix.patch (#140): BPSD's
-        # bpsd_setup_species_kdata loop writes one element past the
-        # kid/kunit arrays (last iteration with nd = ndmax-1 = 18 writes
-        # kid(21) when array size is 20). This 32-byte CHARACTER overflow
-        # smashes the next malloc chunk's metadata and triggers
-        # "corrupted size vs. prev_size" SIGABRTs in the libtrapi.so /
-        # libtotapi.so Python wrappers under CI's glibc heap layout.
-        # Located via valgrind in PR #139.
+        # (1) species_kid OOB write in bpsd_setup_species_kdata
+        #     (task-private #140, upstream emailed 2026-04-22)
+        # (2) INTENT(OUT) scalars undefined in bpsd_get_plasmaf
+        #     (task-private #148, upstream emailed 2026-04-22)
         #
-        # (2) bpsd-plasmaf-intent-out-init.patch (#148): bpsd_get_plasmaf
-        # has INTENT(OUT) on a derived type with allocatable components,
-        # which leaves scalar fields UNDEFINED on entry. The body tests
-        # plasmaf_out%nrmax==0 to dispatch mode 0 vs 1 → garbage value
-        # picks wrong branch → corrupt rho descriptor → SIGABRT in
-        # callers. Patch zero-inits the 3 scalar fields up front.
-        # Confirmed via file-based dump (debug/plasmaf-dump-148 in fork)
-        # showing ALLOC(rho)=F + nrmax=stale at entry.
-        #
-        # Once upstream merges either fix
-        # (https://github.com/ats-fukuyama/bpsd), drop the matching
-        # `git apply` line and patch file.
-        #
-        # LOCAL DEV: see docs/external-patches/bpsd/README.md for the
-        # one-shot setup script that mirrors this CI step.
+        # When upstream merges either fix, rebase develop onto upstream
+        # main — the corresponding commit drops out naturally. See
+        # memory/reference_bpsd_fork.md for the sync workflow.
         run: |
           set -e
-          git clone --depth 1 https://github.com/ats-fukuyama/bpsd.git \
+          git clone --depth 1 --branch develop \
+            https://github.com/k-yoshimi/bpsd.git \
             "$GITHUB_WORKSPACE/../bpsd"
-          git -C "$GITHUB_WORKSPACE/../bpsd" apply --verbose \
-            "$GITHUB_WORKSPACE/docs/external-patches/bpsd/bpsd-species-kid-oob-fix.patch"
-          echo "BPSD species kid OOB fix applied."
-          # #148 fix: bpsd_get_plasmaf intent(out) leaves scalars
-          # undefined → garbage nrmax → corrupt rho descriptor on
-          # mode=1 path. Confirmed via file-based dump (debug branch
-          # debug/plasmaf-dump-148 in fork) showing ALLOC(rho)=F AND
-          # nrmax=stale at entry. Patch zero-inits the 3 scalar fields
-          # so mode=0 always taken on first invocation.
-          git -C "$GITHUB_WORKSPACE/../bpsd" apply --verbose \
-            "$GITHUB_WORKSPACE/docs/external-patches/bpsd/bpsd-plasmaf-intent-out-init.patch"
-          echo "BPSD plasmaf intent(out) zero-init applied."
           ls -la "$GITHUB_WORKSPACE/../bpsd" | head -5
 
       - name: Provision mtxp/make.mtxp from nompi template
@@ -245,8 +220,9 @@ jobs:
           # MEMORY.md feedback_never_skip_tests + feedback_
           # equivalence_must_pass: SKIPped tests do not count as
           # verification. BPSD heap-corruption root cause is fixed
-          # by docs/external-patches/bpsd/bpsd-species-kid-oob-fix.patch
-          # (PR #140). property_boundary / property_fanout are the
+          # by the patched fork k-yoshimi/bpsd@develop cloned above
+          # (PR #140, upstream emailed 2026-04-22). property_boundary /
+          # property_fanout are the
           # remaining class; this PR adds NSMAX range guards (one of
           # the three known-bug triplet) and un-ignores the property
           # suites so CI verifies the guard in action. Follow-up PRs
