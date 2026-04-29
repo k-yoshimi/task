@@ -28,10 +28,13 @@ ${OBJDIR}/%.o:%.f90
 # otherwise fall through to make's built-in `.f.o` rule that invokes
 # `f77` — not present on macOS, and not installed alongside gfortran on
 # Ubuntu CI either, so the build fails on both platforms without this.
-%.o: %.f
+# Explicit per-file targets (rather than a `%.o: %.f` global pattern)
+# scope the override to just the two known callers and leave any future
+# bare-name `make plX.o` to fail loud.
+noeqlib.o: noeqlib.f
 	$(FCFIXED) $(FFLAGS) -c $< -o $@ $(MODDIR) $(MODINCLUDE)
-%.o: %.f90
-	$(FCFREE) $(FFLAGS) -c $< -o $@ $(MODDIR) $(MODINCLUDE)
+noequlib.o: noequlib.f
+	$(FCFIXED) $(FFLAGS) -c $< -o $@ $(MODDIR) $(MODINCLUDE)
 
 SRCS_NOEQ = plvmec.f90 plcomm.f90 plinit.f90 plparm.f90 \
             platmd.f90 plcoll.f90 \
