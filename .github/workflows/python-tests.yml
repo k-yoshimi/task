@@ -235,18 +235,24 @@ jobs:
         #   test_full_cycle                              (Layer 6 happy path)
         #
         # The static-link drivers (smoke / param / negative / full_cycle)
-        # need the non-PIC archive chain (libtr2.a / libeq.a / libpl.a /
-        # ...) plus per-module API .o files. tot/Makefile rules delegate
-        # to each owning module via `(cd ../<mod>; make <target>)` — make
-        # bootstraps the whole non-PIC chain automatically from the
-        # already-installed PIC chain above. graphics-symbol resolution
-        # is handled by tot/tot_static_stubs.f90 (~100 GSAF no-op stubs)
-        # so the `GFLIBS=` empty workflow variant links cleanly without
-        # libgsp / libg3d.
+        # need the non-PIC archive chain (libtask.a / libgrf.a /
+        # libmds.a / libtr2.a / libeq.a / libpl.a / ...) plus per-module
+        # API .o files. tot/Makefile's $(LIBS) prerequisite list is
+        # *unordered* — make is free to build ../tr/libtr2.a before
+        # ../lib/libtask.a, and tr's compile then fails because
+        # lib/mod/libitp.mod (produced by the non-PIC libtask build) is
+        # not yet present. The `make -C tot libs` target encodes the
+        # correct topological order in a single shell recipe, so we run
+        # it first to seed the non-PIC chain. tot_api_check_all then
+        # links against an already-bootstrapped tree.
         #
-        # Runs before pytest so a broken orchestrator surfaces here
-        # instead of as a cascade of confusing pytest failures.
+        # graphics-symbol resolution is handled by tot/tot_static_stubs.f90
+        # (~100 GSAF no-op stubs) so the `GFLIBS=` empty workflow
+        # variant links cleanly without libgsp / libg3d. Runs before
+        # pytest so a broken orchestrator surfaces here instead of as a
+        # cascade of confusing pytest failures.
         run: |
+          make -C tot libs
           make -C tot tot_api_check_all
 
       - name: Run pytest (FFI + layout + serialization coverage)
