@@ -53,6 +53,15 @@ SRCS      = $(SRCS_CORE) $(SRCS_MENU)
 OBJS     = $(SRCS:.f90=.o)
 OBJ_API  = $(SRCS_API:.f90=.o)
 
+# Phase L-6 (Layer 2 follow-up): static-link C driver targets need
+# graphics-symbol stubs that cover the ~100 GSAF primitives the full
+# archive chain (libgrf.a + per-module libX.a) references. tot_graphics_
+# stubs.f90 (already linked into libtotapi.so) only ships the minimal
+# 7-stub safety net; tot_static_stubs.f90 is the orchestrator-level
+# union of every static-link-only stub. NOT linked into libtotapi.so —
+# only into the four C ABI driver binaries below.
+TOT_STATIC_STUBS_OBJ = tot_static_stubs.o
+
 # Phase L-3: per-module param_registry .o files (NOT in the static
 # libs, because every per-module Makefile keeps SRCS_API out of its
 # libX.a). The tot_api_check link needs them explicitly.
@@ -215,11 +224,11 @@ $(TOT_API_PARAM_O): $(TOT_API_PARAM_C) tot_api.h
 # param_registry + per-module api/state .o files + backing libs.
 # gfortran drives the link so the libgfortran runtime is pulled in
 # automatically.
-$(TOT_API_SMOKE_BIN): $(TOT_API_SMOKE_O) $(OBJ_API) $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB)
-	$(FLINKER) -o $(TOT_API_SMOKE_BIN) $(TOT_API_SMOKE_O) $(OBJ_API) \
+$(TOT_API_SMOKE_BIN): $(TOT_API_SMOKE_O) $(OBJ_API) $(TOT_STATIC_STUBS_OBJ) $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB)
+	$(FLINKER) -o $(TOT_API_SMOKE_BIN) $(TOT_API_SMOKE_O) $(OBJ_API) $(TOT_STATIC_STUBS_OBJ) \
 	    $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB) $(FFLAGS) $(FLIBS) $(LIBX_MTX)
-$(TOT_API_PARAM_BIN): $(TOT_API_PARAM_O) $(OBJ_API) $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB)
-	$(FLINKER) -o $(TOT_API_PARAM_BIN) $(TOT_API_PARAM_O) $(OBJ_API) \
+$(TOT_API_PARAM_BIN): $(TOT_API_PARAM_O) $(OBJ_API) $(TOT_STATIC_STUBS_OBJ) $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB)
+	$(FLINKER) -o $(TOT_API_PARAM_BIN) $(TOT_API_PARAM_O) $(OBJ_API) $(TOT_STATIC_STUBS_OBJ) \
 	    $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB) $(FFLAGS) $(FLIBS) $(LIBX_MTX)
 
 # Each per-module registry .o / api .o / state .o is built by the
@@ -551,8 +560,8 @@ $(TOT_API_NEG_O): $(TOT_API_NEG_C) tot_api.h
 # (for init/run/get_state/finalize) directly via OBJ_API + per-module
 # *_param_registry.o + per-module api/state .o + backing libs. No
 # dlopen, no libdl.
-$(TOT_API_NEG_BIN): $(TOT_API_NEG_O) $(OBJ_API) $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB)
-	$(FLINKER) -o $(TOT_API_NEG_BIN) $(TOT_API_NEG_O) $(OBJ_API) \
+$(TOT_API_NEG_BIN): $(TOT_API_NEG_O) $(OBJ_API) $(TOT_STATIC_STUBS_OBJ) $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB)
+	$(FLINKER) -o $(TOT_API_NEG_BIN) $(TOT_API_NEG_O) $(OBJ_API) $(TOT_STATIC_STUBS_OBJ) \
 	    $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB) $(FFLAGS) $(FLIBS) $(LIBX_MTX)
 
 # Phase L-6: full-cycle C driver that exercises the new init -> run ->
@@ -566,8 +575,8 @@ TOT_API_FULL_BIN = $(TOT_API_SMOKE_DIR)/test_full_cycle
 $(TOT_API_FULL_O): $(TOT_API_FULL_C) tot_api.h
 	$(CC) $(CFLAGS_API) -I. -c -o $(TOT_API_FULL_O) $(TOT_API_FULL_C)
 
-$(TOT_API_FULL_BIN): $(TOT_API_FULL_O) $(OBJ_API) $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB)
-	$(FLINKER) -o $(TOT_API_FULL_BIN) $(TOT_API_FULL_O) $(OBJ_API) \
+$(TOT_API_FULL_BIN): $(TOT_API_FULL_O) $(OBJ_API) $(TOT_STATIC_STUBS_OBJ) $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB)
+	$(FLINKER) -o $(TOT_API_FULL_BIN) $(TOT_API_FULL_O) $(OBJ_API) $(TOT_STATIC_STUBS_OBJ) \
 	    $(TOT_L3_DEPS_OBJ) $(TOT_L6_API_OBJ) $(TOT_L3_DEPS_LIB) $(FFLAGS) $(FLIBS) $(LIBX_MTX)
 
 .PHONY: tot_api_check_all

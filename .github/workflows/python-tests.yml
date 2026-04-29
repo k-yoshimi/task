@@ -227,19 +227,27 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Run orchestrator Layer 4 C ABI check (tot_api_check_so)
-        # Phase L-4 dlopen-path lifecycle test: builds tests/c_abi/test_run_so
-        # and exercises libtotapi.so end-to-end via dlopen
-        # (init -> set_param(eq:RR, tr:DT) -> get_state -> finalize). This
-        # validates the orchestrator wiring against the per-module .so chain
-        # the workflow just built — without needing the non-PIC static
-        # archive chain that the deferred `<mod>_api_check_all` targets
-        # require (see placeholder step below).
+      - name: Run orchestrator Layer 2 + Layer 4 C ABI checks (tot_api_check_all)
+        # Phase L-6 composite target. Builds and runs every C ABI driver:
+        #   tot_api_check    -> test_smoke + test_param  (Layer 3 dispatcher)
+        #   tot_api_check_so -> test_run_so via dlopen   (Layer 4)
+        #   test_negative                                (Layer 6 negative)
+        #   test_full_cycle                              (Layer 6 happy path)
         #
-        # Fast (~seconds) and runs before pytest so a broken orchestrator
-        # surfaces here instead of as a cascade of confusing pytest failures.
+        # The static-link drivers (smoke / param / negative / full_cycle)
+        # need the non-PIC archive chain (libtr2.a / libeq.a / libpl.a /
+        # ...) plus per-module API .o files. tot/Makefile rules delegate
+        # to each owning module via `(cd ../<mod>; make <target>)` — make
+        # bootstraps the whole non-PIC chain automatically from the
+        # already-installed PIC chain above. graphics-symbol resolution
+        # is handled by tot/tot_static_stubs.f90 (~100 GSAF no-op stubs)
+        # so the `GFLIBS=` empty workflow variant links cleanly without
+        # libgsp / libg3d.
+        #
+        # Runs before pytest so a broken orchestrator surfaces here
+        # instead of as a cascade of confusing pytest failures.
         run: |
-          make -C tot tot_api_check_so
+          make -C tot tot_api_check_all
 
       - name: Run pytest (FFI + layout + serialization coverage)
         env:
@@ -281,30 +289,6 @@ jobs:
             --tb=short \
             -ra \
             --maxfail=50
-
-      # Deferred: "Run static-link C ABI drivers (Layer 2: tot_api_check_all)"
-      # The orchestrator dlopen path is now exercised above via
-      # tot_api_check_so. The remaining static-link drivers
-      # (test_smoke / test_param / test_negative / test_full_cycle)
-      # link against the non-PIC archive chain (libgrf.a + libtr2.a + ...)
-      # which references ~30 GSAF graphics primitives (gscale_, gframe_,
-      # gplotp_, contf2_, ...) that the current per-module
-      # *_graphics_stubs.f90 do not cover. Resolving this needs:
-      #   (a) extend the *_graphics_stubs.f90 stub set to all
-      #       libgrf.a undefined symbols
-      #   (b) link the stubs into the static-link C driver targets in
-      #       tot/Makefile + per-module Makefiles
-      #   (c) add a non-PIC build chain step (make -C tot libs) to this
-      #       workflow before invoking tot_api_check_all
-      # Tracked as the PR-2 follow-up to the PR that introduced
-      # tot_api_check_so above.
-      - name: _noop_placeholder_for_deferred_c_abi_step
-        if: false
-        run: |
-          true
-          # unreachable — left in place so the file structure documents
-          # the intended future step. Remove when the follow-up lands.
-          # for mod in wr; do make -C "$mod" "${mod}_api_check_all"; done
 
       - name: Show collected vs skipped summary
         if: always()

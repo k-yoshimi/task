@@ -157,7 +157,10 @@ tot/mod_pic/
 tot/tests/c_abi/test_smoke
 tot/tests/c_abi/test_param
 tot/tests/c_abi/test_run_so
+tot/tests/c_abi/test_negative
+tot/tests/c_abi/test_full_cycle
 tot/tests/c_abi/*.o
+tot/tot_static_stubs.o
 
 # Python
 __pycache__/

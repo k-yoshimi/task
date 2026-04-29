@@ -1,14 +1,20 @@
 /*
- * Phase L-3 C ABI smoke test for the tot orchestrator.
+ * Phase L-3 C ABI smoke test for the tot orchestrator's set_param
+ * dispatcher contracts.
  *
- * Init/run/get_state/finalize are still stubs at L-3 (orchestrator
- * fan-out lands in a later phase), so they continue to return
- * TOT_ERR_NOT_IMPL. tot_set_param (and the new tot_set_param_str)
- * now dispatches to real per-module registries, and therefore
- * returns TOT_OK when the namespaced name resolves and
- * TOT_ERR_INVALID when it does not. This smoke driver asserts both
- * sides of that dispatch without allocating any backing state
- * (so no init is required).
+ * tot_set_param (and tot_set_param_str) dispatch to per-module
+ * registries; this driver pins the dispatcher's pre-routing rejection
+ * paths, which by design hold regardless of whether tot is initialized
+ * or not. The init -> run -> get_state -> finalize happy path is
+ * covered by test_full_cycle.c (Phase L-6); the pre-init / unknown-
+ * namespace / double-finalize negative contracts are covered by
+ * test_negative.c.
+ *
+ * Originally (Phase L-3 / L-5) this driver also asserted that the
+ * lifecycle entry points returned TOT_ERR_NOT_IMPL while they were
+ * stubs. With L-6 those stubs were replaced by real fan-out, so the
+ * NOT_IMPL assertions were removed; keeping them as TOT_OK assertions
+ * would just duplicate test_full_cycle.
  */
 #include <stdio.h>
 #include "tot_api.h"
@@ -26,13 +32,6 @@ static int expect(const char *name, int rc, int expected) {
 
 int main(void) {
     int failures = 0;
-    tot_state_t st;
-
-    /* Still-stub entry points. */
-    failures += expect("tot_init",      tot_init(),      TOT_ERR_NOT_IMPL);
-    failures += expect("tot_run",       tot_run(0),      TOT_ERR_NOT_IMPL);
-    failures += expect("tot_get_state", tot_get_state(&st), TOT_ERR_NOT_IMPL);
-    failures += expect("tot_finalize",  tot_finalize(),  TOT_ERR_NOT_IMPL);
 
     /* L-3 dispatcher: a bare name (no "<ns>:" prefix) is rejected. */
     failures += expect("set_param no-prefix",
@@ -61,6 +60,6 @@ int main(void) {
         fprintf(stderr, "%d assertion(s) failed\n", failures);
         return 1;
     }
-    printf("Phase L-3 tot smoke OK: stubs + dispatcher error paths verified\n");
+    printf("Phase L-3 tot smoke OK: dispatcher error paths verified\n");
     return 0;
 }
