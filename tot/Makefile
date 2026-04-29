@@ -176,8 +176,16 @@ libs:
 	make totmenu.o
 	make totregress.o
 
-tot : $(LIB_MTX) $(LIBS) totmenu.o totregress.o totmain.o
-	$(FLINKER) totmenu.o totregress.o totmain.o -o $@ $(FFLAGS) $(LIBS) $(FLIBS) $(LIBX_MTX)
+# Phase L-6 (Layer 1 follow-up): the standalone `tot` binary uses the
+# same graphics-stub gate as the Layer 2 C ABI drivers — when GFLIBS is
+# empty (CI / no-graphics build), tot_static_stubs.o satisfies the ~100
+# GSAF symbols that libgrf.a + per-module libX.a otherwise leave
+# unresolved. With GFLIBS populated (production-graphics build) the
+# stub is omitted and the link uses the real graphics chain.
+# This lets test_run/run_tests.sh produce the eqdata baselines that
+# Layer 1 (test_equivalence.py at 1e-10 tolerance) needs.
+tot : $(LIB_MTX) $(LIBS) totmenu.o totregress.o totmain.o $(TOT_STATIC_STUBS_OBJ)
+	$(FLINKER) totmenu.o totregress.o totmain.o $(TOT_STATIC_STUBS_OBJ) -o $@ $(FFLAGS) $(LIBS) $(FLIBS) $(LIBX_MTX)
 
 # ---------------------------------------------------------------------
 # Phase L-3: orchestrator C ABI check (independent of default `tot`)

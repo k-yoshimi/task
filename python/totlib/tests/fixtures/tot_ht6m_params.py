@@ -34,8 +34,12 @@ SCALARS = {
     "eq:RDLT": 0.1,
     "eq:RIP":  0.02,
     "eq:BB":   1.5,
-    # eq:PP0 is not yet in eq_param_registry; kept in UNREGISTERED_KEYS
-    # below until it lands. (See trparm comment under &tr.)
+    # eq:PP0 is registered but adding it does not lift the rc=3
+    # CALCULATION_FAILED in tot_run for this case — there's a deeper
+    # divergence between the Python pipeline's replay of the .trparm
+    # block and what the standalone tot driver actually does. Leave
+    # ht6m gated behind its missing eqdata-HT6M baseline (no CI
+    # generation) until the divergence is investigated separately.
 
     # --- &tr block ---
     "tr:MODELG": 3,

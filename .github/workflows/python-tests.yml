@@ -255,6 +255,33 @@ jobs:
           make -C tot libs
           make -C tot tot_api_check_all
 
+      - name: Generate Layer 1 (1e-10 equivalence) eqdata baselines
+        # Build the standalone `tot` Fortran binary (graphics-free via
+        # the same tot_static_stubs.o gate as the Layer 2 C drivers)
+        # and run the demo2014 short case to produce
+        # test_run/test_output/tot_demo2014_short/eqdata.demo2014. The
+        # Phase 0 metrics.json baseline is already committed under
+        # test_run/baselines/<case>/, so once the eqdata is on disk
+        # python/totlib/tests/test_equivalence.py lifts its skipUnless
+        # guard and runs the 1e-10 comparison automatically as part of
+        # the pytest step below.
+        #
+        # Only tot_demo2014_short is generated. tot_ht6m_short's Python
+        # fixture currently diverges from the standalone tot driver
+        # (rc=3 CALCULATION_FAILED in tot_run even after eq:PP0 is set)
+        # so its baseline is intentionally skipped — pytest auto-SKIPs
+        # the case on missing eqdata-HT6M. Tracked as a follow-up.
+        run: |
+          set -e
+          make -C tot tot
+          case=tot_demo2014_short
+          mkdir -p "test_run/test_output/$case"
+          ( cd "test_run/test_output/$case" && \
+              ../../../tot/tot < "../../inputs/${case}.in" > output.log 2>&1 )
+          test -f "test_run/test_output/$case/eqdata.demo2014" \
+            || { echo "ERROR: eqdata.demo2014 not produced"; tail -50 "test_run/test_output/$case/output.log"; exit 1; }
+          ls -l "test_run/test_output/$case/"
+
       - name: Run pytest (FFI + layout + serialization coverage)
         env:
           PYTHONDONTWRITEBYTECODE: "1"
