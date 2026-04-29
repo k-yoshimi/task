@@ -23,6 +23,16 @@ ${OBJDIR}/%.o:%.f
 ${OBJDIR}/%.o:%.f90
 	$(FCFREE) $(FFLAGS) -c $< -o $@ $(MODDIR) $(MODINCLUDE)
 
+# Top-level (.o next to .f, no OBJDIR prefix). tot/Makefile pulls in
+# noeqlib.o / noequlib.o via `(cd ../pl; make noeqlib.o)`, which would
+# otherwise fall through to make's built-in `.f.o` rule that invokes
+# `f77` — not present on macOS, and not installed alongside gfortran on
+# Ubuntu CI either, so the build fails on both platforms without this.
+%.o: %.f
+	$(FCFIXED) $(FFLAGS) -c $< -o $@ $(MODDIR) $(MODINCLUDE)
+%.o: %.f90
+	$(FCFREE) $(FFLAGS) -c $< -o $@ $(MODDIR) $(MODINCLUDE)
+
 SRCS_NOEQ = plvmec.f90 plcomm.f90 plinit.f90 plparm.f90 \
             platmd.f90 plcoll.f90 \
             plprof_TOTAL.f90 plprof_travis.f90 plload.f90 plprep.f90

@@ -222,6 +222,20 @@ jobs:
             echo "::endgroup::"
           done
 
+      - name: Run orchestrator Layer 4 C ABI check (tot_api_check_so)
+        # Phase L-4 dlopen-path lifecycle test: builds tests/c_abi/test_run_so
+        # and exercises libtotapi.so end-to-end via dlopen
+        # (init -> set_param(eq:RR, tr:DT) -> get_state -> finalize). This
+        # validates the orchestrator wiring against the per-module .so chain
+        # the workflow just built — without needing the non-PIC static
+        # archive chain that the deferred `<mod>_api_check_all` targets
+        # require (see placeholder step below).
+        #
+        # Fast (~seconds) and runs before pytest so a broken orchestrator
+        # surfaces here instead of as a cascade of confusing pytest failures.
+        run: |
+          make -C tot tot_api_check_so
+
       - name: Run pytest (FFI + layout + serialization coverage)
         env:
           PYTHONDONTWRITEBYTECODE: "1"
@@ -263,13 +277,22 @@ jobs:
             -ra \
             --maxfail=50
 
-      # Deferred: "Run C ABI check drivers (per-module integration)"
-      # The <mod>_api_check_all Makefile targets recompile wrcomm.f90
-      # etc. in non-PIC form, which needs a parallel non-PIC mtxp build
-      # (commpi.mod). The CI workflow only builds the PIC chain today;
-      # resolving this properly is a separate follow-up that either
-      # extends the workflow with non-PIC builds, or links the C
-      # driver binaries against the PIC .so directly.
+      # Deferred: "Run static-link C ABI drivers (Layer 2: tot_api_check_all)"
+      # The orchestrator dlopen path is now exercised above via
+      # tot_api_check_so. The remaining static-link drivers
+      # (test_smoke / test_param / test_negative / test_full_cycle)
+      # link against the non-PIC archive chain (libgrf.a + libtr2.a + ...)
+      # which references ~30 GSAF graphics primitives (gscale_, gframe_,
+      # gplotp_, contf2_, ...) that the current per-module
+      # *_graphics_stubs.f90 do not cover. Resolving this needs:
+      #   (a) extend the *_graphics_stubs.f90 stub set to all
+      #       libgrf.a undefined symbols
+      #   (b) link the stubs into the static-link C driver targets in
+      #       tot/Makefile + per-module Makefiles
+      #   (c) add a non-PIC build chain step (make -C tot libs) to this
+      #       workflow before invoking tot_api_check_all
+      # Tracked as the PR-2 follow-up to the PR that introduced
+      # tot_api_check_so above.
       - name: _noop_placeholder_for_deferred_c_abi_step
         if: false
         run: |
