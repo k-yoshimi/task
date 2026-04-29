@@ -2,9 +2,14 @@ name: python-tests
 
 on:
   pull_request:
-    branches: [develop, master]
+    # `chore/pre-push-hook-worktree-compat` is the de-facto main line on
+    # this fork (765+ commits ahead of master). Without it here, PRs
+    # targeting that branch (i.e. every recent feature PR) silently
+    # bypass GitHub Actions — the appearance of a passing pipeline on
+    # PRs #178-#183 came from Cursor Bugbot, not this workflow.
+    branches: [develop, master, chore/pre-push-hook-worktree-compat]
   push:
-    branches: [develop, master]
+    branches: [develop, master, chore/pre-push-hook-worktree-compat]
 
 # Cancel superseded runs on the same branch to save minutes
 concurrency:
