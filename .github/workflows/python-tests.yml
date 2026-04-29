@@ -255,7 +255,7 @@ jobs:
           make -C tot libs
           make -C tot tot_api_check_all
 
-      - name: Generate Layer 1 (1e-10 equivalence) eqdata baselines
+      - name: Generate Layer 1 (1e-10 equivalence) eqdata baseline (demo2014)
         # Build the standalone `tot` Fortran binary (graphics-free via
         # the same tot_static_stubs.o gate as the Layer 2 C drivers)
         # and run the demo2014 short case to produce
@@ -272,14 +272,18 @@ jobs:
         # so its baseline is intentionally skipped — pytest auto-SKIPs
         # the case on missing eqdata-HT6M. Tracked as a follow-up.
         run: |
-          set -e
+          set -eo pipefail
           make -C tot tot
           case=tot_demo2014_short
           mkdir -p "test_run/test_output/$case"
           ( cd "test_run/test_output/$case" && \
               ../../../tot/tot < "../../inputs/${case}.in" > output.log 2>&1 )
-          test -f "test_run/test_output/$case/eqdata.demo2014" \
-            || { echo "ERROR: eqdata.demo2014 not produced"; tail -50 "test_run/test_output/$case/output.log"; exit 1; }
+          # `test -s` (non-zero size) catches the case where the
+          # standalone tot exits cleanly but produces a truncated /
+          # empty eqdata file — `test -f` alone would let that slip
+          # through and surface as a confusing pytest failure later.
+          test -s "test_run/test_output/$case/eqdata.demo2014" \
+            || { echo "ERROR: eqdata.demo2014 not produced or empty"; tail -50 "test_run/test_output/$case/output.log"; exit 1; }
           ls -l "test_run/test_output/$case/"
 
       - name: Run pytest (FFI + layout + serialization coverage)
