@@ -60,7 +60,17 @@ OBJ_API  = $(SRCS_API:.f90=.o)
 # 7-stub safety net; tot_static_stubs.f90 is the orchestrator-level
 # union of every static-link-only stub. NOT linked into libtotapi.so —
 # only into the four C ABI driver binaries below.
+#
+# Gated on GFLIBS being empty so production-graphics builds (where the
+# real libgsp / libg3d are linked via $(FLIBS)) never silently substitute
+# the no-op stubs for the real implementations. CI's generated
+# make.header sets GFLIBS= empty, which is the only configuration this
+# target is intended to run under today.
+ifeq ($(strip $(GFLIBS)),)
 TOT_STATIC_STUBS_OBJ = tot_static_stubs.o
+else
+TOT_STATIC_STUBS_OBJ =
+endif
 
 # Phase L-3: per-module param_registry .o files (NOT in the static
 # libs, because every per-module Makefile keeps SRCS_API out of its

@@ -53,6 +53,28 @@ END FUNCTION NGULEN
 ! resolve at link time on symbol name alone (no implicit interface
 ! checking from a USE'd module is involved here). The stubs ignore
 ! the passed arguments and return immediately.
+!
+! Why this is safe under gfortran on x86_64 Linux / macOS arm64
+! (the only CI / dev targets):
+!   * The Fortran ABI used by gfortran follows the C SysV / AAPCS64
+!     caller-cleans convention. The stub's prologue saves the frame
+!     pointer and returns; it never references the caller's args, so
+!     they are silently discarded.
+!   * Per Fortran 2008 §12.4.3.4 this is technically undefined when
+!     the caller's actual-argument list does not match the stub's
+!     dummy-argument list, but no test path in tot_api_check_all
+!     reaches a graphics output routine — init / run(0) / get_state /
+!     finalize never invoke GR* / GS*. The stubs exist solely to
+!     satisfy link-time symbol resolution; they are never executed.
+!   * If a future test path were to actually call into one of these
+!     stubs, the worst-case outcome is a no-op return rather than a
+!     crash (because the args are passed but unread). That is the
+!     desired CI behaviour anyway.
+!
+! For a stricter (but tedious) alternative, harvest each call site's
+! signature from libgrf / libtr2 / ... and declare matching dummy
+! arguments. Tracked as a future tightening; not required for the L-6
+! Layer 2 CI gate.
 ! ---------------------------------------------------------------------
 
 SUBROUTINE BLACK
