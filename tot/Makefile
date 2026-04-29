@@ -311,21 +311,31 @@ totregress.o: totregress.f90
 tot_state.o : tot_state.f90
 # Phase L-3: tot_param_registry USEs tr_param_registry, fp_param_registry,
 # ti_param_registry, wrx_param_registry, eq_param_registry. Those .mod
-# files are produced under ../tr/mod, ../fp/mod, ../ti/mod, ../wrx/mod
-# and ../eq/mod respectively (all already on MODINCLUDE). We therefore
-# depend on the owning module's libX.a so the .mod files are present
-# before this source is compiled.
+# files are produced as a side-effect of compiling each owning module's
+# *_param_registry.o (NOT included in libX.a — see SRCS_API note in each
+# module's Makefile). Depending on the lib*.a alone is therefore
+# insufficient: make may compile this file before the per-module
+# *_param_registry.o, leaving the USE statements unresolvable. List the
+# per-module .o files explicitly so make orders the build correctly.
 tot_param_registry.o : tot_param_registry.f90 \
                        ../tr/libtr2.a ../fp/libfp.a ../ti/libti.a \
-                       ../wrx/libwr.a ../eq/libeq.a
+                       ../wrx/libwr.a ../eq/libeq.a \
+                       ../tr/obj/tr_param_registry.o \
+                       ../fp/obj/fp_param_registry.o \
+                       ../ti/ti_param_registry.o \
+                       ../wrx/obj/wrx_param_registry.o \
+                       ../eq/eq_param_registry.o
 # tot_api.o USEs tr_api / ti_api / fp_api / wrx_api (in addition to
-# tot_state + tot_param_registry). Those .mod files are emitted by
-# each per-module Makefile's SRCS_API target into ../<mod>/mod/ — the
-# same tree MODINCLUDE already pulls in. Depending on each owner's
-# static archive is the cheapest way to force the .mod files to be
-# present before this compile step.
+# tot_state + tot_param_registry). The corresponding .mod files are
+# emitted by each module's *_api.o build, NOT by lib*.a. Same reasoning
+# as tot_param_registry.o above: depend on the per-module *_state.o /
+# *_api.o explicitly so make compiles them first.
 tot_api.o   : tot_api.f90 tot_state.f90 tot_state.o tot_param_registry.o \
-              ../tr/libtr2.a ../ti/libti.a ../fp/libfp.a ../wrx/libwr.a
+              ../tr/libtr2.a ../ti/libti.a ../fp/libfp.a ../wrx/libwr.a \
+              ../tr/obj/tr_state.o ../tr/obj/tr_api.o \
+              ../ti/ti_state.o ../ti/ti_api.o \
+              ../fp/obj/fp_state.o ../fp/obj/fp_api.o \
+              ../wrx/obj/wrx_state.o ../wrx/obj/wrx_api.o
 
 # =====================================================================
 # Phase L-4: libtotapi.so composite shared library build
