@@ -92,6 +92,9 @@ class TestExternalDrivenCurrent(unittest.TestCase):
 
         Q0 (safety factor on axis) is a clean downstream proxy: AJT is
         a boundary condition (RIPS/RIPE) and so is invariant for ntmax=1.
+        Threshold 1e-3 is ~10x below the observed delta (~1.5e-2 with the
+        ITER-like fixture), giving headroom for cross-platform numerical
+        noise without masking a regression.
         """
         s_zero = _run_scalars()
         s_one = _run_scalars({"EXTERNAL_DRIVEN_I": 1.0})

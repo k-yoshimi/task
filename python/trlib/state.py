@@ -55,7 +55,7 @@ class TrState:
         nt:      time-step counter
         nrmax:   number of radial points actually in use
         nsmax:   number of species actually in use
-        scalars: dict of 13 scalar plasma quantities (T, WPT, ...)
+        scalars: dict of 14 scalar plasma quantities (T, WPT, ..., AJRFT)
         RN:      [nrmax][nsmax] density profile
         RT:      [nrmax][nsmax] temperature profile
         AJ:      [nrmax] current profile

@@ -17,10 +17,13 @@
       REAL(rkind)   :: TRCDEF
 
 
-      ! L-7b-i: enter the routine when EXTERNAL_DRIVEN_I is set even if no
-      ! RF source is configured. Existing PEC/PLH/PIC blocks gracefully
-      ! produce zero contributions when their TOT inputs are zero.
       IF(PECTOT+PLHTOT+PICTOT.LE.0.D0 .AND. EXTERNAL_DRIVEN_I.EQ.0.D0) RETURN
+
+      ! ----- Original RF heating + current drive (PEC/PLH/PIC) -----
+      ! Gated on RF totals so a config with zero RF power but nonzero
+      ! EXTERNAL_DRIVEN_I cannot reach the PECTOT/SUMEC normalization
+      ! (which would divide 0/0 if PECRW=0 etc.).
+      IF(PECTOT+PLHTOT+PICTOT.GT.0.D0) THEN
 
       IF(PLHR0.LT.0.D0) THEN
          VPHLH=VC/(PLHNPR*ABS(PLHR0))
@@ -128,6 +131,8 @@
                     + PICCD*PICTOE*EFCDIC*PICL)
       ENDDO
 
+      END IF   ! end of RF heating + current drive block
+
 ! ----- L-7b-i: external driven current (scalar API, Gaussian profile) -----
 ! AJRFT [MA] = SUM(AJRF * DSRHO) * DR / 1.D6  (per trrslt_globals.f90:240)
 ! DSRHO(NR) = DVRHO(NR) / (2*PI*RR)            (per trrslt_globals.f90:72)
@@ -138,6 +143,16 @@
 ! Outer guard: skip when I=0 (default → no-op, backward compatible) OR when
 ! RW<=0 (silent: tr_api_validate surfaces this misconfiguration via OUT_OF_RANGE).
       IF (EXTERNAL_DRIVEN_I /= 0.D0 .AND. EXTERNAL_DRIVEN_RW > 0.D0) THEN
+         ! When the RF block above was skipped (no PEC/PLH/PIC), AJRF may
+         ! retain stale values from a prior call -- zero it before adding
+         ! the external contribution so the post-condition
+         !   AJRFT [MA] == EXTERNAL_DRIVEN_I (when RF totals == 0)
+         ! holds exactly.
+         IF (PECTOT+PLHTOT+PICTOT.LE.0.D0) THEN
+            DO NR = 1, NRMAX
+               AJRF(NR) = 0.D0
+            END DO
+         END IF
          SUM_EXT = 0.D0
          DO NR = 1, NRMAX
             SUM_EXT = SUM_EXT + DEXP(-((RM(NR) - EXTERNAL_DRIVEN_R0) &
