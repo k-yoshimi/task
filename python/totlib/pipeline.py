@@ -214,11 +214,10 @@ def compute_rjt_volint(state, *, R0: float, a: float) -> float:
 # ------------------------------------------------------------------
 # Coupling rule registry
 # ------------------------------------------------------------------
-# L-7a: ('fp','tr') is populated below from R2/R3 outcomes (spec §8).
-# tr's PLHCD is dimensionless, so this is a skeleton coupling — physical
-# fidelity (a proper EXTERNAL_DRIVEN_I scalar) is L-7b's scope.
-# L-7b will also add more pairs (('wr','fp'), ('wr','tr'), ('eq','tr'), ...)
-# without changing the orchestrator code.
+# L-7b-i: ('fp','tr') uses the physical EXTERNAL_DRIVEN_I scalar [MA]
+# (Gaussian-profile injection in trprf). Future L-7b-ii will add more pairs
+# (('wr','fp'), ('wr','tr'), ('eq','tr'), ...) via BPSD broker without
+# changing the orchestrator code.
 
 COUPLING_RULES: Dict[Tuple[str, str], List[CouplingRule]] = {
     ("fp", "tr"): [
@@ -230,13 +229,9 @@ COUPLING_RULES: Dict[Tuple[str, str], List[CouplingRule]] = {
                 R0=params["tr:RR"],
                 a=params["tr:RA"],
             ),
-            dst_param="PLHCD",                  # R3: PNBCD unregistered; PLHCD is the only
-                                                # set_param-accepting current-drive scalar.
-            transform=lambda v: v * 1e-6,       # Amperes -> "MA-scale numeric value"
-                                                # (skeleton: PLHCD is dimensionless — see
-                                                # spec §3 non-goals).
-            doc="fp driven current (RJT volume integral, A) -> tr PLHCD"
-                " (skeleton coupling; L-7b adds proper EXTERNAL_DRIVEN_I scalar)",
+            dst_param="EXTERNAL_DRIVEN_I",      # MA, injected as Gaussian profile in trprf
+            transform=lambda v: v * 1e-6,       # Amperes -> MA
+            doc="fp driven current (RJT volume integral, A) -> tr EXTERNAL_DRIVEN_I (MA)",
         ),
     ],
 }

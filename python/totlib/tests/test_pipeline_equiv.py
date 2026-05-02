@@ -6,11 +6,9 @@ Requires libfpapi.so + libtrapi.so. Run with --forked --timeout=120
 
 Per spec §9.2. Uses the active-drive fixture from spec §8 R3.
 
-Note (skeleton coupling): tr's PLHCD is dimensionless (per R3), so the
-"physical" semantics of the rule are placeholder. The equivalence test
-verifies API correctness — pattern X and pattern Y compute identical
-PLHCD inputs to tr and identical tr final scalars. Physical fidelity
-of the skeleton coupling itself is out of L-7a scope.
+L-7b-i: physical EXTERNAL_DRIVEN_I [MA] coupling. Pattern X (direct call)
+and pattern Y (TotPipeline.run_pipeline) push the same EXTERNAL_DRIVEN_I
+value to tr; the test verifies their tr final scalars match at 1e-10.
 """
 import math
 import os
@@ -84,8 +82,7 @@ def _baseline():
     tr.set_params(**TR_SCALAR_PARAMS)
     for name, val in TR_ARRAY_PARAMS.items():
         tr.set_param(name, val)
-    # R3 confirmed: PNBCD is unregistered; PLHCD is the chosen skeleton param.
-    tr.set_param("PLHCD", rjt_volint * 1e-6)
+    tr.set_param("EXTERNAL_DRIVEN_I", rjt_volint * 1e-6)
     tr.run(ntmax=NTMAX_TR)
     tr_scalars = _state_to_scalars(tr.get_state())
     tr.close()

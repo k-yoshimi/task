@@ -400,7 +400,7 @@ def test_run_pipeline_callable_rule_receives_params(patch_wrappers, monkeypatch)
         ("fp", "tr"): [
             CouplingRule(
                 src_state_key=callable_src,
-                dst_param="PLHCD",
+                dst_param="EXTERNAL_DRIVEN_I",
                 transform=lambda v: v * 1e-3,
                 doc="callable rule with params",
             ),
@@ -416,7 +416,7 @@ def test_run_pipeline_callable_rule_receives_params(patch_wrappers, monkeypatch)
     pipe.run_pipeline([("fp", {"ntmax": 1}), ("tr", {"ntmax": 1})])
     assert captured["params"]["tr:RR"] == 6.2
     # transform applied: 100 * 6.2 * 1e-3 = 0.62
-    tr_inst.set_param.assert_any_call("PLHCD", 0.62)
+    tr_inst.set_param.assert_any_call("EXTERNAL_DRIVEN_I", 0.62)
 
 
 def test_state_to_scalars_with_scalars_dict():
@@ -454,9 +454,7 @@ def test_coupling_rules_has_fp_to_tr():
     rules = COUPLING_RULES.get(("fp", "tr"), [])
     assert len(rules) == 1, f"expected exactly 1 rule, got {rules!r}"
     rule = rules[0]
-    # R3 confirmed: PNBCD is NOT registered in tr_param_registry.f90; use PLHCD
-    # (dimensionless skeleton — see spec §3 non-goals + §8 R3 outcome).
-    assert rule.dst_param == "PLHCD"
+    assert rule.dst_param == "EXTERNAL_DRIVEN_I"
     # src_state_key is a callable wrapper around compute_rjt_volint that pulls
     # tr:RR / tr:RA from the params dict.
     assert callable(rule.src_state_key)
