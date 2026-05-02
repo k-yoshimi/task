@@ -34,6 +34,8 @@ MODULE tr_api
        NRMAX, NSMAX, NT, T, NTMAX, MODELG, KNAMEQ, &
        WPT, AJT, Q0, BETA0, BETAP0, BETAA, BETAN, &
        TAUE1, TAUE2, ZEFF0, ALI, RQ1, RN, RT, AJ, QP, &
+       AJRFT, &
+       EXTERNAL_DRIVEN_I, EXTERNAL_DRIVEN_RW, &
        ALLOCATE_TRCOMM, DEALLOCATE_TRCOMM
   USE tr_param_registry, ONLY: tr_param_set, tr_param_set_str
   USE plinit,            ONLY: pl_init
@@ -277,6 +279,7 @@ CONTAINS
     state%RT     = 0.0_C_DOUBLE
     state%AJ     = 0.0_C_DOUBLE
     state%QP     = 0.0_C_DOUBLE
+    state%AJRFT  = 0.0_C_DOUBLE     ! L-7b-i
 
     IF (.NOT. g_initialized) THEN
        ierr = TR_ERR_NOT_INIT
@@ -308,6 +311,7 @@ CONTAINS
     state%ZEFF0  = ZEFF0
     state%ALI    = ALI
     state%RQ1    = RQ1
+    state%AJRFT  = AJRFT             ! L-7b-i: includes EXTERNAL_DRIVEN_I contribution
 
     ! Profiles: only populate when TRCOMM arrays are allocated (they are
     ! after ALLOCATE_TRCOMM succeeds during tr_api_init). The transpose
@@ -409,6 +413,15 @@ CONTAINS
           CALL push_diag("KNAMEQ", TR_DIAG_FILE_MISSING, &
                "MODELG=3/5/7/8 requires non-blank KNAMEQ (eq/VMEC file)")
        END IF
+    END IF
+
+    ! ---- L-7b-i: OUT_OF_RANGE: EXTERNAL_DRIVEN_I requires positive width.
+    !      Non-zero I with non-positive RW would silently normalize to zero
+    !      in trprf, leaving AJRF unchanged. Surface this so callers know
+    !      their setting was no-op rather than physically applied.
+    IF (EXTERNAL_DRIVEN_I /= 0.D0 .AND. EXTERNAL_DRIVEN_RW <= 0.D0) THEN
+       CALL push_diag("EXTERNAL_DRIVEN_RW", TR_DIAG_OUT_OF_RANGE, &
+            "non-positive width with non-zero EXTERNAL_DRIVEN_I; profile cannot be normalized (silent no-op)")
     END IF
 
     ndiag = nlocal

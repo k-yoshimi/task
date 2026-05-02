@@ -113,6 +113,10 @@ class TrStateC(ctypes.Structure):
         ("RT", (ctypes.c_double * TR_MAX_NSMAX) * TR_MAX_NRMAX),
         ("AJ", ctypes.c_double * TR_MAX_NRMAX),
         ("QP", ctypes.c_double * TR_MAX_NRMAX),
+        # L-7b-i: total RF + external driven current [MA]. Mirrors AJRFT
+        # in tr_state_c (Fortran) and tr_state_t (C). Placed at struct end
+        # to preserve existing field offsets.
+        ("AJRFT", ctypes.c_double),
     ]
 
 

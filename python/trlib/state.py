@@ -24,6 +24,7 @@ SCALAR_FIELDS = (
     "BETA0", "BETAP0", "BETAA", "BETAN",
     "TAUE1", "TAUE2", "ZEFF0",
     "ALI", "RQ1",
+    "AJRFT",   # L-7b-i: includes EXTERNAL_DRIVEN_I contribution
 )
 
 _DIM_BOUNDS = (

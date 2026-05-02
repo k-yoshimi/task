@@ -38,7 +38,12 @@ MODULE trcomm_param
        PICTOT, PICR0, PICRW, PICCD, PICTOE, PICNPR, &
        PELTOT, PELR0, PELRW, PELRAD, PELVEL, PELTIM, &
        pellet_time_start,pellet_time_interval, &
-       ELMWID, ELMDUR
+       ELMWID, ELMDUR, &
+! L-7b-i: external user-supplied driven current (Gaussian profile, MA).
+! Distinct from PLHCD/PECCD/PICCD: bypasses TRCDEF efficiency model — the
+! given current is injected directly with a Gaussian radial shape rather
+! than computed from RF wave power × efficiency.
+       EXTERNAL_DRIVEN_I, EXTERNAL_DRIVEN_R0, EXTERNAL_DRIVEN_RW
   INTEGER:: &
        number_of_pellet_repeat
   REAL(rkind), DIMENSION(NSMM) :: &

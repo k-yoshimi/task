@@ -61,6 +61,9 @@ MODULE tr_state
      REAL(C_DOUBLE)  :: RT(TR_MAX_NSMAX, TR_MAX_NRMAX)
      REAL(C_DOUBLE)  :: AJ(TR_MAX_NRMAX)
      REAL(C_DOUBLE)  :: QP(TR_MAX_NRMAX)
+     ! L-7b-i: total RF + external driven current [MA] (sum into AJRFT global,
+     ! includes the new EXTERNAL_DRIVEN_I contribution from trprf).
+     REAL(C_DOUBLE)  :: AJRFT
   END TYPE tr_state_c
 
   ! One validation diagnostic entry. Mirrors tr_api.h::tr_diag_entry_t.

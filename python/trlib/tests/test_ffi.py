@@ -63,16 +63,17 @@ class TestTrStateCLayout(unittest.TestCase):
             "BETA0", "BETAP0", "BETAA", "BETAN",
             "TAUE1", "TAUE2", "ZEFF0", "ALI", "RQ1",
             "RN", "RT", "AJ", "QP",
+            "AJRFT",   # L-7b-i
         ):
             self.assertIn(n, names, f"missing field {n}")
 
     def test_size_matches_header_math(self):
-        # 3 ints + 13 doubles (scalars) + 2 * NR*NS doubles
+        # 3 ints + 14 doubles (scalars: 13 + AJRFT) + 2 * NR*NS doubles
         # + 2 * NR doubles. Compilers may pad the 3 ints to 16 bytes,
         # so we accept either 12 or 16 bytes for the int block.
         nr = _ffi.TR_MAX_NRMAX
         ns = _ffi.TR_MAX_NSMAX
-        exp_core = 13 * 8 + 2 * nr * ns * 8 + 2 * nr * 8
+        exp_core = 14 * 8 + 2 * nr * ns * 8 + 2 * nr * 8
         sz = ctypes.sizeof(_ffi.TrStateC)
         self.assertIn(
             sz,

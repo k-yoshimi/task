@@ -53,6 +53,7 @@ MODULE tr_param_registry
        PICCD, PICR0, PICRW, PICNPR, &
        PECCD, PECR0, PECRW, PECNPR, &
        PLHCD, PLHR0, PLHRW, PLHNPR, PLHTOT, &
+       EXTERNAL_DRIVEN_I, EXTERNAL_DRIVEN_R0, EXTERNAL_DRIVEN_RW, &
        KNAMEQ
   IMPLICIT NONE
   PRIVATE
@@ -161,6 +162,10 @@ CONTAINS
     CASE ("PLHRW");  PLHRW  = value
     CASE ("PLHNPR"); PLHNPR = value
     CASE ("PLHTOT"); PLHTOT = value
+    !     L-7b-i: external user-supplied driven current
+    CASE ("EXTERNAL_DRIVEN_I");  EXTERNAL_DRIVEN_I  = value
+    CASE ("EXTERNAL_DRIVEN_R0"); EXTERNAL_DRIVEN_R0 = value
+    CASE ("EXTERNAL_DRIVEN_RW"); EXTERNAL_DRIVEN_RW = value
     CASE DEFAULT
        ierr = 1   ! unknown name
     END SELECT

@@ -8,15 +8,19 @@
 
       USE TRCOMM, ONLY : AJRF, AJRFV, AME, DR, DVRHO, EPSRHO, NRMAX, PECCD, PECNPR, PECR0, PECRW, PECTOE, PECTOT, PICCD, &
      &                   PICNPR, PICR0, PICRW, PICTOE, PICTOT, PLHCD, PLHNPR, PLHR0, PLHRW, PLHTOE, PLHTOT, PRF, PRFV,   &
-     &                   RA, RKEV, RM, RN, RT, VC, ZEFF, rkind
+     &                   PI, RA, RKEV, RM, RN, RR, RT, VC, ZEFF, rkind, &
+     &                   EXTERNAL_DRIVEN_I, EXTERNAL_DRIVEN_R0, EXTERNAL_DRIVEN_RW
       IMPLICIT NONE
       REAL(rkind)   :: EFCDEC, EFCDIC, EFCDLH, FACT, PEC0, PECL, PIC0, PICL, PLH0, PLHL, PLHR0L, RLNLMD, SUMEC, SUMIC, SUMLH, &
-     &             VPHEC, VPHIC, VPHLH, VTE, VTEP
+     &             VPHEC, VPHIC, VPHLH, VTE, VTEP, SUM_EXT
       INTEGER:: NR
       REAL(rkind)   :: TRCDEF
 
 
-      IF(PECTOT+PLHTOT+PICTOT.LE.0.D0) RETURN
+      ! L-7b-i: enter the routine when EXTERNAL_DRIVEN_I is set even if no
+      ! RF source is configured. Existing PEC/PLH/PIC blocks gracefully
+      ! produce zero contributions when their TOT inputs are zero.
+      IF(PECTOT+PLHTOT+PICTOT.LE.0.D0 .AND. EXTERNAL_DRIVEN_I.EQ.0.D0) RETURN
 
       IF(PLHR0.LT.0.D0) THEN
          VPHLH=VC/(PLHNPR*ABS(PLHR0))
@@ -123,6 +127,34 @@
                     + PLHCD*PLHTOE*EFCDLH*PLHL          &
                     + PICCD*PICTOE*EFCDIC*PICL)
       ENDDO
+
+! ----- L-7b-i: external driven current (scalar API, Gaussian profile) -----
+! AJRFT [MA] = SUM(AJRF * DSRHO) * DR / 1.D6  (per trrslt_globals.f90:240)
+! DSRHO(NR) = DVRHO(NR) / (2*PI*RR)            (per trrslt_globals.f90:72)
+! → AJRFT [MA] = SUM(AJRF * DVRHO) * DR / (2*PI*RR * 1.D6)
+! Choose AJ_ext(NR) such that the integrated total → EXTERNAL_DRIVEN_I [MA] exactly:
+!   SUM(AJ_ext * DVRHO * DR) = EXTERNAL_DRIVEN_I * 1.D6 * 2*PI*RR  [A·m]
+! → AJ_ext(NR) = EXTERNAL_DRIVEN_I * 1.D6 * 2*PI*RR * gauss(NR) / SUM(gauss * DVRHO * DR)
+! Outer guard: skip when I=0 (default → no-op, backward compatible) OR when
+! RW<=0 (silent: tr_api_validate surfaces this misconfiguration via OUT_OF_RANGE).
+      IF (EXTERNAL_DRIVEN_I /= 0.D0 .AND. EXTERNAL_DRIVEN_RW > 0.D0) THEN
+         SUM_EXT = 0.D0
+         DO NR = 1, NRMAX
+            SUM_EXT = SUM_EXT + DEXP(-((RM(NR) - EXTERNAL_DRIVEN_R0) &
+                                       / EXTERNAL_DRIVEN_RW)**2) &
+                                * DVRHO(NR) * DR
+         END DO
+         ! Inner guard: numerical safety net for extreme RW that pushes the
+         ! Gaussian entirely outside the plasma.
+         IF (SUM_EXT > 0.D0) THEN
+            DO NR = 1, NRMAX
+               AJRF(NR) = AJRF(NR) + EXTERNAL_DRIVEN_I * 1.D6 * 2.D0 * PI * RR &
+                          * DEXP(-((RM(NR) - EXTERNAL_DRIVEN_R0) &
+                                   / EXTERNAL_DRIVEN_RW)**2) &
+                          / SUM_EXT
+            END DO
+         END IF
+      END IF
 
       RETURN
       END SUBROUTINE TRPWRF

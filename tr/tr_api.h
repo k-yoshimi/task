@@ -40,6 +40,9 @@ typedef struct {
     double RT[TR_MAX_NRMAX][TR_MAX_NSMAX];
     double AJ[TR_MAX_NRMAX];
     double QP[TR_MAX_NRMAX];
+    /* L-7b-i: total RF + external driven current [MA]. Mirrors AJRFT in
+       tr_state_c; placed at struct end to preserve existing field offsets. */
+    double AJRFT;
 } tr_state_t;
 
 /*
