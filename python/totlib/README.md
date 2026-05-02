@@ -285,18 +285,24 @@ with TotPipeline() as tot:
     print(result.last("tr").coupling_applied)
 ```
 
-**Coupling rules (L-7a):**
+**Coupling rules:**
 
-- `fp → tr`: fp's RJT volume integral [A] → tr's `PLHCD` [dimensionless]
+- `fp → tr`: fp's RJT volume integral [A] → tr's `EXTERNAL_DRIVEN_I` [MA]
   (transform `× 1e-6`).
 
-> **Skeleton coupling caveat.** `tr.PLHCD` is a dimensionless multiplier
-> (R3 outcome: `tr_param_registry.f90` does not register `PNBCD`, so
-> `PLHCD` is the only `set_param`-accepting current-drive scalar). L-7a
-> verifies API correctness — the equivalence test
-> (`python/totlib/tests/test_pipeline_equiv.py`) pins `1e-10` agreement
-> between hand-written and pipeline-driven runs. Physical fidelity (a
-> proper `EXTERNAL_DRIVEN_I` scalar) is L-7b's scope.
+The fp side computes the total driven current via
+`compute_rjt_volint(state, R0, a)` (volume integral of `RJT[NSA][NR]`
+over the plasma cross-section). The result [A] is converted to MA and
+pushed into tr's `EXTERNAL_DRIVEN_I` scalar; tr injects that current
+into the transport equation via a Gaussian radial profile
+(`EXTERNAL_DRIVEN_R0`, `EXTERNAL_DRIVEN_RW` — defaults 0.0 / 0.3:
+axis-peaked, width 30% of minor radius). The Gaussian is normalized
+so the integral of AJRF's external contribution equals
+`EXTERNAL_DRIVEN_I [MA]` exactly.
+
+Verify the injected total via `tr.get_state().scalars["AJRFT"]`
+(total RF + external driven current [MA], includes the
+`EXTERNAL_DRIVEN_I` contribution).
 
 **Failure handling:** If a step raises mid-pipeline, the exception is
 wrapped as `TotPipelineRunError` whose `partial_result` carries the

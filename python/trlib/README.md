@@ -131,6 +131,43 @@ is required — the wrapper forwards names verbatim.
 
 Unknown names return ierr=1 (raised as `TrlibParamError`).
 
+## External driven current
+
+For pipelines where another module computes a total driven current
+(e.g. fp's RJT volume integral) and tr should consume it, set:
+
+| Param                | Unit             | Default | Meaning                               |
+|----------------------|------------------|---------|---------------------------------------|
+| `EXTERNAL_DRIVEN_I`  | MA               | 0.0     | Total externally-driven current       |
+| `EXTERNAL_DRIVEN_R0` | normalized rho   | 0.0     | Gaussian profile center (axis-peaked) |
+| `EXTERNAL_DRIVEN_RW` | normalized rho   | 0.3     | Gaussian profile width                |
+
+`EXTERNAL_DRIVEN_I = 0.0` means no external drive (no-op; existing
+regression baselines are unaffected).
+
+```python
+from trlib import Trlib
+
+with Trlib() as tr:
+    tr.set_param("RR", 8.5)
+    tr.set_param("RA", 2.0)
+    # ... other parameters ...
+    tr.set_param("EXTERNAL_DRIVEN_I",  1.0)   # 1 MA externally driven
+    tr.set_param("EXTERNAL_DRIVEN_R0", 0.0)
+    tr.set_param("EXTERNAL_DRIVEN_RW", 0.3)
+    tr.run(ntmax=10)
+    state = tr.get_state()
+    print("AJRFT:", state.scalars["AJRFT"])   # ≈ 1.0 (matches injected I)
+```
+
+The injected current is added to `AJRF(NR)` in `trprf.f90`'s `TRPWRF`
+via a Gaussian profile, normalized so the integral over the plasma
+cross-section equals `EXTERNAL_DRIVEN_I [MA]` exactly.
+
+`tr.validate()` returns an `OUT_OF_RANGE` diagnostic if you set
+`EXTERNAL_DRIVEN_I != 0` together with `EXTERNAL_DRIVEN_RW <= 0`
+(which would silently no-op in trprf otherwise).
+
 ## `TrState` fields
 
 Matches `tr_state_t` in `tr/tr_api.h`. Full dict layout is available
@@ -142,14 +179,15 @@ format so `compare_metrics.py` can diff wrapper vs `tr2` output).
 | `nt` | int | current time-step index |
 | `nrmax` | int | radial points actually in use |
 | `nsmax` | int | species actually in use |
-| `scalars` | dict[str, float] | 13 plasma scalars (see below) |
+| `scalars` | dict[str, float] | 14 plasma scalars (see below) |
 | `RN` | list[list[float]] | `[nrmax][nsmax]` density profile |
 | `RT` | list[list[float]] | `[nrmax][nsmax]` temperature profile |
 | `AJ` | list[float] | `[nrmax]` current density profile |
 | `QP` | list[float] | `[nrmax]` safety-factor profile |
 
 Scalars (canonical order): `T`, `WPT`, `AJT`, `Q0`, `BETA0`,
-`BETAP0`, `BETAA`, `BETAN`, `TAUE1`, `TAUE2`, `ZEFF0`, `ALI`, `RQ1`.
+`BETAP0`, `BETAA`, `BETAN`, `TAUE1`, `TAUE2`, `ZEFF0`, `ALI`, `RQ1`,
+`AJRFT` (total RF + external driven current [MA]).
 
 ## Exceptions
 
