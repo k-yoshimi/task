@@ -8,7 +8,7 @@
 
 **Tech Stack:** Fortran (gfortran, free-form F90, BIND(C) interop), Python 3.10+ (ctypes + dataclasses), pytest. macOS local build needs `make -C tr GFLIBS=""` override (Linux CI defaults to empty).
 
-**Spec:** `docs/superpowers/specs/2026-05-03-l7b-ii-bpsd-broker-coupling-design.md` (commit `f3dafae6`)
+**Spec:** `docs/superpowers/specs/2026-05-03-l7b-ii-bpsd-broker-coupling-design.md` (commit `bdc09131`)
 
 **Predecessor:** L-7b-i PR #187 (squash-merged `e049a1e4`) established the same 4-phase commit pattern, the `EXTERNAL_DRIVEN_I` scalar plumbing, and the existing `CouplingRule` shape this plan extends.
 
@@ -48,7 +48,7 @@ Expected: only untracked files from prior session leftovers (`.worktrees/`, `doc
 git log --oneline -5
 ```
 
-Expected first line: `f3dafae6 docs(spec): L-7b-ii final assert narrowing for rule.verify`
+Expected first line: `bdc09131 docs(plan): add L-7b-ii BPSD broker coupling implementation plan`
 
 - [ ] **Step 3: Create and switch to feature branch**
 
@@ -331,7 +331,7 @@ git commit -m "trlib: add Trlib.check_bpsd_pull() wrapper (L-7b-ii)"
 - [ ] **Step 1: List Phase 1 commits**
 
 ```bash
-git log --oneline f3dafae6..HEAD
+git log --oneline bdc09131..HEAD
 ```
 
 Expected: 4 commits (Tasks 1.1, 1.2, 1.3, 1.4).
@@ -339,7 +339,7 @@ Expected: 4 commits (Tasks 1.1, 1.2, 1.3, 1.4).
 - [ ] **Step 2: Squash via soft reset**
 
 ```bash
-git reset --soft f3dafae6
+git reset --soft bdc09131
 git status
 ```
 
@@ -384,7 +384,7 @@ EOF
 git log --oneline -3
 ```
 
-Expected top: the new squashed Commit 1; HEAD~1 is `f3dafae6 docs(spec): L-7b-ii final assert narrowing for rule.verify`.
+Expected top: the new squashed Commit 1; HEAD~1 is `bdc09131 docs(plan): add L-7b-ii BPSD broker coupling implementation plan`.
 
 ---
 
@@ -751,7 +751,7 @@ EOF
 git log --oneline -4
 ```
 
-Expected top 2: Commit 2 (pipeline) and Commit 1 (Fortran/wrapper); HEAD~2 is `f3dafae6 docs(spec): ...`.
+Expected top 2: Commit 2 (pipeline) and Commit 1 (Fortran/wrapper); HEAD~2 is `bdc09131 docs(plan): ...`.
 
 ---
 
@@ -1191,10 +1191,15 @@ def test_eq_tr_modelg0_verify_fails():
     assert "BPSD broker" in msg
 ```
 
-- [ ] **Step 3: Run Layer C and measure runtime**
+- [ ] **Step 3: Run Layer C with `--forked` for BPSD isolation (per spec §8.4 risk #5) and measure runtime**
+
+`--forked` is required (not advisory) — BPSD broker state persists
+across in-process tests, and Layer C tests depend on a clean broker.
+Without isolation, C-3 (MODELG=0 expected failure) may spuriously
+pass if a prior C-1 already populated the BPSD slots.
 
 ```bash
-time PYTHONPATH=python python3 -m pytest --timeout=120 --timeout-method=signal -v \
+time PYTHONPATH=python python3 -m pytest --forked --timeout=120 --timeout-method=signal -v \
     python/totlib/tests/test_pipeline_eq_tr_verify.py 2>&1 | tail -20
 ```
 
@@ -1374,7 +1379,10 @@ README updates:
     documenting Trlib.check_bpsd_pull() with usage example and notes
     on non-mutating semantics + plasmaf exclusion + coarse granularity.
 
-Total: 11 cases (Layer A 6 + Layer B 3 + Layer C 2). Existing Layer 1
+Total: 11 logical cases (Layer A 6 + Layer B 3 + Layer C 2). The
+A-5 validation case is implemented as 3 separate test functions
+(transfer-missing-fields / verify-missing-callable / unknown-kind),
+so pytest reports 13 individual tests total. Existing Layer 1
 baselines (demo2014, ht6m at 1e-10) unchanged.
 
 Spec: docs/superpowers/specs/2026-05-03-l7b-ii-bpsd-broker-coupling-design.md
@@ -1390,7 +1398,7 @@ EOF
 git log --oneline -4
 ```
 
-Expected: 3 PR commits (Phase 3, 2, 1) + base spec commit (`f3dafae6`).
+Expected: 3 PR commits (Phase 3, 2, 1) + plan commit base (`bdc09131`).
 
 ---
 
@@ -1402,20 +1410,30 @@ Expected: 3 PR commits (Phase 3, 2, 1) + base spec commit (`f3dafae6`).
 
 **Files:** none (test only)
 
-- [ ] **Step 1: Run canonical CI test set (handoff scope)**
+- [ ] **Step 1: Run canonical CI test set (handoff scope, CLAUDE.md flags)**
+
+CLAUDE.md non-negotiable: pre-push pytest MUST use the SAME flags as
+the CI workflow: `--forked --timeout=120 --timeout-method=signal`.
+The `--forked` plugin is `pytest-forked`; install via `pip install
+pytest-forked` if missing. If the plugin is genuinely unavailable in
+the current environment (e.g. fresh contributor clone), document the
+substitution explicitly in the commit message and run without
+`--forked` as a documented exception.
 
 ```bash
-PYTHONPATH=python python3 -m pytest --timeout=120 --timeout-method=signal \
+PYTHONPATH=python python3 -m pytest --forked --timeout=120 --timeout-method=signal \
     python/totlib/tests/ python/mcp-servers/tot_mcp/tests/ 2>&1 \
     | grep -E "passed|failed" | tail -3
 ```
 
-Expected: 217 passed (206 baseline + Layer A 6 + integration 2 + 2.x test_pipeline.py ExceptionGroup unrelated may still fail on Python 3.10).
+Expected: 217 passed (206 baseline + Layer A 8 + integration 2 + the
+pre-existing Python 3.10 `ExceptionGroup` unrelated test may still
+fail; documented as known-not-blocking).
 
 - [ ] **Step 2: Run new Layer B unit tests**
 
 ```bash
-PYTHONPATH=python python3 -m pytest --timeout=60 \
+PYTHONPATH=python python3 -m pytest --forked --timeout=60 --timeout-method=signal \
     python/trlib/tests/test_bpsd_check.py python/trlib/tests/test_validate.py 2>&1 \
     | grep -E "passed|failed" | tail
 ```
@@ -1425,7 +1443,7 @@ Expected: all PASS (Layer B 3 + existing validate tests).
 - [ ] **Step 3: Re-verify Layer 1 baseline (key backward-compat gate)**
 
 ```bash
-PYTHONPATH=python python3 -m pytest --timeout=120 --timeout-method=signal \
+PYTHONPATH=python python3 -m pytest --forked --timeout=120 --timeout-method=signal \
     python/totlib/tests/test_equivalence.py 2>&1 | grep -E "passed|failed" | tail -3
 ```
 
@@ -1441,13 +1459,19 @@ DO NOT proceed if anything other than the documented Python 3.10 ExceptionGroup 
 
 - [ ] **Step 1: Launch in-house code-reviewer + Codex independent reviewer in PARALLEL**
 
+CLAUDE.md specifies `feature-dev:code-reviewer` as the in-house
+reviewer agent. If that subagent_type is unavailable in the current
+environment (verify via TaskList of available agents), substitute
+`superpowers:code-reviewer`. Both have the same review responsibility;
+the priority is "two independent reviewers in parallel".
+
 In a single message, dispatch both:
 
 ```
-Agent(subagent_type="superpowers:code-reviewer", prompt="""
+Agent(subagent_type="feature-dev:code-reviewer", prompt="""
 Review the diff in /Users/k-yoshimi/Dropbox/cursor/task on branch
 claude/2026-05-03-l7b-ii-bpsd-broker-coupling. Run:
-    git diff f3dafae6..HEAD
+    git diff bdc09131..HEAD
 to see the 3 commits:
 
 1. tr+trlib: tr_check_bpsd_pull helper + C ABI + Python wrapper
@@ -1651,7 +1675,7 @@ Expected: chore tip is the new merge commit; the L-7b-ii series is now on chore.
 | §7 Layer A 6 cases | Task 3.1 |
 | §7 Layer B 3 cases | Task 3.2 |
 | §7 Layer C 2 cases (C-1, C-3) | Task 3.3 |
-| §7 MODELG fixture extension | Task 3.3 (uses `tot_demo2014_params.py` + explicit MODELG) |
+| §7 MODELG fixture extension | Task 3.3 (introduces local `_eq_params_modelg(modelg)` helper instead of mutating `tot_demo2014_params.py`; rationale: avoid side effects on Layer 1 baselines that share the existing fixture. Spec §7 preferred extending the existing file; this plan deviates for safety. The `eqdata.demo2014` path IS reused.) |
 | §7 CI runtime measurement | Task 3.3 Step 3-4 |
 | §8.1 Out-of-scope deferrals | PR description Out-of-scope section (Task 4.4) |
 | §8.4 BPSD pre-alloc fallback | Task 1.1 (`%nrmax = 0` initialization) |
