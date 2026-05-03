@@ -24,8 +24,10 @@ would surface only as downstream tr behavior (default values, NaNs,
 or quiet divergence from baselines).
 
 This spec adds an orchestrator-level verification step that fires
-between `eq.run()` and `tr.run()`, asserts that all four BPSD slots
-tr expects (`device`, `plasmaf`, `equ1D`, `metric1D`) are pullable, and
+between `eq.run()` and `tr.run()`, asserts that all three BPSD slots
+that eq pushes (`device`, `equ1D`, `metric1D`) are pullable. (Note:
+`plasmaf` is tr's own output to BPSD — pushed by `tr_bpsd_put`, NOT
+by eq — so it is intentionally excluded from the eq→tr verify.), and
 raises `TotPipelineCouplingError` (existing class) on failure.
 
 ```
@@ -33,8 +35,13 @@ raises `TotPipelineCouplingError` (existing class) on failure.
        ↓
 [orchestrator] ── after eq, before tr, fires ("eq","tr") VERIFY rule
        ↓
-[tr_check_bpsd_pull()] ── new C ABI helper; pulls 4 slots into LOCAL
-                          discardable types; reports ok = (all ierr==0)
+[tr_check_bpsd_pull()] ── new C ABI helper; pulls the 3 eq-pushed slots
+                          (device, equ1D, metric1D) into LOCAL discardable
+                          types; reports ok = (all 3 ierr==0). plasmaf is
+                          NOT checked: it is tr's own BPSD output, pushed
+                          by tr_bpsd_put on a previous run, so a fresh
+                          [eq, tr] pipeline would spuriously fail a
+                          plasmaf check.
        ↓
 [orchestrator] ── if ok: continue to tr.run(); if not: raise CouplingError
                   (wrapped by run_pipeline's broad except into RunError)
@@ -66,7 +73,7 @@ Out of scope (see §8 for full list):
 | Python wrapper (`python/trlib/_ffi.py` + `trlib.py`) | ~30 |
 | `CouplingRule` extension + dispatch (`python/totlib/pipeline.py`) | ~25 |
 | New `("eq","tr")` rule entry | ~10 |
-| Tests (3 layers, 12 cases) | ~245 |
+| Tests (3 layers, 11 cases) | ~245 |
 | Doc updates | ~30 |
 
 ---
@@ -77,30 +84,29 @@ Out of scope (see §8 for full list):
 
 ```fortran
 !  --- L-7b-ii: BPSD broker round-trip verification ---------
-!  Pull all 4 BPSD slots (device, plasmaf, equ1D, metric1D) into
+!  Pull the 3 eq-pushed BPSD slots (device, equ1D, metric1D) into
 !  LOCAL discardable types and report ok = (all per-slot ierr == 0).
+!  plasmaf is intentionally NOT pulled: it is tr's own BPSD output
+!  (via tr_bpsd_put), absent on a fresh eq->tr pipeline.
 !  Non-mutating: TRCOMM is untouched; safe to call before or after
-!  tr.run(). Per-slot ierr are accumulated to avoid masking
-!  earlier failures by later successes.
+!  tr.run(). Per-slot ierr are accumulated to avoid masking earlier
+!  failures by later successes.
 SUBROUTINE tr_check_bpsd_pull(ok) BIND(C, NAME="tr_check_bpsd_pull")
   USE iso_c_binding, ONLY: c_int
   USE bpsd, ONLY: bpsd_get_data
-  USE bpsd_types, ONLY: bpsd_device_type, bpsd_plasmaf_type,  &
-                         bpsd_equ1D_type, bpsd_metric1D_type
+  USE bpsd_types, ONLY: bpsd_device_type, bpsd_equ1D_type,  &
+                         bpsd_metric1D_type
   INTEGER(c_int), INTENT(OUT) :: ok
   TYPE(bpsd_device_type)    :: dev_local
-  TYPE(bpsd_plasmaf_type)   :: pf_local
   TYPE(bpsd_equ1D_type)     :: eq_local
   TYPE(bpsd_metric1D_type)  :: met_local
-  INTEGER :: ierr_dev, ierr_pf, ierr_eq, ierr_met
+  INTEGER :: ierr_dev, ierr_eq, ierr_met
 
   CALL bpsd_get_data(dev_local, ierr_dev)
-  CALL bpsd_get_data(pf_local,  ierr_pf)
   CALL bpsd_get_data(eq_local,  ierr_eq)
   CALL bpsd_get_data(met_local, ierr_met)
 
-  IF (ierr_dev == 0 .AND. ierr_pf == 0 .AND.  &
-      ierr_eq  == 0 .AND. ierr_met == 0) THEN
+  IF (ierr_dev == 0 .AND. ierr_eq == 0 .AND. ierr_met == 0) THEN
     ok = 1
   ELSE
     ok = 0
@@ -123,9 +129,11 @@ END SUBROUTINE tr_check_bpsd_pull
 
 ```c
 /* L-7b-ii: BPSD broker round-trip verification.
- * Returns *ok = 1 on successful pull of all 4 BPSD slots
- * (device, plasmaf, equ1D, metric1D); 0 otherwise. Non-mutating:
- * pulls into local discardable types, does not change tr_state. */
+ * Returns *ok = 1 on successful pull of the 3 eq-pushed BPSD slots
+ * (device, equ1D, metric1D); 0 otherwise. plasmaf is intentionally
+ * excluded -- it is tr's own BPSD output, absent on a fresh eq->tr
+ * pipeline. Non-mutating: pulls into local discardable types, does
+ * not change tr_state. */
 void tr_check_bpsd_pull(int *ok);
 ```
 
@@ -151,9 +159,10 @@ Add to the existing `load_library` prototype-attachment block.
 
 ```python
 def check_bpsd_pull(self) -> bool:
-    """Verify that BPSD has all 4 slots tr expects (device, plasmaf,
-    equ1D, metric1D) by performing a non-mutating round-trip pull
-    into local discardable types.
+    """Verify that BPSD has the 3 eq-pushed slots (device, equ1D,
+    metric1D) by performing a non-mutating round-trip pull into
+    local discardable types. plasmaf is excluded: it is tr's own
+    BPSD output, absent on a fresh eq -> tr pipeline.
 
     Used by TotPipeline as a pre-tr-run verification of the eq -> tr
     BPSD coupling: after eq.run() pushes equ1D/metric1D into BPSD,
@@ -180,9 +189,11 @@ Existing fields stay; two new fields are added; existing transfer
 rules continue to work unchanged (defaults preserve their semantics).
 
 ```python
-@dataclass
+@dataclass(frozen=True)   # preserved from existing definition
 class CouplingRule:
     # --- existing transfer-rule fields (kind="transfer") ---
+    # All three are required for kind="transfer" but defaulted to
+    # None so kind="verify" rules can omit them.
     src_state_key: Optional[Callable] = None
     dst_param: Optional[str] = None
     transform: Optional[Callable] = None
@@ -195,10 +206,17 @@ class CouplingRule:
 
     def __post_init__(self):
         if self.kind == "transfer":
-            if self.src_state_key is None or self.dst_param is None:
+            missing = [
+                name for name, val in (
+                    ("src_state_key", self.src_state_key),
+                    ("dst_param",     self.dst_param),
+                    ("transform",     self.transform),
+                ) if val is None
+            ]
+            if missing:
                 raise ValueError(
-                    "transfer-kind CouplingRule requires "
-                    "src_state_key and dst_param"
+                    f"transfer-kind CouplingRule missing required "
+                    f"fields: {missing}"
                 )
         elif self.kind == "verify":
             if self.verify is None:
@@ -208,6 +226,11 @@ class CouplingRule:
         else:
             raise ValueError(f"unknown CouplingRule.kind: {self.kind!r}")
 ```
+
+**Note on `frozen=True`**: The existing dataclass is frozen for
+hashability and accidental-mutation guards. `__post_init__` only
+raises `ValueError` and never assigns to `self.*`, so frozen
+remains compatible.
 
 **Why kind+verify (vs separate `VerificationRule` dataclass)?** MVP
 prioritizes minimal infrastructure churn (1 dataclass field + 1
@@ -529,6 +552,21 @@ verify is orchestrator-level only; no Fortran-level numerics change.
   に限定 or BPSD 提供環境を持つ runner に hard-skipif。L-7a が
   同種の lib-availability skip pattern を確立済。
 
+- **Stale BPSD slot data across tests/runs**
+  Risk: BPSD persists data put by a previous tr.run() (or earlier
+  test in the same process). A pullability check can pass against
+  STALE slots even if the current pipeline's eq.run() failed silently.
+  - Layer B is unaffected: B-1 starts in a fresh process where BPSD
+    is empty (per Codex Q3 confirmation: tr_init does not pre-populate)
+  - Layer A is unaffected: it uses mocks, no real BPSD interaction
+  - Layer C may be affected: multiple tests in the same process
+    share BPSD state
+  Fallback: Layer C tests use `--forked` (existing pytest-forked
+  pattern in the repo per CLAUDE.md) for per-test process isolation,
+  OR explicitly reset BPSD between tests via a fixture finalizer
+  (mechanism to be specified at plan-time). Spec assumption: each
+  Layer C test starts from a clean BPSD broker.
+
 ### §8.5 Explicit assumptions (MVP の前提)
 
 - **eq → tr は single-step pipeline** (multi-time-step での time skew
@@ -557,9 +595,14 @@ This spec is implemented when:
    `kind="verify"`
 4. Layer A test cases (A-1 through A-6) all pass
 5. Layer B test cases (B-1 through B-3) all pass
-6. Layer C test cases (C-1, C-3) pass when libs + eqdata are present;
-   skip cleanly otherwise (drop from MVP if Eq wrapper is insufficient
-   per §8.4 fallback)
+6. Layer C decision is **plan-time** (not post-MVP): if `Eq` wrapper
+   is sufficient (set_param/set_param_str/run/get_state present per
+   §8.4 risk #2), Layer C cases C-1 and C-3 must pass when libs +
+   eqdata are present and skip cleanly otherwise. If `Eq` wrapper
+   is insufficient, Layer C is removed from MVP scope and AC6 is
+   satisfied by Layer A+B alone (follow-up PR adds Layer C after
+   `Eq` wrapper is extended). The drop decision is made at plan
+   creation, before implementation begins.
 7. `python/totlib/README.md` documents the new `("eq","tr")` rule
 8. Existing Layer 1 baselines (demo2014, ht6m at 1e-10) unchanged
 9. CLAUDE.md pre-push gate passed (local pytest + 2 reviewer agents +
