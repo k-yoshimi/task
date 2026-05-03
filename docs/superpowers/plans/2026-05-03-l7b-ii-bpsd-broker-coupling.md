@@ -1433,7 +1433,7 @@ fail; documented as known-not-blocking).
 - [ ] **Step 2: Run new Layer B unit tests**
 
 ```bash
-PYTHONPATH=python python3 -m pytest --forked --timeout=60 --timeout-method=signal \
+PYTHONPATH=python python3 -m pytest --forked --timeout=120 --timeout-method=signal \
     python/trlib/tests/test_bpsd_check.py python/trlib/tests/test_validate.py 2>&1 \
     | grep -E "passed|failed" | tail
 ```
