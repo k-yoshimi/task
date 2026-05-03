@@ -56,7 +56,10 @@ In scope:
 - ✅ C ABI export + Python wrapper
 - ✅ `CouplingRule` extended with `kind` and `verify` fields
 - ✅ Single new entry in `COUPLING_RULES` for `("eq","tr")`
-- ✅ Test coverage across mock, unit, and integration layers
+- ✅ Test coverage: Layer A (mock dispatch) + Layer B (unit) are
+  unconditional MVP. Layer C (integration) is conditionally included
+  based on plan-time `Eq` wrapper sufficiency check (§8.4 risk #2);
+  if dropped, it ships in a follow-up PR. See AC6.
 - ✅ Doc updates in `python/totlib/README.md` and `python/trlib/README.md`
 
 Out of scope (see §8 for full list):
@@ -123,7 +126,7 @@ END SUBROUTINE tr_check_bpsd_pull
 - TRCOMM is never touched, so `tr.run()` afterwards proceeds with its
   natural state (no double-pull-overwrite risk).
 - Each `bpsd_get_data` call writes its own `ierr_*`; the final `ok`
-  is computed from the AND of all four. No masking by last-write.
+  is computed from the AND of all three. No masking by last-write.
 
 ### `tr/tr_api.h` — C prototype
 
@@ -249,9 +252,10 @@ COUPLING_RULES: Dict[Tuple[str, str], List[CouplingRule]] = {
             verify=lambda tr_inst: tr_inst.check_bpsd_pull(),
             doc=(
                 "eq -> tr equilibrium coupling via BPSD broker "
-                "(equ1D + metric1D + device + plasmaf). Verified "
-                "pre-tr-run; raises TotPipelineCouplingError if "
-                "BPSD lacks any expected slot."
+                "(verifies device + equ1D + metric1D; plasmaf is "
+                "tr's own BPSD output and intentionally excluded). "
+                "Verified pre-tr-run; raises TotPipelineCouplingError "
+                "if BPSD lacks any expected slot."
             ),
         ),
     ],
@@ -274,8 +278,14 @@ The existing rule-firing loop in `run_pipeline` (around
 ```python
 for rule in COUPLING_RULES.get((prev_name, name), []):
     if rule.kind == "transfer":
-        # Existing logic: extract -> transform -> set_param -> record
+        # Existing logic: extract -> transform -> set_param -> record.
+        # __post_init__ guarantees src_state_key/dst_param/transform
+        # are non-None for kind="transfer", so the asserts below are
+        # type-narrowing for static checkers (mypy/pyright) and
+        # documentation for readers; they are unreachable at runtime.
         raw = self._extract_source(prev_state, rule)
+        assert rule.transform is not None    # type narrowing
+        assert rule.dst_param is not None    # type narrowing
         try:
             transformed = rule.transform(raw)
         except Exception as e:
