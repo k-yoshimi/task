@@ -311,7 +311,7 @@ Expected: `got expected TrlibError: check_bpsd_pull on closed Trlib`.
 - [ ] **Step 5: Run existing trlib tests to confirm no regression**
 
 ```bash
-PYTHONPATH=python python3 -m pytest --timeout=60 \
+PYTHONPATH=python python3 -m pytest --forked --timeout=120 --timeout-method=signal \
     python/trlib/tests/test_trlib.py python/trlib/tests/test_validate.py 2>&1 | tail -5
 ```
 
@@ -586,7 +586,7 @@ Edit `python/totlib/pipeline.py`. Locate the existing rule loop (inside the `if 
 - [ ] **Step 3: Verify pipeline tests still pass (transfer path unchanged)**
 
 ```bash
-PYTHONPATH=python python3 -m pytest --timeout=120 --timeout-method=signal \
+PYTHONPATH=python python3 -m pytest --forked --timeout=120 --timeout-method=signal \
     python/totlib/tests/test_pipeline.py 2>&1 | grep -E "passed|failed" | tail -3
 ```
 
@@ -655,7 +655,7 @@ Expected:
 - [ ] **Step 4: Verify Layer 1 baseline still passes (verify rule must not affect tr-only pipelines)**
 
 ```bash
-PYTHONPATH=python python3 -m pytest --timeout=120 --timeout-method=signal \
+PYTHONPATH=python python3 -m pytest --forked --timeout=120 --timeout-method=signal \
     python/totlib/tests/test_equivalence.py 2>&1 | grep -E "passed|failed" | tail -3
 ```
 
@@ -967,7 +967,7 @@ def test_unregistered_pair_silent_skip(patch_wrappers, monkeypatch):
 - [ ] **Step 3: Run the new tests**
 
 ```bash
-PYTHONPATH=python python3 -m pytest --timeout=60 -v \
+PYTHONPATH=python python3 -m pytest --forked --timeout=120 --timeout-method=signal -v \
     python/totlib/tests/test_pipeline_verify.py 2>&1 | tail -20
 ```
 
@@ -1063,7 +1063,7 @@ if __name__ == "__main__":  # pragma: no cover
 - [ ] **Step 3: Run the tests**
 
 ```bash
-PYTHONPATH=python python3 -m pytest --timeout=60 -v \
+PYTHONPATH=python python3 -m pytest --forked --timeout=120 --timeout-method=signal -v \
     python/trlib/tests/test_bpsd_check.py 2>&1 | tail -10
 ```
 
