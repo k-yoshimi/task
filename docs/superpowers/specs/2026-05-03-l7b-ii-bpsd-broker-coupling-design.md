@@ -334,8 +334,12 @@ TotPipelineRunError("step 1 (tr) failed: verify failed: rule 'eq -> tr ...' retu
 ### Error message format
 
 ```
-verify failed: rule {rule.doc!r} ({verify.__qualname__}) for {prev}->{curr} returned False (likely cause: ...)
+verify failed: rule {rule.doc!r} ({callable_repr}) for {prev}->{curr} returned False (likely cause: ...)
 ```
+
+where `callable_repr = getattr(rule.verify, "__qualname__", repr(rule.verify))`
+(see §5 dispatch). Falls back to `repr(verify)` for `functools.partial`
+or other callables without `__qualname__`.
 
 - `verify failed:` prefix improves `pytest -x` one-liner scannability
 - Includes src→dst pair + full doc + verify callable qualname for debug
@@ -353,7 +357,9 @@ arise in the future, add `f"rule[{idx}]"` to the format.
 
 ## §7. Test strategy
 
-Three layers, 12 total cases. All use `pytest`; no new framework dependencies.
+Three layers, 11 total cases (C-2 documented for completeness but not
+implemented — see Layer C table). All use `pytest`; no new framework
+dependencies.
 
 ### Layer A: Mock-based dispatch tests
 
@@ -496,9 +502,10 @@ verify is orchestrator-level only; no Fortran-level numerics change.
 
 - **`bpsd_get_data` の destination type 要件**
   Risk: local の uninitialized type に直接 pull できるか。
-  Fallback: helper 内で local type を `ALLOCATABLE` 宣言 +
-  `ALLOCATE(local%rho(MAX_NRHO))` 等を pre-call。
-  Impact: helper が ~10 行膨らむのみ、design 不変。
+  Fallback: helper 内で local type の必要 array (e.g. `rho`,
+  `psit`, etc.) を `ALLOCATABLE` 宣言 + `ALLOCATE` 前置。
+  サイズは BPSD 既存 caller (eq/eqbpsd, tr/trbpsd) のパターンを
+  借用。Impact: helper が ~10 行膨らむのみ、design 不変。
 
 - **`python/eqlib/Eq` wrapper の API 充足度**
   Risk: Layer C で `[("eq", ...), ("tr", ...)]` pipeline に必要な
