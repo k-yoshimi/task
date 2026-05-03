@@ -296,6 +296,7 @@ for rule in COUPLING_RULES.get((prev_name, name), []):
         self._params[f"{name}:{rule.dst_param}"] = transformed
         applied.append(rule.doc)
     elif rule.kind == "verify":
+        assert rule.verify is not None    # type narrowing (see transfer branch)
         try:
             ok = rule.verify(module)   # module = curr_inst
         except Exception as e:
