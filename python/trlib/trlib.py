@@ -329,5 +329,24 @@ class Trlib:
             ))
         return out
 
+    def check_bpsd_pull(self) -> bool:
+        """Verify that BPSD has the 3 eq-pushed slots (device, equ1D,
+        metric1D) by performing a non-mutating round-trip pull into
+        local discardable types. plasmaf is excluded: it is tr's own
+        BPSD output, absent on a fresh eq -> tr pipeline.
+
+        Used by TotPipeline as a pre-tr-run verification of the eq -> tr
+        BPSD coupling: after eq.run() pushes equ1D/metric1D into BPSD,
+        a False return signals broker failure / missing eq step / wrong
+        pipeline order. TRCOMM is unaffected.
+
+        Returns True iff all 3 BPSD slots are pullable (per-slot ierr==0).
+        """
+        if self._closed:
+            raise TrlibError("check_bpsd_pull on closed Trlib")
+        ok = ctypes.c_int(0)
+        self._lib.tr_check_bpsd_pull(ctypes.byref(ok))
+        return ok.value == 1
+
 
 __all__ = ["Trlib", "TrDiagCode", "TrDiagEntryPy"]

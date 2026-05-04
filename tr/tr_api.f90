@@ -47,7 +47,8 @@ MODULE tr_api
   PRIVATE
   PUBLIC :: tr_api_init, tr_api_run, tr_api_get_state, &
             tr_api_set_param, tr_api_set_param_str, tr_api_finalize, &
-            tr_api_validate
+            tr_api_validate, &
+            tr_check_bpsd_pull
 
   ! Error codes (must match tr_api.h enum):
   !   0 = OK
@@ -476,5 +477,39 @@ CONTAINS
     END SUBROUTINE push_diag
 
   END FUNCTION tr_api_validate
+
+  ! ----- L-7b-ii: BPSD broker round-trip verification -------------
+  ! Non-mutating: pulls the 3 eq-pushed BPSD slots (device, equ1D,
+  ! metric1D) into LOCAL discardable types and reports ok = 1 iff
+  ! all three per-slot ierr == 0. plasmaf is intentionally NOT
+  ! checked; it is tr's own BPSD output (tr_bpsd_put), absent on a
+  ! fresh eq->tr pipeline. Each local %nrmax is set to 0 to trigger
+  ! BPSD's self-allocation path (per ../../bpsd/bpsd_equ1D.f90:143).
+  SUBROUTINE tr_check_bpsd_pull(ok) BIND(C, NAME="tr_check_bpsd_pull")
+    USE iso_c_binding, ONLY: c_int
+    USE bpsd, ONLY: bpsd_get_data
+    USE bpsd_types, ONLY: bpsd_device_type, bpsd_equ1D_type, &
+                          bpsd_metric1D_type
+    INTEGER(c_int), INTENT(OUT) :: ok
+    TYPE(bpsd_device_type)    :: dev_local
+    TYPE(bpsd_equ1D_type)     :: eq_local
+    TYPE(bpsd_metric1D_type)  :: met_local
+    INTEGER :: ierr_dev, ierr_eq, ierr_met
+
+    ! Initialize size fields to 0 so BPSD allocates internally
+    ! (mode=0 path in bpsd_get_*). bpsd_device_type has no nrmax.
+    eq_local%nrmax  = 0
+    met_local%nrmax = 0
+
+    CALL bpsd_get_data(dev_local, ierr_dev)
+    CALL bpsd_get_data(eq_local,  ierr_eq)
+    CALL bpsd_get_data(met_local, ierr_met)
+
+    IF (ierr_dev == 0 .AND. ierr_eq == 0 .AND. ierr_met == 0) THEN
+      ok = 1
+    ELSE
+      ok = 0
+    END IF
+  END SUBROUTINE tr_check_bpsd_pull
 
 END MODULE tr_api

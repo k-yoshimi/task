@@ -105,6 +105,14 @@ int tr_finalize(void);
  */
 int tr_validate(tr_diag_entry_t* diag, int diag_cap, int* ndiag_out);
 
+/* L-7b-ii: BPSD broker round-trip verification.
+ * Returns *ok = 1 on successful pull of the 3 eq-pushed BPSD slots
+ * (device, equ1D, metric1D); 0 otherwise. plasmaf is intentionally
+ * excluded -- it is tr's own BPSD output, absent on a fresh eq->tr
+ * pipeline. Non-mutating: pulls into local discardable types; does
+ * not change tr_state_t contents. */
+void tr_check_bpsd_pull(int *ok);
+
 #ifdef __cplusplus
 }
 #endif

@@ -194,6 +194,10 @@ def _apply_prototypes(lib: ctypes.CDLL) -> ctypes.CDLL:
 
     lib.tr_finalize.restype = ctypes.c_int
     lib.tr_finalize.argtypes = []
+
+    # L-7b-ii: BPSD broker round-trip verification (non-mutating).
+    lib.tr_check_bpsd_pull.argtypes = [ctypes.POINTER(ctypes.c_int)]
+    lib.tr_check_bpsd_pull.restype = None
     return lib
 
 
