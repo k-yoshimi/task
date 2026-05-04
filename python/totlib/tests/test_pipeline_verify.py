@@ -1,12 +1,16 @@
 """L-7b-ii: verify-rule dispatch tests for TotPipeline.
 
-Six mock-based cases covering:
+Eight mock-based test functions covering six logical cases (A-5 is
+realised as three separate test functions, one per validation path):
 
   A-1: verify True -> rule recorded in coupling_applied
-  A-2: verify False -> TotPipelineRunError raised, applied unchanged
+  A-2: verify False -> TotPipelineRunError, 2-level __cause__ chain
+       (CouplingError, no original cause)
   A-3: verify raises -> TotPipelineRunError, 3-level __cause__ chain
+       (CouplingError -> original exception)
   A-4: mixed transfer+verify rules in one pair fire in declaration order
   A-5: __post_init__ validation rejects misconstructed rules
+       (transfer-missing-fields / verify-missing-callable / unknown-kind)
   A-6: unregistered pair -> silent skip, coupling_applied == []
 
 No `.so` required; uses the existing patch_wrappers + monkeypatch

@@ -298,9 +298,13 @@ with TotPipeline() as tot:
   `transform` → `set_param` の流れで前段モジュールの状態をスカラー値
   として後段へ渡す。`src_state_key`/`dst_param`/`transform` の 3 つが必須。
 - `kind="verify"` (L-7b-ii 新設): 前段ステップ完了後、後段モジュールの
-  `verify(curr_inst)` を呼んで真偽値を返す。`False` または例外なら
-  `TotPipelineCouplingError` を `TotPipelineRunError` の `__cause__` に
-  ぶら下げて送出する (3 段の例外チェイン)。`verify` のみ必須。
+  `verify(curr_inst)` を呼んで真偽値を返す。
+  `False` 返却時 → `TotPipelineRunError.__cause__ =
+  TotPipelineCouplingError` の **2 段** チェイン
+  (元例外がないため `__cause__.__cause__` は None)。
+  `verify` 内で例外が送出された場合 → `TotPipelineRunError.__cause__ =
+  TotPipelineCouplingError`、`__cause__.__cause__ = 元例外` の
+  **3 段** チェイン。`verify` のみ必須。
 
 `("eq","tr")` の verify ルール (BPSD ブローカー経由の equilibrium
 受け渡し検証) について — **本リリースでは登録を保留**。

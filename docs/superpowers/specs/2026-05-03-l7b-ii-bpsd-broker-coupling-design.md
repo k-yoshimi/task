@@ -1,13 +1,55 @@
 # L-7b-ii: BPSD broker coupling verification (eq → tr) — Design
 
-**Status:** Draft (brainstorming-stage spec)
-**Date:** 2026-05-03
+**Status:** Partial (verify dispatch shipped; ('eq','tr') registry
+entry deferred — see §0 below)
+**Date:** 2026-05-03 (spec); 2026-05-04 (implementation deferral note)
 **Predecessors:** `2026-04-28-l7a-cross-module-coupling-design.md`,
 `2026-05-02-l7b-i-external-driven-i-design.md`
 **MVP scope:** "A-medium" — eq → tr orchestrator-level verification of
 the existing Fortran-side BPSD coupling. New scope is intentionally
 narrow; broader L-7b follow-ups (wr coupling, declarative API, state
 aggregation) are out-of-scope (§8.1).
+
+---
+
+## §0. Implementation deferral note (2026-05-04)
+
+実装 PR (branch `claude/2026-05-03-l7b-ii-bpsd-broker-coupling`) 投入時
+に確認した制約。本 spec の §1〜§9 の記述は変更していないが、
+「BPSD = eq/tr 共有ブローカー」の前提が `TotPipeline` (per-module
+.so) アーキテクチャでは成立しないことが分かった。
+
+**確認内容**: `nm libeqapi.so` と `nm libtrapi.so` の両方で
+`___bpsd_equ1d_MOD_equ1dx` 等の BPSD module-level シンボルが
+小文字 `s` (static linkage = .so 内 private) として現れる。よって
+libeqapi.so 側の `bpsd_put_equ1D` は libtrapi.so 側の `bpsd_get_equ1D`
+が触る `equ1Dx` には到達しない。レガシー `Tot` / `libtotapi.so`
+は eq + tr + bpsd を同一 .so に co-link しているため本制約の影響を
+受けない。
+
+**この PR で shipped**:
+- §2 Fortran helper `tr_check_bpsd_pull` (非破壊、3 スロット pull)
+- §3 C ABI + `Trlib.check_bpsd_pull` Python wrapper
+- §4 `CouplingRule.kind` / `verify` フィールド + `__post_init__` 検証
+- §5 `pipeline.py` の verify ディスパッチ (`kind="verify"` ブランチ)
+- §7 Layer A (8 mock テスト) と Layer B (3 unit テスト)
+
+**この PR で deferred**:
+- §4 の `("eq","tr")` ルール登録 → `COUPLING_RULES` には未追加
+- §7 Layer C (eq+tr 統合テスト) → `TotPipeline` では構造的に
+  C-1 が pass しえず、C-3 は誤った理由で pass するため割愛
+
+**有効化に必要な変更**: 共有 BPSD 状態の確立 — 候補は (a) 共有 .so
+への再構成、(b) IPC ベース broker、(c) RTLD_GLOBAL + weak symbols
+を用いた dlopen 時の symbol unification、(d) per-module .so のまま
+明示的な BPSD blob のシリアライゼーション + Python 側受け渡し。
+方針が決まり次第、`COUPLING_RULES` に 1 行と Layer C 統合テストを
+追加すればルールが有効化される (verify ディスパッチ機構自体は
+完了済み)。
+
+ユーザ向けの説明は `python/totlib/README.md` の Coupling rules 節と
+`python/trlib/README.md` の "BPSD ブローカー pull 検証" 節 (両方とも
+日本語) を参照。
 
 ---
 
