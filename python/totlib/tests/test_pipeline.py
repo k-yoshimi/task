@@ -308,7 +308,12 @@ def test_run_pipeline_missing_source_state_raises_coupling_error(
     from totlib.pipeline import CouplingRule
     rules = {
         ("fp", "tr"): [
-            CouplingRule(src_state_key="missing_key", dst_param="X", doc="r"),
+            CouplingRule(
+                src_state_key="missing_key",
+                dst_param="X",
+                transform=lambda v: v,
+                doc="r",
+            ),
         ]
     }
     monkeypatch.setattr("totlib.pipeline.COUPLING_RULES", rules)

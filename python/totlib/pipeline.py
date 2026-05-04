@@ -12,7 +12,7 @@ import importlib
 import math
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # ExceptionGroup is a Python 3.11+ builtin. The exceptiongroup PyPI
 # package back-ports it to 3.10. Fall back to None if neither is
@@ -41,7 +41,18 @@ class CouplingRule:
     Frozen so the registry can be hashable in the future (rule dedup,
     set-based lookups) and to prevent accidental mutation by callers.
 
-    src_state_key resolves a value from the source module's get_state():
+    Two kinds of rules are supported:
+
+    * kind="transfer" (default): runs src_state_key on the previous
+      step's state, applies transform, and pushes via set_param to
+      the current module. All three of src_state_key/dst_param/
+      transform are required.
+    * kind="verify" (L-7b-ii): runs verify(curr_inst) and raises
+      TotPipelineCouplingError if False. Only the verify callable
+      is required; src_state_key/dst_param/transform are ignored.
+
+    src_state_key (transfer-kind only) resolves a value from the source
+    module's get_state():
 
     * str  -> looked up in prev_state.scalars (only valid for modules
       that expose a .scalars dict — Tr/Eq/Wr/Wrx/Ti).
@@ -53,11 +64,37 @@ class CouplingRule:
     sink.set_param). transform is applied to the source value (e.g. unit
     conversion) before it reaches the sink.
     """
-
-    src_state_key: Union[str, Callable[[Any, Dict[str, Any]], float]]
-    dst_param: str
-    transform: Callable[[float], float] = lambda v: v
+    # Transfer-rule fields (required when kind="transfer").
+    src_state_key: Optional[Union[str, Callable[[Any, Dict[str, Any]], float]]] = None
+    dst_param: Optional[str] = None
+    transform: Optional[Callable[[float], float]] = None
     doc: str = ""
+    # L-7b-ii: kind dispatch + verify-only callable.
+    kind: str = "transfer"
+    verify: Optional[Callable[[Any], bool]] = None
+    #   verify(dst_inst) -> bool; only consulted when kind == "verify"
+
+    def __post_init__(self):
+        if self.kind == "transfer":
+            missing = [
+                name for name, val in (
+                    ("src_state_key", self.src_state_key),
+                    ("dst_param",     self.dst_param),
+                    ("transform",     self.transform),
+                ) if val is None
+            ]
+            if missing:
+                raise ValueError(
+                    f"transfer-kind CouplingRule missing required "
+                    f"fields: {missing}"
+                )
+        elif self.kind == "verify":
+            if self.verify is None:
+                raise ValueError(
+                    "verify-kind CouplingRule requires verify callable"
+                )
+        else:
+            raise ValueError(f"unknown CouplingRule.kind: {self.kind!r}")
 
 
 @dataclass
@@ -234,6 +271,19 @@ COUPLING_RULES: Dict[Tuple[str, str], List[CouplingRule]] = {
             doc="fp driven current (RJT volume integral, A) -> tr EXTERNAL_DRIVEN_I (MA)",
         ),
     ],
+    # NOTE (L-7b-ii, 2026-05-04): ('eq','tr') verify ルールは保留。
+    #   spec は BPSD を eq/tr 間の共有ブローカーとして扱う前提だったが、
+    #   実装の `libeqapi.so` と `libtrapi.so` はそれぞれ独立した .so で、
+    #   `nm` で確認したとおり `___bpsd_equ1d_MOD_equ1dx` 等は各 .so 内
+    #   private な module-level 変数 (static linkage)。よって libeqapi.so
+    #   側で `bpsd_put_equ1D` しても libtrapi.so 側の equ1Dx は更新されず、
+    #   `Trlib.check_bpsd_pull()` は常に False。spec の前提が成立しない。
+    #
+    #   verify ディスパッチ (kind="verify") の機構自体は本 PR で導入済み
+    #   (Layer A モックテストで網羅) なので、共有 .so / IPC / プロセス間
+    #   broker といった解決方針が決まり次第ルールを追加できる骨組みは
+    #   揃っている。詳細は spec §後続検討、および
+    #   `python/totlib/README.md` の Coupling rules 節を参照。
 }
 
 
@@ -424,18 +474,47 @@ class TotPipeline:
 
                 if prev_name is not None:
                     for rule in COUPLING_RULES.get((prev_name, name), []):
-                        raw = self._extract_source(prev_state, rule)
-                        try:
-                            transformed = rule.transform(raw)
-                        except Exception as e:
-                            raise TotPipelineCouplingError(
-                                f"transform failed for rule {rule.doc!r}: {e}"
-                            ) from e
-                        module.set_param(rule.dst_param, transformed)
-                        # Record the injected value so subsequent rules can see it
-                        # (mirrors set_param's _params bookkeeping).
-                        self._params[f"{name}:{rule.dst_param}"] = transformed
-                        applied.append(rule.doc)
+                        if rule.kind == "transfer":
+                            # __post_init__ guarantees src_state_key/dst_param/
+                            # transform are non-None for kind="transfer", so the
+                            # asserts below are type-narrowing for static checkers
+                            # (mypy/pyright); they are unreachable at runtime.
+                            raw = self._extract_source(prev_state, rule)
+                            assert rule.transform is not None    # type narrowing
+                            assert rule.dst_param is not None    # type narrowing
+                            try:
+                                transformed = rule.transform(raw)
+                            except Exception as e:
+                                raise TotPipelineCouplingError(
+                                    f"transform failed for rule {rule.doc!r}: {e}"
+                                ) from e
+                            module.set_param(rule.dst_param, transformed)
+                            # Record the injected value so subsequent rules can see it
+                            # (mirrors set_param's _params bookkeeping).
+                            self._params[f"{name}:{rule.dst_param}"] = transformed
+                            applied.append(rule.doc)
+                        elif rule.kind == "verify":
+                            assert rule.verify is not None    # type narrowing (see transfer branch)
+                            try:
+                                ok = rule.verify(module)   # module = curr_inst
+                            except Exception as e:
+                                raise TotPipelineCouplingError(
+                                    f"verify failed: rule {rule.doc!r} for "
+                                    f"{prev_name}->{name} raised "
+                                    f"{type(e).__name__}: {e}"
+                                ) from e
+                            if not ok:
+                                callable_repr = getattr(
+                                    rule.verify, "__qualname__", repr(rule.verify)
+                                )
+                                raise TotPipelineCouplingError(
+                                    f"verify failed: rule {rule.doc!r} ({callable_repr}) "
+                                    f"for {prev_name}->{name} returned False "
+                                    f"(likely cause: upstream step did not push expected "
+                                    f"data to BPSD broker; check pipeline order and "
+                                    f"MODELG setting)"
+                                )
+                            applied.append(rule.doc)   # only on success
 
                 module.run(**kwargs)
                 cur_state = module.get_state()
