@@ -4,9 +4,12 @@ from totlib.pipeline import CouplingRule, PipelineStep, PipelineResult
 
 
 def test_coupling_rule_defaults():
-    r = CouplingRule(src_state_key="x", dst_param="Y")
-    assert r.transform(3.0) == 3.0    # default identity
+    # L-7b-ii: transform は kind="transfer" で必須になったため、
+    # ここでも明示的に渡す。doc / kind の既定値が変わっていない
+    # ことだけを確認する。
+    r = CouplingRule(src_state_key="x", dst_param="Y", transform=lambda v: v)
     assert r.doc == ""
+    assert r.kind == "transfer"
 
 
 def test_coupling_rule_with_transform():

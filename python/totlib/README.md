@@ -290,6 +290,33 @@ with TotPipeline() as tot:
 - `fp → tr`: fp's RJT volume integral [A] → tr's `EXTERNAL_DRIVEN_I` [MA]
   (transform `× 1e-6`).
 
+**Rule kinds (L-7b-ii):**
+
+`CouplingRule` には 2 種類がある。`__post_init__` でフィールド検証を行う:
+
+- `kind="transfer"` (デフォルト, L-7a 互換): `src_state_key` →
+  `transform` → `set_param` の流れで前段モジュールの状態をスカラー値
+  として後段へ渡す。`src_state_key`/`dst_param`/`transform` の 3 つが必須。
+- `kind="verify"` (L-7b-ii 新設): 前段ステップ完了後、後段モジュールの
+  `verify(curr_inst)` を呼んで真偽値を返す。`False` または例外なら
+  `TotPipelineCouplingError` を `TotPipelineRunError` の `__cause__` に
+  ぶら下げて送出する (3 段の例外チェイン)。`verify` のみ必須。
+
+`("eq","tr")` の verify ルール (BPSD ブローカー経由の equilibrium
+受け渡し検証) について — **本リリースでは登録を保留**。
+原因: `libeqapi.so` と `libtrapi.so` は別個の共有ライブラリとして
+ロードされ、それぞれが BPSD の module-level state
+(`___bpsd_equ1d_MOD_equ1dx` ほか) を private に持つため、libeqapi.so
+側で `bpsd_put_equ1D` しても libtrapi.so 側の `bpsd_get_equ1D` には
+反映されない (`nm` で確認済み)。spec が想定した「BPSD = 共有ブローカー」
+の前提が現アーキテクチャでは成立しない。
+verify ディスパッチ機構そのものは Layer A モックテストで網羅済みで、
+共有 .so / IPC / RTLD_GLOBAL+weak symbols 等の解決方針が決まり次第、
+`COUPLING_RULES` に 1 行追加するだけでルールが有効化できる骨組みは
+整っている。
+レガシーの `Tot` / `libtotapi.so` 経路は eq+tr+bpsd を 1 つの .so に
+co-link するため本制約の影響を受けない。
+
 The fp side computes the total driven current via
 `compute_rjt_volint(state, R0, a)` (volume integral of `RJT[NSA][NR]`
 over the plasma cross-section). The result [A] is converted to MA and

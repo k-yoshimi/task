@@ -168,6 +168,42 @@ cross-section equals `EXTERNAL_DRIVEN_I [MA]` exactly.
 `EXTERNAL_DRIVEN_I != 0` together with `EXTERNAL_DRIVEN_RW <= 0`
 (which would silently no-op in trprf otherwise).
 
+## BPSD ブローカー pull 検証 (`Trlib.check_bpsd_pull`)
+
+`Trlib.check_bpsd_pull()` は L-7b-ii で追加した非破壊ヘルパで、tr 側
+の BPSD インスタンスから `device` / `equ1D` / `metric1D` の 3 スロット
+を pull できるか (= 各 `ierr == 0` か) のみを返す。`plasmaf` は tr
+自身の BPSD 出力 (`tr_bpsd_put` で push する側) なので意図的に対象外。
+
+```python
+from trlib import Trlib
+
+with Trlib() as tr:
+    if not tr.check_bpsd_pull():
+        # equ1D/metric1D を tr の BPSD に push してくれる相手が
+        # まだ走っていない、もしくは別 .so の BPSD に書いてしまっている
+        # (後述) 状態。tr.run() を呼ぶと既定 / 古い equilibrium で
+        # 走ってしまう可能性がある。
+        raise RuntimeError("BPSD broker missing equilibrium data")
+    tr.run(ntmax=10)
+```
+
+ノート:
+
+- **非破壊**: ローカルの捨て型に pull するだけで TRCOMM は変えない。
+  `tr.run()` の前後どちらで呼んでも安全。
+- **粒度は bool 1 つ**: スロット単位の詳細 ierr は出さない (将来拡張)。
+- **plasmaf 除外の理由**: tr が自身で put する側のスロットなので、
+  「fresh init で False を返す」想定が崩れないようにするため。
+- **L-7b-ii 時点での scope 制約 (重要)**: `libtrapi.so` は自分自身の
+  `bpsd_equ1D` モジュール変数を持つため、別 .so (例えば
+  `libeqapi.so`) で `bpsd_put_equ1D` しても tr 側からは見えない。
+  `check_bpsd_pull` は **同じ libtrapi.so 内** で push されたスロット
+  だけが True になる。`Tot` / `libtotapi.so` 経由 (eq+tr+bpsd 同梱)
+  なら期待どおり機能するが、`TotPipeline` (per-module .so) では
+  現状 push 経路がないため fresh init では常に False。詳細は
+  `python/totlib/README.md` の Coupling rules 節を参照。
+
 ## `TrState` fields
 
 Matches `tr_state_t` in `tr/tr_api.h`. Full dict layout is available
