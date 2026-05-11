@@ -24,6 +24,8 @@ def test_extracts_tr_scalars():
     assert data["scalars"]["T"] == 2.0
     assert data["scalars"]["WPT"] == 41.13
     assert data["scalars"]["Q0"] == 0.579
+    assert "AJRFT" in data["scalars"]
+    assert data["scalars"]["AJRFT"] == 0.0
 
 
 def test_extracts_module_presence():
