@@ -33,7 +33,7 @@ For a complete runnable example see {doc}`quickstart`.
 - **Physics scope**: `tr` is plain 1-D transport; `ti` is a full package
   that **integrates transport with auxiliary physics (neutral beams, RF
   heating, impurities, fusion)**.
-- **Scalar outputs**: `tr` returns 13 scalars (`BETAN`, `TAUE`, …); `ti`
+- **Scalar outputs**: `tr` returns 14 scalars (`BETAN`, `TAUE`, …, `AJRFT`); `ti`
   returns **2 scalars + 2 iteration counters** (time and convergence
   diagnostics).
 - **Profiles**: in `tr`, the species axis is the outer index

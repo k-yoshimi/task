@@ -118,7 +118,7 @@ reached from the entry points.
 
 ## Where the scalar outputs (`TrState.scalars`) are computed
 
-The 13 scalars returned by `tr_get_state` are all computed in
+The 14 scalars returned by `tr_get_state` are all computed in
 `trrslt_globals.f90::TR_CALC_GLOBAL` and stored in `TRCOMM` module
 variables. Excerpt:
 

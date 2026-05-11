@@ -12,10 +12,10 @@ state.nrmax           # actual number of radial points (<= TR_MAX_NRMAX=500)
 state.nsmax           # actual number of species (<= TR_MAX_NSMAX=8)
 ```
 
-## Scalar quantities (13 entries, dictionary `state.scalars`)
+## Scalar quantities (14 entries, dictionary `state.scalars`)
 
 Spatially / temporally integrated quantities that summarise the whole
-plasma. The 13 entries below are always available.
+plasma. The 14 entries below are always available.
 
 | Key | Unit | Meaning |
 |---|---|---|
@@ -32,6 +32,7 @@ plasma. The 13 entries below are always available.
 | `ZEFF0`   | — | effective charge $Z_\text{eff}$ on the axis |
 | `ALI`     | — | plasma internal inductance $\ell_i$ |
 | `RQ1`     | m | radius of the $q=1$ surface (or `RA` if there is none) |
+| `AJRFT`   | MA | total RF + external-driven current (L-7b-i) |
 
 Access example:
 

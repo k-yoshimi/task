@@ -31,7 +31,7 @@ print(state.scalars["T"], state.scalars["residual_loop_max"])
 
 - **物理範囲**: `tr` は単純な 1D 輸送, `ti` は **輸送と補助物理 (中性ビーム,
   RF 加熱, 不純物, 核融合) を統合** したフルパッケージ.
-- **スカラー出力**: `tr` は 13 スカラー (BETAN, TAUE 等), `ti` は **2 スカラー
+- **スカラー出力**: `tr` は 14 スカラー (BETAN, TAUE 等, AJRFT), `ti` は **2 スカラー
   + 2 反復カウンタ** (T と収束診断).
 - **プロファイル**: `tr` は species 軸が外側 `RN[nr][ns]`, `ti` は active
   species 軸 `RNA[nr][nsa]` (内部で species をマッピング).

@@ -172,7 +172,7 @@ STATE_SCHEMA: Dict[str, Any] = {
         "NSMAX": {"type": "integer", "description": "species in use"},
         "scalars": {
             "type": "object",
-            "description": "13 plasma scalars (T, WPT, AJT, Q0, BETA0, BETAP0, BETAA, BETAN, TAUE1, TAUE2, ZEFF0, ALI, RQ1)",
+            "description": "14 plasma scalars (T, WPT, AJT, Q0, BETA0, BETAP0, BETAA, BETAN, TAUE1, TAUE2, ZEFF0, ALI, RQ1, AJRFT)",
             "additionalProperties": {"type": "number"},
         },
         "profile": {
@@ -560,7 +560,7 @@ def build_server() -> Any:
         """Return the current simulation state.
 
         Returns a dict with ``NT``, ``NRMAX``, ``NSMAX``, ``scalars``
-        (13 plasma scalars), and ``profile`` (radial profile array).
+        (14 plasma scalars), and ``profile`` (radial profile array).
         Schema also available via `describe_state_schema`.
         """
         return handle_get_state()

@@ -111,7 +111,7 @@ END FUNCTION
 
 ## スカラー出力 (`TrState.scalars`) はどこで計算されるか
 
-`tr_get_state` が返す 13 個のスカラーは, すべて `trrslt_globals.f90::TR_CALC_GLOBAL`
+`tr_get_state` が返す 14 個のスカラーは, すべて `trrslt_globals.f90::TR_CALC_GLOBAL`
 で計算され `TRCOMM` モジュール変数に格納されています. 抜粋:
 
 ```fortran
