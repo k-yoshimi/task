@@ -85,8 +85,12 @@ The work is grouped into three commit-level concerns:
 ### 4.1 Group 1 — TOT C ABI + Python wrapper + docs parity (7 components + 1 doc sweep)
 
 Mirrors the AJRFT-injection block PR #187 (`e049a1e4`) applied to
-TR. All six components are interdependent (a single missing one
-re-creates the same invisibility class) and ship together.
+TR. Components 1-6 form the ABI/wrapper triangle and are
+interdependent (a single missing one re-creates the same invisibility
+class). Components 6a (doc sweep) and 6b (`test_totlib.py` round-trip
+fixture) are added to keep user-visible narrative and Python-level
+test coverage in lockstep with the ABI change. All seven components
++ 1 doc sweep ship together in C1.
 
 #### 4.1.1 `tot/tot_state.f90` (component 1)
 
@@ -420,13 +424,15 @@ tot2); C1 and C3 are mac-friendly.
 | 3. Regenerate `tot_demo2014_short` + `tot_ht6m_short` baselines | #9, #10 ✓ |
 | 4. Unit-test fixture coverage in `sample_tot_regress.dat` | #11 ✓ |
 | 5. `./test_run/run_tests.sh tot_demo2014_short tot_ht6m_short` passes | C2 clavius verification ✓ |
-| 6. Verify totlib pipeline equivalence covers AJRFT | **Verify-only** via existing `test_pipeline_equiv.py` after C1 (components 1-6 + 6a-6d) propagates AJRFT through `Tot.get_state()` ✓ |
+| 6. Verify totlib pipeline equivalence covers AJRFT | **Verify-only** via existing `test_pipeline_equiv.py` after C1 (components 1-6 + 6a + 6b) propagates AJRFT through `Tot.get_state()` ✓ |
 
 The issue's acceptance #6 requires the full C1 set in addition to the
 literal text of the issue body; this expansion is what Codex's design-
-stage review surfaced (HIGH finding, 2026-05-12), with a further
-spec-file review on 2026-05-12 adding the `test_size_matches_header_math`
-sizeof guard and the four user-facing scalar-count surfaces (§4.1.7).
+stage review surfaced (HIGH finding, 2026-05-12). Subsequent spec-file
+review rounds added the `test_size_matches_header_math` sizeof guard,
+12 hardcoded scalar-count references across 9 files consolidated into
+the §4.1.7 doc sweep, and the `test_totlib.py` round-trip fixture in
+§4.1.8 (component 6b).
 
 ## 7. Test plan
 
@@ -582,7 +588,16 @@ hypothetical follow-up after this PR lands if needed.
   subset; the existing test silently passes when `AJRFT` is added to
   `TotStateC._fields_` because the new field defaults to 0.0 and
   isn't asserted — coverage on the `_ffi.TotStateC → TotState.from_c`
-  round-trip for AJRFT is missing). Incorporated in this revision
+  round-trip for AJRFT is missing). Incorporated at `bb4d2bd7`
   as §4.1.8 (component 6b).
+- **Spec-file Codex review #5** (2026-05-12, post-round-4):
+  diminishing returns confirmed (checks 1-5 PASS, no new triangle
+  gaps in §1-3 / §9-10 / §10 references / cross-section consistency).
+  MED (§6 orphan refs to `6c`/`6d` left over from R2; should be
+  `6a + 6b`) + LOW (§4.1 "All six components" stale prose; §6
+  reviewer-history sentence understating §4.1.7's actual scope).
+  Incorporated in this revision. Meta finding: issue #191 body
+  should be updated to reflect the expanded scope before C1 lands
+  (decided out-of-spec; tracked as a manual user task).
 - Implementation-time pre-push gate: in-house code-reviewer + Codex
   rescue (parallel) on each commit's diff per CLAUDE.md.
