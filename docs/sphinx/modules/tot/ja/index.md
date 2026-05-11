@@ -29,7 +29,7 @@ with Tot() as tot:
 
 得られる主な量 (TR ベース):
 
-- スカラー (13 個): `T`, `WPT`, `BETAN`, `TAUE1`, ...
+- スカラー (14 個): `T`, `WPT`, `BETAN`, `TAUE1`, ..., `AJRFT`
 - プロファイル: `RN`, `RT`, `AJ`, `QP` (TR 互換)
 - 追加: `tr_present`, `ti_present`, `fp_present`, `wr_present` (サブモジュール
   存在フラグ)

@@ -80,8 +80,25 @@ class TestTotStateCLayout(unittest.TestCase):
             "BETA0", "BETAP0", "BETAA", "BETAN",
             "TAUE1", "TAUE2", "ZEFF0", "ALI", "RQ1",
             "RN", "RT", "AJ", "QP",
+            "AJRFT",   # L-7b-i: end-of-struct, matches ABI v2 layout
         ):
             self.assertIn(n, names, f"missing field {n}")
+
+    def test_size_matches_header_math(self):
+        # TOT struct: 4 presence flags + 3 size ints = 7 ints total,
+        # then 14 doubles (13 pre-AJRFT scalars + AJRFT), then
+        # 2 * NR * NS doubles (RN, RT), then 2 * NR doubles (AJ, QP).
+        # Compilers may pad the 7 ints to 28 or 32 bytes, so we
+        # accept either of the two natural alignments.
+        nr = _ffi.TOT_MAX_NRMAX
+        ns = _ffi.TOT_MAX_NSMAX
+        exp_core = 14 * 8 + 2 * nr * ns * 8 + 2 * nr * 8
+        sz = ctypes.sizeof(_ffi.TotStateC)
+        self.assertIn(
+            sz,
+            (28 + exp_core, 32 + exp_core),
+            f"unexpected TotStateC size {sz}",
+        )
 
     def test_array_dimensions(self):
         s = _ffi.TotStateC()

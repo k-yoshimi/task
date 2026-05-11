@@ -235,6 +235,7 @@ CONTAINS
     state%ZEFF0  = 0.0_C_DOUBLE
     state%ALI    = 0.0_C_DOUBLE
     state%RQ1    = 0.0_C_DOUBLE
+    state%AJRFT  = 0.0_C_DOUBLE   ! L-7b-i
     state%RN     = 0.0_C_DOUBLE
     state%RT     = 0.0_C_DOUBLE
     state%AJ     = 0.0_C_DOUBLE
@@ -290,6 +291,7 @@ CONTAINS
        state%ZEFF0  = trstate%ZEFF0
        state%ALI    = trstate%ALI
        state%RQ1    = trstate%RQ1
+       state%AJRFT  = trstate%AJRFT   ! L-7b-i: includes EXTERNAL_DRIVEN_I contribution
        DO nr = 1, trstate%nrmax
           DO ns = 1, trstate%nsmax
              state%RN(ns, nr) = trstate%RN(ns, nr)

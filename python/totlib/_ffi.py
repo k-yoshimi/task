@@ -96,6 +96,9 @@ class TotStateC(ctypes.Structure):
         ("RT", (ctypes.c_double * TOT_MAX_NSMAX) * TOT_MAX_NRMAX),
         ("AJ", ctypes.c_double * TOT_MAX_NRMAX),
         ("QP", ctypes.c_double * TOT_MAX_NRMAX),
+        # L-7b-i: total RF + external driven current [MA]. Mirrors AJRFT
+        # in tr_state_c; appended at end-of-struct for ABI v2 compatibility.
+        ("AJRFT", ctypes.c_double),
     ]
 
 

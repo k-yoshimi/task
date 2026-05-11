@@ -151,9 +151,9 @@ Expected output:
 
 ### Possible extensions
 
-- Extend the wrapper to return all 13 entries of `state.scalars`
+- Extend the wrapper to return all 14 entries of `state.scalars`
   (`T, WPT, AJT, Q0, BETA0, BETAP0, BETAA, BETAN, TAUE1, TAUE2, ZEFF0,
-  ALI, RQ1`)
+  ALI, RQ1, AJRFT`)
 - Accumulate `state.scalars` into a list at every ntmax for time-series
   analysis
 

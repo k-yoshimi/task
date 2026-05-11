@@ -227,8 +227,9 @@ STATE_SCHEMA: Dict[str, Any] = {
         "scalars": {
             "type": "object",
             "description": (
-                "13 integrated plasma scalars (T, WPT, AJT, Q0, BETA0, "
-                "BETAP0, BETAA, BETAN, TAUE1, TAUE2, ZEFF0, ALI, RQ1)"
+                "14 integrated plasma scalars (T, WPT, AJT, Q0, BETA0, "
+                "BETAP0, BETAA, BETAN, TAUE1, TAUE2, ZEFF0, ALI, RQ1, "
+                "AJRFT)"
             ),
             "additionalProperties": {"type": "number"},
         },
@@ -828,7 +829,7 @@ def build_server() -> Any:
         """Return the current orchestrator state.
 
         Returns a dict with ``presence`` (per-sub-module init flags),
-        ``NT``, ``NRMAX``, ``NSMAX``, ``scalars`` (13 plasma scalars),
+        ``NT``, ``NRMAX``, ``NSMAX``, ``scalars`` (14 plasma scalars),
         and ``profile`` (radial profile array). Schema also available
         via `describe_state_schema`. Stubbed until L-6.
         """

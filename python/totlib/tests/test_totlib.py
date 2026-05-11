@@ -154,6 +154,7 @@ class TestTotStateFromC(unittest.TestCase):
         s.ZEFF0 = 1.5
         s.ALI = 0.8
         s.RQ1 = 0.4
+        s.AJRFT = 1.5   # L-7b-i
         for i in range(nr):
             s.AJ[i] = float(i) * 100.0
             s.QP[i] = 1.0 + float(i) * 0.5
@@ -179,6 +180,7 @@ class TestTotStateFromC(unittest.TestCase):
         self.assertAlmostEqual(st.RN[2][1], 2.1)
         self.assertAlmostEqual(st.scalars["Q0"], 1.05)
         self.assertAlmostEqual(st.scalars["WPT"], 1.5e6)
+        self.assertAlmostEqual(st.scalars["AJRFT"], 1.5)
 
     def test_from_c_zero_sizes_yields_empty_profiles(self):
         # At L-3/L-4 stub scope the .so returns nrmax=0 / nsmax=0;

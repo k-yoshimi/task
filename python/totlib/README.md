@@ -207,7 +207,7 @@ baseline so cross-comparison tooling works).
 | `nt`         | int | time-step counter (TR-authoritative) |
 | `nrmax`      | int | radial points actually in use |
 | `nsmax`      | int | species actually in use |
-| `scalars`    | dict[str, float] | 13 integrated plasma scalars |
+| `scalars`    | dict[str, float] | 14 integrated plasma scalars (incl. AJRFT, L-7b-i) |
 | `RN`         | list[list[float]] | `[nrmax][nsmax]` density profile |
 | `RT`         | list[list[float]] | `[nrmax][nsmax]` temperature profile |
 | `AJ`         | list[float]      | `[nrmax]` current density profile |

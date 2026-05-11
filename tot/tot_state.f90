@@ -78,6 +78,10 @@ MODULE tot_state
      REAL(C_DOUBLE) :: RT(TOT_MAX_NSMAX, TOT_MAX_NRMAX)
      REAL(C_DOUBLE) :: AJ(TOT_MAX_NRMAX)
      REAL(C_DOUBLE) :: QP(TOT_MAX_NRMAX)
+
+     ! L-7b-i: total RF + external driven current [MA]. Mirrors AJRFT
+     ! in tr_state_c; appended at end-of-struct for ABI v2 compatibility.
+     REAL(C_DOUBLE) :: AJRFT
   END TYPE tot_state_c
 
 END MODULE tot_state

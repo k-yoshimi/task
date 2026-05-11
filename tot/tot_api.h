@@ -33,6 +33,21 @@ extern "C" {
 #define TOT_MAX_NRMAX 500
 #define TOT_MAX_NSMAX 8
 
+/*
+ * tot_state_t ABI version. Bumped whenever a field is added/removed/
+ * reordered in tot_state_t (i.e. whenever sizeof(tot_state_t) changes).
+ * Out-of-tree binary consumers should compare TOT_STATE_ABI_VERSION at
+ * compile time against any cached layout assumption and recompile when
+ * it bumps. In-tree consumers (python/totlib/_ffi.py and any future
+ * tot_api_check_* helpers) all rebuild from this header, so they are
+ * kept in sync automatically by the build system.
+ *
+ * History:
+ *   1 -> initial layout (Phase L-2)
+ *   2 -> appended AJRFT [MA] (L-7b-i); existing field offsets preserved.
+ */
+#define TOT_STATE_ABI_VERSION 2
+
 /* Error codes returned by every tot_* entry point. */
 enum tot_error {
     TOT_OK              = 0,
@@ -59,6 +74,10 @@ typedef struct {
     double RT[TOT_MAX_NRMAX][TOT_MAX_NSMAX];
     double AJ[TOT_MAX_NRMAX];
     double QP[TOT_MAX_NRMAX];
+
+    /* L-7b-i: total RF + external driven current [MA]. Matches
+     * tot_state.f90 end-of-struct placement; ABI v2. */
+    double AJRFT;
 } tot_state_t;
 
 int tot_init(void);

@@ -316,7 +316,7 @@ class Tot:
         """Copy the current TOT state into a :class:`TotState`.
 
         L-6 aggregates the TR-authoritative slots (``tr_present=1``,
-        plus all 13 integrated scalars and the RN/RT/AJ/QP profiles).
+        plus all 14 integrated scalars (incl. AJRFT) and the RN/RT/AJ/QP profiles).
         ``ti_present`` / ``fp_present`` / ``wr_present`` stay 0
         because those modules are init'd but not advanced from
         ``tot_run``; their state is reachable via per-module wrappers

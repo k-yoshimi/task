@@ -31,7 +31,7 @@ with Tot() as tot:
 
 Main quantities returned (TR-based):
 
-- Scalars (13): `T`, `WPT`, `BETAN`, `TAUE1`, ...
+- Scalars (14): `T`, `WPT`, `BETAN`, `TAUE1`, ..., `AJRFT`
 - Profiles: `RN`, `RT`, `AJ`, `QP` (TR-compatible)
 - Additionally: `tr_present`, `ti_present`, `fp_present`, `wr_present`
   (sub-module presence flags)

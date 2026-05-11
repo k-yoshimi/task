@@ -32,9 +32,9 @@ the other modules are not accessible — use the stand-alone module if
 you need them.
 ```
 
-## Scalars (13 entries, the `state.scalars` dict)
+## Scalars (14 entries, the `state.scalars` dict)
 
-These are **exactly the same** 13 scalars as in `TrState`. They are
+These are **exactly the same** 14 scalars as in `TrState`. They are
 representative quantities for the whole plasma.
 
 | Key | Unit | Meaning |
@@ -52,6 +52,7 @@ representative quantities for the whole plasma.
 | `ZEFF0`   | — | Effective charge on axis |
 | `ALI`     | — | Plasma internal inductance |
 | `RQ1`     | m | Radius of the $q=1$ surface |
+| `AJRFT`   | MA | Total RF + external-driven current (L-7b-i) |
 
 For the physical meaning and exact formulas, see the `tr` module's state
 page (`docs/sphinx/modules/tr/en/state.md`).
@@ -100,6 +101,6 @@ If you need these, run the **stand-alone module** (`Eq`, `Fplib`,
 | | `TrState` (tr alone) | `TotState` (tot integrated) |
 |---|---|---|
 | **Dimensions** | nt, nrmax, nsmax | + tr_present, ti_present, fp_present, wr_present |
-| **Scalars** | 13 | 13 (same set) |
+| **Scalars** | 14 | 14 (same set) |
 | **Profiles** | RN, RT, AJ, QP | RN, RT, AJ, QP (same) |
 | **Source** | tr alone | tr (with eq/ti/fp/wr influence applied) |

@@ -113,9 +113,9 @@ Return codes (`enum tot_error`):
 
 `tot_state_t` carries: 4 per-module presence flags (`tr_present`,
 `ti_present`, `fp_present`, `wr_present`); 3 grid counters (`nt`,
-`nrmax`, `nsmax`); 13 integrated plasma scalars (`T`, `WPT`, `AJT`,
+`nrmax`, `nsmax`); 14 integrated plasma scalars (`T`, `WPT`, `AJT`,
 `Q0`, `BETA0`, `BETAP0`, `BETAA`, `BETAN`, `TAUE1`, `TAUE2`, `ZEFF0`,
-`ALI`, `RQ1`); and 4 profile arrays
+`ALI`, `RQ1`, `AJRFT`); and 4 profile arrays
 (`RN[NRMAX][NSMAX]`, `RT[NRMAX][NSMAX]`, `AJ[NRMAX]`, `QP[NRMAX]`)
 padded to `TOT_MAX_NRMAX=500` × `TOT_MAX_NSMAX=8`.
 

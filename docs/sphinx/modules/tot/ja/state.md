@@ -31,9 +31,9 @@
 インスタンス化してください.
 ```
 
-## スカラー量 (13 個, `state.scalars` 辞書)
+## スカラー量 (14 個, `state.scalars` 辞書)
 
-`TrState` と **完全に同じ** 13 スカラーを返します. プラズマ全体の
+`TrState` と **完全に同じ** 14 スカラーを返します. プラズマ全体の
 代表量です.
 
 | キー | 単位 | 意味 |
@@ -51,6 +51,7 @@
 | `ZEFF0`   | — | 軸上の実効電荷数 |
 | `ALI`     | — | プラズマ内部インダクタンス |
 | `RQ1`     | m | $q=1$ 面の半径 |
+| `AJRFT`   | MA | 全 RF + 外部駆動電流 (L-7b-i) |
 
 各スカラーの物理的意味と算出式は
 `tr` モジュールの state ページ (`docs/sphinx/modules/tr/ja/state.md`)
@@ -99,6 +100,6 @@ state.to_dict()       # JSON-ready dict
 | | `TrState` (tr 単独) | `TotState` (tot 統合) |
 |---|---|---|
 | **次元** | nt, nrmax, nsmax | + tr_present, ti_present, fp_present, wr_present |
-| **スカラー** | 13 個 | 13 個 (同一) |
+| **スカラー** | 14 個 | 14 個 (同一) |
 | **プロファイル** | RN, RT, AJ, QP | RN, RT, AJ, QP (同一) |
 | **計算源** | 単独 tr | tr (eq/ti/fp/wr の影響反映) |

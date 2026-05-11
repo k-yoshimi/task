@@ -148,8 +148,8 @@ with Tot() as tot:
 
 ### 拡張案
 
-- `state.scalars` 全 13 項目 (`T, WPT, AJT, Q0, BETA0, BETAP0, BETAA,
-  BETAN, TAUE1, TAUE2, ZEFF0, ALI, RQ1`) をすべて返すよう拡張
+- `state.scalars` 全 14 項目 (`T, WPT, AJT, Q0, BETA0, BETAP0, BETAA,
+  BETAN, TAUE1, TAUE2, ZEFF0, ALI, RQ1, AJRFT`) をすべて返すよう拡張
 - 各 ntmax ごとに state.scalars をリストに蓄積して時系列分析
 
 ---

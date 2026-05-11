@@ -26,6 +26,7 @@ SCALAR_FIELDS = (
     "BETA0", "BETAP0", "BETAA", "BETAN",
     "TAUE1", "TAUE2", "ZEFF0",
     "ALI", "RQ1",
+    "AJRFT",   # L-7b-i: includes EXTERNAL_DRIVEN_I contribution
 )
 
 _DIM_BOUNDS = (
@@ -60,7 +61,7 @@ class TotState:
         nt:         time-step counter (TR-authoritative)
         nrmax:      number of radial points actually in use
         nsmax:      number of species actually in use
-        scalars:    dict of 13 integrated plasma scalars
+        scalars:    dict of 14 integrated plasma scalars (incl. AJRFT)
         RN:         [nrmax][nsmax] density profile
         RT:         [nrmax][nsmax] temperature profile
         AJ:         [nrmax] current profile
