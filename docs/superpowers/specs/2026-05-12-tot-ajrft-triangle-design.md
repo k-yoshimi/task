@@ -78,11 +78,11 @@ its entirety** onto the TOT triangle, plus the regress-mirror work that
   when AJRFT was added; TOT follows the same `1 → 2` increment. No major
   restructure.
 
-## 4. Scope (13 modification points + 1 doc-sweep across 12 lines + ABI bump + 3 commits)
+## 4. Scope (14 modification points + 1 doc-sweep across 12 lines + ABI bump + 3 commits)
 
 The work is grouped into three commit-level concerns:
 
-### 4.1 Group 1 — TOT C ABI + Python wrapper + docs parity (6 components + 1 doc sweep)
+### 4.1 Group 1 — TOT C ABI + Python wrapper + docs parity (7 components + 1 doc sweep)
 
 Mirrors the AJRFT-injection block PR #187 (`e049a1e4`) applied to
 TR. All six components are interdependent (a single missing one
@@ -288,6 +288,35 @@ user reading any of these surfaces after C1 lands would see 13 in
 the docs and 14 in `Tot.get_state().scalars`. Folding the sweep into
 C1 keeps the commit's narrative self-consistent.
 
+#### 4.1.8 `python/totlib/tests/test_totlib.py` round-trip fixture (component 6b)
+
+`TestTotStateFromC._populated_state` (lines 135-167) hardcodes a
+populated `TotStateC` instance with all 13 pre-AJRFT scalars and
+`test_from_c_slices_correctly` (lines 169-185) assert-checks a
+representative subset. After C1 adds `AJRFT` to `TotStateC._fields_`
+(§4.1.4) and `SCALAR_FIELDS` (§4.1.5), the existing test will still
+pass — but only because `s.AJRFT` defaults to `0.0` on a fresh
+ctypes struct and the assertion list doesn't probe it. This silently
+loses coverage on the round-trip: a future bug where AJRFT is in
+`_fields_` but `TotState.from_c` drops it (or vice versa) would not
+fail the test.
+
+Two edits to close the gap, mirroring the d17f71ec pattern but for
+the `from_c` round-trip rather than the extractor:
+
+1. **`_populated_state` (line 135 area)**: after `s.RQ1 = 0.4` (line
+   158), append `s.AJRFT = 1.5  # L-7b-i`. Choice of `1.5` is
+   arbitrary (any non-zero non-default value works) — it just must
+   be distinguishable from struct-default `0.0`.
+
+2. **`test_from_c_slices_correctly` (line 169 area)**: after the
+   existing `self.assertAlmostEqual(st.scalars["WPT"], 1.5e6)` (line
+   184), append `self.assertAlmostEqual(st.scalars["AJRFT"], 1.5)`.
+
+Folded into C1 because it's part of the same ABI/wrapper triangle
+(without C1's `_ffi.py` + `state.py` changes, the test fixture
+edit alone makes no sense).
+
 ### 4.2 Group 2 — Regress dump + baselines (4 components)
 
 Mirrors TR `24b1b12f`.
@@ -369,7 +398,7 @@ Mirrors PR #187's TR-side three-layer commit structure:
 
 | # | Subject | Components | TR-side mirror |
 |---|---------|------------|----------------|
-| C1 | `feat(tot): add AJRFT to tot_state ABI + Python wrapper (#191 / PR #187 follow-up)` | 1, 2, 3, 4, 5, 6, 6a (doc sweep, 12 lines across 9 files) + `TOT_STATE_ABI_VERSION 2` bump | PR #187 ABI block |
+| C1 | `feat(tot): add AJRFT to tot_state ABI + Python wrapper (#191 / PR #187 follow-up)` | 1, 2, 3, 4, 5, 6, 6a (doc sweep, 12 lines across 9 files), 6b (`test_totlib.py` round-trip fixture) + `TOT_STATE_ABI_VERSION 2` bump | PR #187 ABI block |
 | C2 | `test+tot: backfill AJRFT in regression dump (#191 / PR #187 follow-up)` | 7, 8, 9, 10 | TR `24b1b12f` |
 | C3 | `test: backfill AJRFT in extractor unit-test fixture (#191)` | 11, 12 | TR `d17f71ec` |
 
@@ -404,9 +433,14 @@ sizeof guard and the four user-facing scalar-count surfaces (§4.1.7).
 ### 7.1 Local (mac, after C1)
 
 - `pytest python/totlib/tests/test_ffi.py -v -k Layout` — `TotStateC.AJRFT`
-  layout assertion passes.
+  field-name assertion + new `test_size_matches_header_math` sizeof
+  assertion both pass.
 - `pytest python/totlib/tests/test_ffi.py -v` (whole file) — no regression
   in other layout / loader tests.
+- `pytest python/totlib/tests/test_totlib.py::TestTotStateFromC -v` —
+  the updated `_populated_state` + `test_from_c_slices_correctly`
+  assertion exercise the `TotStateC → TotState.from_c → scalars dict`
+  round-trip for AJRFT (component 6b, §4.1.8).
 - `pytest python/totlib/tests/ -v --collect-only` — confirm no test file
   silently broke at collection time (catches import errors from
   state.py / _ffi.py changes).
@@ -539,8 +573,16 @@ hypothetical follow-up after this PR lands if needed.
   en/applications.md, `tot-library/architecture.md`; §7 missing
   verification mechanism for docs) + LOW (§4.1.2 sample text missed
   in-tree-consumers sentence from TR; §8 missing doc-scope risks).
-  Incorporated in this revision: §4.1.7 reframed as a doc-sweep
+  Incorporated at `51289977`: §4.1.7 reframed as a doc-sweep
   with explicit 12-line known-hit table + grep command; §7.4
   added; §8 expanded.
+- **Spec-file Codex review #4** (2026-05-12, post-round-3): MED
+  (`test_totlib.py::TestTotStateFromC` round-trip fixture at lines
+  135-185 hardcodes the 13-scalar populated state and asserts a
+  subset; the existing test silently passes when `AJRFT` is added to
+  `TotStateC._fields_` because the new field defaults to 0.0 and
+  isn't asserted — coverage on the `_ffi.TotStateC → TotState.from_c`
+  round-trip for AJRFT is missing). Incorporated in this revision
+  as §4.1.8 (component 6b).
 - Implementation-time pre-push gate: in-house code-reviewer + Codex
   rescue (parallel) on each commit's diff per CLAUDE.md.
