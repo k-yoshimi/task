@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 SCALAR_KEYS = {
-    "T", "WPT", "AJT", "Q0", "BETA0", "BETAP0", "BETAA", "BETAN",
+    "T", "WPT", "AJT", "AJRFT", "Q0", "BETA0", "BETAP0", "BETAA", "BETAN",
     "TAUE1", "TAUE2", "ZEFF0", "ALI", "RQ1",
 }
 MODULE_KEYS = {"TR_PRESENT", "TI_PRESENT", "FP_PRESENT", "WR_PRESENT"}

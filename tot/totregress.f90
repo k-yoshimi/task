@@ -24,7 +24,7 @@ CONTAINS
   SUBROUTINE tot_regress_dump_if_enabled
     USE TRCOMM, ONLY: &
          NRMAX, NSMAX, NT, T, &
-         WPT, AJT, Q0, BETA0, BETAP0, BETAA, BETAN, &
+         WPT, AJT, AJRFT, Q0, BETA0, BETAP0, BETAA, BETAN, &
          TAUE1, TAUE2, ZEFF0, ALI, RQ1, &
          RN, RT, AJ, QP
     USE commpi, ONLY: nrank
@@ -60,6 +60,7 @@ CONTAINS
        WRITE(UNIT_DUMP, '(A,1PE24.16)')  'T=',      T
        WRITE(UNIT_DUMP, '(A,1PE24.16)')  'WPT=',    WPT
        WRITE(UNIT_DUMP, '(A,1PE24.16)')  'AJT=',    AJT
+       WRITE(UNIT_DUMP, '(A,1PE24.16)')  'AJRFT=',  AJRFT
        WRITE(UNIT_DUMP, '(A,1PE24.16)')  'Q0=',     Q0
        WRITE(UNIT_DUMP, '(A,1PE24.16)')  'BETA0=',  BETA0
        WRITE(UNIT_DUMP, '(A,1PE24.16)')  'BETAP0=', BETAP0
