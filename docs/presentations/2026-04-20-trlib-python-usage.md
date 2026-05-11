@@ -188,7 +188,7 @@ json.dump(state.to_dict(), open('out.json', 'w'))
   `tools/compare_metrics.py` でそのまま 1e-10 比較可。
 
 **Speaker notes:** get_state は TrState という dataclass を返します。
-属性として nt, nrmax, nsmax, scalars 辞書 (13 個のスカラー)、4 つの
+属性として nt, nrmax, nsmax, scalars 辞書 (14 個のスカラー)、4 つの
 プロファイル配列を持ちます。numpy には依存していないので、to_dict() の結果は
 そのまま JSON にダンプできます。
 

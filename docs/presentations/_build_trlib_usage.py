@@ -587,7 +587,7 @@ def build_slide_07_get_state(prs: Presentation) -> None:
         "state.nt        # int  時間ステップカウンタ\n"
         "state.nrmax     # int  実効ラジアル点数\n"
         "state.nsmax     # int  実効種数\n"
-        "state.scalars   # dict T / WPT / AJT / Q0 / BETA0 / ... 13 個\n"
+        "state.scalars   # dict T / WPT / AJT / Q0 / BETA0 / ... 14 個 (AJRFT 含む)\n"
         "state.RN        # [nrmax][nsmax]  密度プロファイル\n"
         "state.RT        # [nrmax][nsmax]  温度プロファイル\n"
         "state.AJ        # [nrmax]         電流密度プロファイル\n"
@@ -650,7 +650,7 @@ def build_slide_07_get_state(prs: Presentation) -> None:
     add_speaker_notes(
         slide,
         "get_state は TrState という dataclass を返します。"
-        "属性として nt, nrmax, nsmax の整数、scalars 辞書 (13 個のスカラー)、"
+        "属性として nt, nrmax, nsmax の整数、scalars 辞書 (14 個のスカラー)、"
         "それから 4 つのプロファイル配列を持ちます。RN / RT は 2 次元のネストリスト、AJ / QP は 1 次元です。"
         "numpy には依存していないので、to_dict() の結果はそのまま JSON にダンプできます。"
         "右側に JSON の形状を示しました。NT, NRMAX, NSMAX, scalars, profile という 5 つのトップレベルキーで、"
