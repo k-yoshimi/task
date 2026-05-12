@@ -1,0 +1,220 @@
+name: regen-baselines
+
+# Issue #197: in-CI baseline regen for fixtures that exhibit
+# cross-host compiler-version drift (notably eq_tst2 / tr_tst2 at
+# ~3e-9 between clavius gfortran 13.3 and CI gfortran 13.2).
+# Generates metrics.json in CI's own environment, uploads as
+# artifact for the user to download and commit.
+
+on:
+  workflow_dispatch:
+    inputs:
+      fixtures:
+        description: 'Space-separated fixture names (default: eq_tst2 tr_tst2)'
+        default: 'eq_tst2 tr_tst2'
+        required: false
+
+# Stacked manual triggers on the same ref cancel the in-flight run —
+# the user re-triggered because they want fresh output. Mirrors
+# python-tests.yml:15-17.
+concurrency:
+  group: regen-baselines-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least-privilege: workflow only checks out source and uploads artifacts.
+# No repo writes, no PR comments. If auto-commit / auto-PR is added in
+# a future iteration, expand to `contents: write` + `pull-requests: write`.
+permissions:
+  contents: read
+
+jobs:
+  regen:
+    name: regen-baselines (Python 3.11)
+    # Pinned to ubuntu-24.04 (NOT ubuntu-latest) — baseline reproducibility
+    # depends on a stable gfortran version. Ubuntu 24.04's default is
+    # gfortran 13.2.0 (which is what python-tests.yml's `ubuntu-latest`
+    # currently resolves to; the regen workflow pins explicitly because
+    # baseline reproducibility cannot tolerate the silent image rotation).
+    # Re-pin to the next LTS
+    # when GitHub deprecates this image and regenerate baselines once.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Fortran/C build deps
+        shell: bash
+        run: |
+          set -eo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gfortran gcc make jq
+          gfortran --version | head -1
+
+      - name: Clone BPSD (patched fork k-yoshimi/bpsd@develop)
+        shell: bash
+        run: |
+          set -eo pipefail
+          git clone --depth 1 --branch develop \
+            https://github.com/k-yoshimi/bpsd.git \
+            "$GITHUB_WORKSPACE/../bpsd"
+          ( cd "$GITHUB_WORKSPACE/../bpsd" && git log --oneline -1 )
+
+      - name: Provision mtxp/make.mtxp from nompi template
+        shell: bash
+        run: |
+          set -eo pipefail
+          cp mtxp/make.mtxp.nompi mtxp/make.mtxp
+          head -3 mtxp/make.mtxp
+
+      - name: Provision make.header for Linux gfortran (no graphics)
+        shell: bash
+        run: |
+          set -eo pipefail
+          # Copied verbatim from python-tests.yml's make.header step
+          # (canonical CI build configuration). The eq/tr Makefiles
+          # expand FCFIXED / FCFREE / OFLAGS / LD / LDFLAGS in every
+          # compile and archive rule. Without these the first
+          # `make -C lib libtask.a` invocation fails immediately.
+          cat > make.header <<'HEADER_EOF'
+          ### CI-generated make.header (Linux gfortran, no graphics, no MPI)
+          LAPACK = nolapack.f
+          LIBLA =
+          MODLA95 =
+          MDSPLUS = nomdsplus.f
+          MDSLIB =
+          MF77 = mpif77
+          MF90 = mpif90
+          MF95 = mpif90
+          MFC  = $(MF90)
+
+          ## linux gfortran (64bit), no graphics linkage (libXapi.so path)
+          GFLIBS=
+          OFLAGS = -g -O3 -m64 -std=legacy
+          DFLAGS = -g -m64 -fbounds-check -ffpe-trap=invalid,zero,overflow -fbacktrace -fcheck=all -std=legacy
+          FCFIXED = gfortran -ffixed-form
+          FCFREE = gfortran -ffree-form
+          MOD = mod
+          MODDIR = -Jmod
+          LD=ld
+          LDFLAGS=-r -o
+          FPP=
+          HEADER_EOF
+          head -10 make.header
+
+      - name: Build the dependency chain (canonical `tot libs` topology)
+        shell: bash
+        run: |
+          set -eo pipefail
+          # `tot/Makefile:libs` is the canonical topologically-ordered
+          # dep-chain recipe that builds: bpsd → lib (libtask, libgrf,
+          # libmds) → mtxp → adpost → adf11-lib → pl (libpl, noeqlib,
+          # noequlib) → eq → tr → dp → wrx → wmx → fp → ob → ti.
+          # Using this instead of a hand-rolled list reduces drift
+          # risk when the archive topology evolves. PIC variants are
+          # NOT needed by this workflow (it only links non-PIC
+          # standalone binaries; PIC is for libXapi.so consumers).
+          make -C tot libs
+
+      - name: Build standalone eq / tr2 / tot binaries (graphics-stubbed)
+        shell: bash
+        run: |
+          set -eo pipefail
+          # Layer A enables these builds via the new *_static_stubs.f90
+          # files + GFLIBS-empty Makefile gates.
+          make -C eq eq
+          make -C tr tr2
+          make -C tot tot
+          ls -l eq/eq tr/tr2 tot/tot
+
+      - name: Regenerate metrics.json per fixture
+        shell: bash
+        run: |
+          set -eo pipefail
+          mkdir -p regen-output
+          for fixture in ${{ inputs.fixtures }}; do
+            echo "::group::regen $fixture"
+            mkdir -p "regen-output/$fixture"
+
+            # Run the canonical regen flow. run_tests.sh handles
+            # dep-copy internally (eqdata.* / *.gs propagation from
+            # dependent test outputs). The "|| true" absorbs the
+            # expected baseline-mismatch exit; the actual success
+            # signal is the regress.dat file appearing.
+            ./test_run/run_tests.sh "$fixture" || true
+
+            # Determine module prefix from the fixture name.
+            # Only fixtures whose standalone binary is built above are
+            # supported. fp/ti/wr/wrx fixtures would need additional
+            # *_static_stubs.f90 + Makefile gate work mirroring eq/tr
+            # — file a follow-up issue to extend if needed.
+            case "$fixture" in
+              tr_*)  module=tr  ;;
+              eq_*)  module=eq  ;;
+              tot_*) module=tot ;;
+              *)
+                echo "ERROR: fixture '$fixture' has prefix not currently supported by this workflow."
+                echo "Supported prefixes: tr_* / eq_* / tot_*. Other modules (fp/ti/wr/wrx)"
+                echo "require their own *_static_stubs.f90 + Makefile gate (see #197 for the pattern)."
+                exit 1
+                ;;
+            esac
+            dump_file="test_run/test_output/$fixture/${module}_regress.dat"
+
+            # Narrow failure detection: distinguish "binary crashed" /
+            # "missing input" (real failure) from "comparison failed"
+            # (expected — that's why we're regenerating).
+            test -s "$dump_file" || {
+              echo "ERROR: dump file $dump_file is empty or missing"
+              echo "Last 50 lines of run_tests.sh output:"
+              ls -la "test_run/test_output/$fixture/" 2>&1
+              exit 1
+            }
+
+            # Extract metrics. The extract scripts SystemExit on
+            # malformed dumps (missing dimension keys, mismatched
+            # profile row count, empty scalars for tr/eq).
+            python3 "test_run/scripts/extract_${module}_metrics.py" "$dump_file" \
+              > "regen-output/$fixture/metrics.json"
+
+            # Defense-in-depth shape check (per-module).
+            case "$module" in
+              tot)
+                # tot scalars CAN be {} when TR_PRESENT=0 (per
+                # extract_tot_metrics.py:5-10). Use dimension keys
+                # instead.
+                jq -e '.NT >= 0 and .NRMAX >= 0 and .NSMAX >= 0' \
+                  "regen-output/$fixture/metrics.json" > /dev/null
+                ;;
+              *)
+                # tr / eq / fp / ti / wr / wrx require non-empty scalars.
+                jq -e '.scalars | length > 0' \
+                  "regen-output/$fixture/metrics.json" > /dev/null
+                ;;
+            esac
+
+            echo "  $fixture: scalars=$(jq -r '.scalars | length' regen-output/$fixture/metrics.json)"
+            echo "::endgroup::"
+          done
+
+          echo
+          echo "=== regen-output/ summary ==="
+          find regen-output -type f -name '*.json' -exec ls -l {} \;
+
+      - name: Upload regenerated baselines as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: baselines-${{ github.run_id }}
+          path: regen-output/
+          # 90-day retention matches GH Actions default. If 90 days
+          # proves too short for the manual review-and-commit cadence,
+          # make retention a workflow_dispatch input.
+          retention-days: 90
+          if-no-files-found: error

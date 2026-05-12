@@ -129,8 +129,19 @@ libs:
 	(cd ../pl; make libpl.a)
 	(cd ../eq; make libeq.a)
 
-tr2: $(LIBS2) $(OBJDIR)/trmain.o 
-	$(FLINKER) $(OBJDIR)/trmain.o $(LIBS2) -o $@ $(FFLAGS) $(FLIBS) $(LIBX_MTX)
+# Issue #197: link tr_static_stubs.o into the standalone `tr2` binary
+# when GFLIBS is empty (CI / no-graphics build). Mirrors
+# tot/Makefile:64-70 and eq/Makefile's analogous gate.
+# Note: tr's compile rule is OBJDIR-prefixed (${OBJDIR}/%.o:%.f90), so
+# the stub object lives at $(OBJDIR)/tr_static_stubs.o.
+ifeq ($(strip $(GFLIBS)),)
+TR_STATIC_STUBS_OBJ = $(OBJDIR)/tr_static_stubs.o
+else
+TR_STATIC_STUBS_OBJ =
+endif
+
+tr2: $(LIBS2) $(OBJDIR)/trmain.o $(TR_STATIC_STUBS_OBJ)
+	$(FLINKER) $(OBJDIR)/trmain.o $(TR_STATIC_STUBS_OBJ) $(LIBS2) -o $@ $(FFLAGS) $(FLIBS) $(LIBX_MTX)
 
 tr3: $(LIBS3) $(OBJDIR)/trmain.o
 	$(FLINKER) $(OBJDIR)/trmain.o $(LIBS3) -o $@ $(FFLAGS) $(FLIBS) $(LIBX_MTX)

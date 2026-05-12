@@ -113,8 +113,18 @@ libs:
 	(cd ../mtxp; make)
 	(cd ../pl; make libpl.a)
 
-eq: libs libeq.a eqmain.o
-	$(FLINKER) eqmain.o $(LIBS2) -o $@ $(FFLAGS) $(FLIBS) $(LIBX_MTX)
+# Issue #197: link eq_static_stubs.o into the standalone `eq` binary
+# when GFLIBS is empty (CI / no-graphics build), so the GSAF symbol
+# references in the archive chain (libgrf.a / libtask.a / etc.) resolve.
+# Mirrors tot/Makefile:64-70's TOT_STATIC_STUBS_OBJ gate.
+ifeq ($(strip $(GFLIBS)),)
+EQ_STATIC_STUBS_OBJ = eq_static_stubs.o
+else
+EQ_STATIC_STUBS_OBJ =
+endif
+
+eq: libs libeq.a eqmain.o $(EQ_STATIC_STUBS_OBJ)
+	$(FLINKER) eqmain.o $(EQ_STATIC_STUBS_OBJ) $(LIBS2) -o $@ $(FFLAGS) $(FLIBS) $(LIBX_MTX)
 
 eq3: libs libeq3.a eqmain.o
 	$(FLINKER) eqmain.o $(LIBS3) -o $@ $(FFLAGS) $(FLIBS) $(LIBX_MTX)
