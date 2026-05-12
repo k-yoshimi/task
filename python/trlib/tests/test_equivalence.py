@@ -38,8 +38,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import pytest
-
 HERE = Path(__file__).resolve()
 REPO = HERE.parents[3]
 PYTHON_ROOT = REPO / "python"
@@ -205,16 +203,6 @@ class TestEquivalence(unittest.TestCase):
         from trlib.tests.fixtures import tr_iter01_params as f
         self._check_case(f)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "#190: tr_tst2 baseline at test_run/baselines/tr_tst2/metrics.json "
-            "is missing AJRFT (pre-AJRFT 13-scalar shape). PR #187 added AJRFT "
-            "to TR's dump path; #193 regenerated tr_iter01 baseline but tr_tst2 "
-            "baseline regen is blocked by upstream eq_tst2 drift (~3e-9 > 1e-10). "
-            "Remove this xfail when #190 closes."
-        ),
-    )
     def test_tst2(self):
         from trlib.tests.fixtures import tr_tst2_params as f
         self._check_case(f)
