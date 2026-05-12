@@ -25,6 +25,7 @@ fort.*
 gsdump*
 eqdata*
 !python/trlib/tests/fixtures/eqdata.TST-2
+!python/trlib/tests/fixtures/eqdata.ITER01
 !python/eqlib/tests/fixtures/eqdata.TST-2
 !python/eqlib/tests/fixtures/eqdata.ITER01
 trdata*
