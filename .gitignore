@@ -14,6 +14,7 @@
 # tests are reproducible without needing licensed ADAS data files.
 !test_run/fixtures/*.data
 *.optrpt
+*.bak
 *.aux
 *.log
 *.dvi
@@ -164,6 +165,12 @@ tot/tests/c_abi/test_negative
 tot/tests/c_abi/test_full_cycle
 tot/tests/c_abi/*.o
 tot/tot_static_stubs.o
+
+# tr L-4: libtrapi.so build artefacts
+tr/libtrapi.so
+tr/obj/pic/
+tr/mod_pic/
+tr/tests/c_abi/test_run_so
 
 # Python
 __pycache__/
