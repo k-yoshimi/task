@@ -2,7 +2,6 @@
 import sys
 from pathlib import Path
 
-import pytest
 from pptx import Presentation
 
 HERE = Path(__file__).parent

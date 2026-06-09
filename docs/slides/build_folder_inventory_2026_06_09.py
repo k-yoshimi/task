@@ -9,7 +9,7 @@
 from pathlib import Path
 
 from pptx import Presentation
-from pptx.util import Inches, Pt
+from pptx.util import Inches
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
@@ -169,7 +169,7 @@ def slide_overview(prs):
     add_text_block(s, [
         "以降のスライドで使う凡例。「最終更新」= 最終 git コミット日。",
         "多くは 2026-04-17/18 (一括インポート) で、それ以降の日付が実際に編集したフォルダの印。",
-    ], top=Inches(5.6), size=13, color=COLOR_ACCENT)
+    ], top=Inches(5.7), size=13, color=COLOR_ACCENT)
     return s
 
 
@@ -194,7 +194,7 @@ def slide_cat_a(prs):
         ],
         top=Inches(1.2),
         col_widths=[Inches(4.2), Inches(5.9), Inches(2.0)],
-        row_height=Inches(0.38),
+        row_height=Inches(0.35),
     )
     add_text_block(s, [
         "このプロジェクトが実際に編集するフォルダ群。7つの Fortran 本体も上流モジュールだが、",
