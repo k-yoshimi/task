@@ -68,10 +68,10 @@ Repository layout:
         mtxp      parallel matrix libraries
         ob        orbit library (used by fp, tot)
         adpost    post-processing library (used by ti, tot)
-        gsaf      GSAF graphics library
         trmodels  transport-model sources (NCLASS / GLF23 / MMM / ...)
         trlib     transport-model library (cytran / GLF / ITG / MMM / NCLASS)
-        (external: ../../bpsd -- lives outside this repository)
+        (external, not tracked in this repo -- separate clones from
+         ats-fukuyama: ../../bpsd, and gsaf [GSAF graphics, gitignored])
 
     Python-ization project (Phase L: shared library + Python wrapper work)
         python/{eq,fp,ti,tot,tr,wr,wrx}lib   Python ctypes wrappers
