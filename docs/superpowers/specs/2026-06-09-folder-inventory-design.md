@@ -25,7 +25,7 @@ fill in.
 
 ## 2. Deliverable
 
-- **Format:** PowerPoint (`.pptx`), language **English**.
+- **Format:** PowerPoint (`.pptx`), language **Japanese** (first pass; English version may follow later if needed for upstream sharing).
 - **Tooling:** follow the existing project convention — a python-pptx build
   script under `docs/slides/`, mirroring `build_status_2026-05-25.py`
   (16:9 = 13.333"×7.5", established color palette, textbox/title helpers).
@@ -111,7 +111,7 @@ A because they are the Phase L bodies under active edit.)
 | `docs/*-library/` ×7 | `eq/fp/ti/tot/tr/wr/wrx-library` each hold a single `architecture.md` — very thin folders. |
 | Stray / generated | `make.header.bak`, `tr/libtrapi.so`, scattered `.DS_Store`. Note: `fort.*`, `*.mod`, `*.so`, `RLAMDAG.dat` are already gitignored (not tracked). |
 
-## 5. Slide Outline (8–10 slides, English)
+## 5. Slide Outline (8–10 slides, Japanese)
 
 1. **Title** — TASK Repository: Folder Inventory & Reorg Plan (2026-06-09)
 2. **Purpose & scope** — stocktake first, no physical moves; Fortran-tree moves
