@@ -60,7 +60,7 @@ def test_build_produces_deck():
     out = deck.build()
     assert out.exists(), f"deck not written: {out}"
     prs = Presentation(str(out))
-    assert len(prs.slides._sldIdLst) == EXPECTED_SLIDES
+    assert len(prs.slides) == EXPECTED_SLIDES
 
 
 def test_no_placeholder_text():
@@ -379,14 +379,15 @@ def slide_cat_a(prs):
             ["wrx", "レイトレーシング派生 (Phase L 本体)", "2026-04-26"],
             ["ti", "輸送 / 不純物 (Phase L 本体)", "2026-04-26"],
             ["tot", "オールインワン集約 (Phase L 本体)", "2026-05-25"],
-            ["python/{eq,fp,ti,tot,tr,wr,wrx}lib", "Python ctypes ラッパー", "2026-06-08"],
+            ["python/{eqlib,fplib,tilib,totlib,trlib,wrlib,wrxlib}", "Python ctypes ラッパー", "2026-06-08"],
             ["python/mcp-servers", "モジュール別 MCP サーバ", "2026-06-08"],
             ["docs/", "プロジェクト docs (sphinx, manual, design, slides)", "2026-06-08"],
-            ["scripts/, test_run/", "プロジェクト用スクリプト + テスト実行物", "2026-05/06"],
+            ["scripts/", "プロジェクトスクリプト (pre-push など)", "2026-05-11"],
+            ["test_run/", "テスト実行フィクスチャ / 出力", "2026-06-02"],
         ],
         top=Inches(1.2),
-        col_widths=[Inches(3.6), Inches(6.5), Inches(2.0)],
-        row_height=Inches(0.40),
+        col_widths=[Inches(4.2), Inches(5.9), Inches(2.0)],
+        row_height=Inches(0.38),
     )
     add_text_block(s, [
         "このプロジェクトが実際に編集するフォルダ群。7つの Fortran 本体も上流モジュールだが、",
@@ -628,7 +629,7 @@ Expected: PASS (2 passed).
 
 - [ ] **Step 5: Generate the deck and confirm it opens**
 
-Run: `cd /Users/k-yoshimi/Dropbox/cursor/task/docs/slides && python3 build_folder_inventory_2026_06_09.py && python3 -c "from pptx import Presentation; print(len(Presentation('2026-06-09-task-folder-inventory.pptx').slides._sldIdLst), 'slides')"`
+Run: `cd /Users/k-yoshimi/Dropbox/cursor/task/docs/slides && python3 build_folder_inventory_2026_06_09.py && python3 -c "from pptx import Presentation; print(len(Presentation('2026-06-09-task-folder-inventory.pptx').slides), 'slides')"`
 Expected: prints `Wrote .../2026-06-09-task-folder-inventory.pptx (9 slides)` then `9 slides`.
 
 - [ ] **Step 6: Confirm the .pptx is not gitignored, then commit script, test, and deck**

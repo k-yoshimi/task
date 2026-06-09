@@ -29,7 +29,7 @@ fill in.
 - **Tooling:** follow the existing project convention — a python-pptx build
   script under `docs/slides/`, mirroring `build_status_2026-05-25.py`
   (16:9 = 13.333"×7.5", established color palette, textbox/title helpers).
-- **Build script:** `docs/slides/build_folder_inventory_2026-06-09.py`
+- **Build script:** `docs/slides/build_folder_inventory_2026_06_09.py` (underscores — the file is imported by the smoke test, and Python module names cannot contain `-`)
 - **Output deck:** `docs/slides/2026-06-09-task-folder-inventory.pptx`
 - Reuse color/layout helpers from the existing build scripts; do not introduce
   a new slide toolchain (no Marp, no separate designer system).
