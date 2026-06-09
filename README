@@ -22,17 +22,18 @@ Optional Libraries:
           PETSc     Paralle Matrix library
                         http://www.mcs.anl.gov/petsc/
 
-Present modules: (*: under development)
-    plx:   Module interface library
+Present modules:
+    pl:    Module interface library
     eq:    2D equilibrium module (fixed boundary)
     equ:   2D equilibrium module (free boundary)
     tr:    1D transport module (diffusive transport)
     trn:   1D transport module (diffusive transport, new version)
+    ti:    1D impurity transport module
     tx:    1D transport module (dynamic transport)
-    txm:   1D transport module (dynamic transport, multi-species)*
     fp:    3D Fokker Planck module (PETSc, MPI)
     dp:    Wave dispersion module
     wr:    3D ray tracing module
+    wrx:   3D ray tracing module (variant, based on TASK/DP)
     w1:    1D full wave module (FDM, MLM)
     wm:    3D full wave module (FFT/FDM)
     wmf:   3D full wave module (FFT/FEM)
@@ -46,11 +47,9 @@ Present modules: (*: under development)
     mtxp:  parallel matrix libraries
     tools: various tools to handle ufile
 
-To be removed near future
-    pl:    Module interface library (old verson)
-    mtx:   matrix libraries
-    mtxpc: parallel complex matrix libraries
-    mpi: interface 
+    (pl is the current module interface library; the previously planned
+     "plx" rename was never adopted.  The old "mtx", "mtxpc" and "mpi"
+     directories listed here historically have already been removed.)
 
 Install: 
     0: Install GSAF graphic library, Before installing TASK
