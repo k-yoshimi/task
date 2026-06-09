@@ -227,6 +227,57 @@ def slide_cat_b(prs):
     return s
 
 
+def slide_cat_c(prs):
+    s = prs.slides.add_slide(prs.slide_layouts[6])
+    add_title_bar(s, "5. 分類C — 個人バリアント / ミラー (要確認)")
+    add_table(s,
+        ["系統", "フォルダ", "判定"],
+        [
+            ["fp", "fp.anzai, fp.nuga, fp.ota, fpx", "TBC"],
+            ["wm", "wmseki, wmfn, wmx", "TBC"],
+            ["dp", "dpseki", "TBC"],
+            ["w-impurity", "wi, wim, wiq, wq", "TBC"],
+            ["tr", "trm, trx", "TBC"],
+            ["wf", "wf2dt, wf2dx", "TBC"],
+            ["その他", "t2, tf2d, sak, demo-ec, sample", "TBC"],
+        ],
+        top=Inches(1.3),
+        col_widths=[Inches(2.2), Inches(7.4), Inches(2.5)],
+        row_height=Inches(0.50),
+    )
+    add_text_block(s, [
+        "判定は意図的に「TBC (要確認)」のまま。これらはアーカイブ候補で、",
+        "残す / アーカイブ / 上流のみ の判断はメンテナが記入する。",
+        "ここでは判定を一切下していない — このスライドは引き継ぎ用ワークシート。",
+    ], top=Inches(5.4), size=13, color=COLOR_ACCENT)
+    return s
+
+
+def slide_cat_d(prs):
+    s = prs.slides.add_slide(prs.slide_layouts[6])
+    add_title_bar(s, "6. 分類D — ドキュメント整理対象")
+    add_table(s,
+        ["項目", "所見"],
+        [
+            ["doc/ vs docs/",
+             "doc/ (2025) = 旧 LaTeX マニュアル原稿; docs/ (2026) = 新プロジェクト docs。2つの根が併存。"],
+            ["docs/doc-design/",
+             "LaTeX 設計書原稿 + ビルド生成物 (.aux/.dvi/.log/.out/.toc) が混入; .sty が doc/ と重複。"],
+            ["docs/*-library/ ×7",
+             "eq/fp/ti/tot/tr/wr/wrx-library が各々 architecture.md 1枚のみの薄いフォルダ。"],
+            ["散乱 / 生成物",
+             "make.header.bak, tr/libtrapi.so, 各所 .DS_Store。(fort.*, *.mod, *.so, RLAMDAG.dat は gitignore 済)"],
+        ],
+        top=Inches(1.3),
+        col_widths=[Inches(2.7), Inches(9.4)],
+        row_height=Inches(0.80),
+    )
+    add_text_block(s, [
+        "分類D は docs/ と作業ツリー内なので、整理は自分たちで実施可能。上流サインオフ不要。",
+    ], top=Inches(5.6), size=13, color=COLOR_ACCENT)
+    return s
+
+
 # ---- メイン ----------------------------------------------------------------
 
 
@@ -236,6 +287,8 @@ BUILDERS = [
     slide_overview,
     slide_cat_a,
     slide_cat_b,
+    slide_cat_c,
+    slide_cat_d,
 ]
 
 
