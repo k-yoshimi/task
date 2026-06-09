@@ -70,7 +70,7 @@ Repository layout:
         adpost    post-processing library (used by ti, tot)
         gsaf      GSAF graphics library
         trmodels  transport-model sources (NCLASS / GLF23 / MMM / ...)
-        trlib     legacy C-ABI library
+        trlib     transport-model library (cytran / GLF / ITG / MMM / NCLASS)
         (external: ../../bpsd -- lives outside this repository)
 
     Python-ization project (Phase L: shared library + Python wrapper work)
