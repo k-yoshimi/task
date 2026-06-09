@@ -51,7 +51,55 @@ Present modules:
      "plx" rename was never adopted.  The old "mtx", "mtxpc" and "mpi"
      directories listed here historically have already been removed.)
 
-Install: 
+Repository layout:
+
+    The top level is flat (inherited from upstream TASK): every module is a
+    direct sibling, and module Makefiles reference each other by relative
+    paths (e.g. eq links ../pl/libpl.a, tot references 13 siblings).  Because
+    of that coupling the directories below are NOT physically regrouped; this
+    map only classifies them so the tree is easier to read.
+
+    Core physics modules (buildable; see "Present modules" above)
+        pl eq equ tr trn ti tx fp dp wr wrx w1 wm wmf
+        wf2 wf3 wf2d wf3d fit3d tot
+
+    Shared libraries / infrastructure (linked via ../<dir>/)
+        lib       common libraries
+        mtxp      parallel matrix libraries
+        ob        orbit library (used by fp, tot)
+        adpost    post-processing library (used by ti, tot)
+        gsaf      GSAF graphics library
+        trmodels  transport-model sources (NCLASS / GLF23 / MMM / ...)
+        trlib     legacy C-ABI library
+        (external: ../../bpsd -- lives outside this repository)
+
+    Python-ization project (Phase L: shared library + Python wrapper work)
+        python/{eq,fp,ti,tot,tr,wr,wrx}lib   Python ctypes wrappers
+        python/mcp-servers                   per-module MCP servers
+        docs/                                project docs (sphinx manual,
+                                             design, slides, presentations)
+        scripts/  test_run/                  project scripts + test fixtures
+
+    Tools / IO / data
+        tools bin template          various tools / scaffolding
+        imas imas-ids               IMAS data exchange
+        open-adas                   ADAS atomic data
+        pic pt sak                  misc tools
+
+    Variants / experimental / personal mirrors (outside the documented
+    module set above; archive candidates -- not part of the main build)
+        fp.anzai fp.nuga fp.ota fpx    (fp variants)
+        wmseki wmfn wmx                (wm variants)
+        dpseki                         (dp variant)
+        trm trx                        (tr variants)
+        wi wim wiq wq                  (wave/impurity variants)
+        txnew t2 tf2d wf2dt wf2dx      (other variants)
+        demo-ec sample                 (demos / samples)
+
+    Note: the root "doc" is a symlink to docs/doc (kept so the module
+    documents' ../../doc/*.sty references continue to resolve).
+
+Install:
     0: Install GSAF graphic library, Before installing TASK
           tar xvzf gsaf-yyyymmdd.tar.gz
 	  cd gsaf/sc
