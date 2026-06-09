@@ -115,7 +115,7 @@ Standard input command:
 Input parameters:
     1. Definitions and default values of input parameters are
        described in XXinit.f.  Most of common input parameters 
-       are given in plx/plinit.f.  We do not recommend you to 
+       are given in pl/plinit.f90.  We do not recommend you to
        modify XXinit.f.  You had better to use XXparm file 
        described in the next item instead.
     2. You can set standard input parameters in a text file 
