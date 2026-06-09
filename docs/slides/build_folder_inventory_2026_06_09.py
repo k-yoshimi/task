@@ -173,6 +173,60 @@ def slide_overview(prs):
     return s
 
 
+def slide_cat_a(prs):
+    s = prs.slides.add_slide(prs.slide_layouts[6])
+    add_title_bar(s, "3. 分類A — プロジェクト所有・現役 (Phase L)")
+    add_table(s,
+        ["フォルダ", "役割", "最終更新"],
+        [
+            ["eq", "2D 平衡 (Phase L 本体)", "2026-05-13"],
+            ["tr", "1D 輸送 (Phase L 本体)", "2026-05-13"],
+            ["fp", "Fokker–Planck (Phase L 本体)", "2026-04-26"],
+            ["wr", "レイトレーシング (Phase L 本体)", "2026-04-26"],
+            ["wrx", "レイトレーシング派生 (Phase L 本体)", "2026-04-26"],
+            ["ti", "輸送 / 不純物 (Phase L 本体)", "2026-04-26"],
+            ["tot", "オールインワン集約 (Phase L 本体)", "2026-05-25"],
+            ["python/{eqlib,fplib,tilib,totlib,trlib,wrlib,wrxlib}", "Python ctypes ラッパー", "2026-06-08"],
+            ["python/mcp-servers", "モジュール別 MCP サーバ", "2026-06-08"],
+            ["docs/", "プロジェクト docs (sphinx, manual, design, slides)", "2026-06-08"],
+            ["scripts/", "プロジェクトスクリプト (pre-push など)", "2026-05-11"],
+            ["test_run/", "テスト実行フィクスチャ / 出力", "2026-06-02"],
+        ],
+        top=Inches(1.2),
+        col_widths=[Inches(4.2), Inches(5.9), Inches(2.0)],
+        row_height=Inches(0.38),
+    )
+    add_text_block(s, [
+        "このプロジェクトが実際に編集するフォルダ群。7つの Fortran 本体も上流モジュールだが、",
+        "Phase L 作業中なので A に配置している。",
+    ], top=Inches(6.0), size=13, color=COLOR_ACCENT)
+    return s
+
+
+def slide_cat_b(prs):
+    s = prs.slides.add_slide(prs.slide_layouts[6])
+    add_title_bar(s, "4. 分類B — 上流現役モジュール (継承)")
+    add_table(s,
+        ["グループ", "フォルダ"],
+        [
+            ["インターフェース / 平衡", "pl (README で旧), equ"],
+            ["輸送", "trn, tx, txnew"],
+            ["波動", "dp, w1, wm, wmf, wf2, wf3, wf2d, wf3d"],
+            ["その他物理", "fit3d, ob, pic, pt"],
+            ["ライブラリ", "lib, mtxp, gsaf (グラフィクス), trmodels, trlib (旧 C-ABI)"],
+            ["ツール / IO", "tools, bin, adpost, template, imas, imas-ids, open-adas"],
+        ],
+        top=Inches(1.3),
+        col_widths=[Inches(3.0), Inches(9.1)],
+        row_height=Inches(0.60),
+    )
+    add_text_block(s, [
+        "ルート README に「現役モジュール」として記載。移動・削除には ats-fukuyama",
+        "サインオフが必須なので、ここでは棚卸しのみで手を付けない。",
+    ], top=Inches(5.6), size=13, color=COLOR_ACCENT)
+    return s
+
+
 # ---- メイン ----------------------------------------------------------------
 
 
@@ -180,6 +234,8 @@ BUILDERS = [
     slide_title,
     slide_scope,
     slide_overview,
+    slide_cat_a,
+    slide_cat_b,
 ]
 
 
