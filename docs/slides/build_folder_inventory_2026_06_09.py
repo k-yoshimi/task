@@ -278,6 +278,44 @@ def slide_cat_d(prs):
     return s
 
 
+def slide_next(prs):
+    s = prs.slides.add_slide(prs.slide_layouts[6])
+    add_title_bar(s, "7. 次フェーズの選択肢 (未確定)")
+    add_bullets_v2(s, [
+        "ドキュメント (自分たちで実施可・サインオフ不要):",
+        "  - doc/ を docs/ に統合 (ドキュメント根を一本化)。",
+        "  - docs/doc-design/ の LaTeX 生成物を除去; .sty の重複を解消。",
+        "  - docs/*-library/ ×7 を1つの構造にまとめるか検討。",
+        "  - .DS_Store / make.header.bak の gitignore 整備; 追跡済み散乱物の除去。",
+        "",
+        "分類C (ユーザー入力待ち):",
+        "  - TBC 判定を記入: 各バリアントを 残す / アーカイブ / 上流のみ に振り分け。",
+        "",
+        "Fortran ツリー (分類B — ゲートあり):",
+        "  - 物理移動は git mv + ats-fukuyama サインオフを経て、別提案として実施。",
+    ], top=Inches(1.1), size=16, vertical_anchor=MSO_ANCHOR.MIDDLE, height=Inches(5.8))
+    return s
+
+
+def slide_closing(prs):
+    s = prs.slides.add_slide(prs.slide_layouts[6])
+    add_title_bar(s, "8. まとめと保留事項")
+    add_bullets_v2(s, [
+        "約60個のトップレベルフォルダを4分類に棚卸し: A (現役), B (上流),",
+        "  - C (バリアント, TBC), D (ドキュメント整理)。フォルダの移動・削除は一切なし。",
+        "",
+        "サインオフ無しで即着手可能: 分類D のドキュメント整理。",
+        "",
+        "保留 / 入力待ち:",
+        "  - 分類C の個別判定 — メンテナが TBC ワークシートを記入。",
+        "  - 分類B の Fortran ツリー移動 — ats-fukuyama サインオフ待ち。",
+    ], top=Inches(1.1), size=16, vertical_anchor=MSO_ANCHOR.MIDDLE, height=Inches(5.6))
+    add_text_block(s, [
+        "python-pptx で生成: docs/slides/build_folder_inventory_2026_06_09.py",
+    ], top=Inches(6.7), size=10, color=COLOR_DIM)
+    return s
+
+
 # ---- メイン ----------------------------------------------------------------
 
 
@@ -289,6 +327,8 @@ BUILDERS = [
     slide_cat_b,
     slide_cat_c,
     slide_cat_d,
+    slide_next,
+    slide_closing,
 ]
 
 
