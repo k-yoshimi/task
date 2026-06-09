@@ -121,11 +121,65 @@ def slide_title(prs):
     return s
 
 
+def slide_scope(prs):
+    s = prs.slides.add_slide(prs.slide_layouts[6])
+    add_title_bar(s, "1. 目的とスコープ")
+    add_bullets_v2(s, [
+        "目的: リポジトリ約60個のトップレベルフォルダを棚卸しし、現状を分類する。",
+        "本資料は何も移動・削除しない。棚卸しのみ。",
+        "",
+        "背景: ツリーには4つの「世界」が混在している:",
+        "  - 進行中の Python 化 / リファクタリング・プロジェクトの資産,",
+        "  - 継承した上流 Fortran モジュール,",
+        "  - 個人 / 実験用のミラーフォルダ,",
+        "  - 複数系統に分かれて増殖したドキュメント。",
+        "",
+        "重要な制約: 上流 Fortran モジュール本体 (eq / tr / fp / wr / wm / wf … )",
+        "  - の物理的な移動・削除は ats-fukuyama さまのサインオフが必須。",
+        "  - C-ABI / ラッパー / レジストリ / テスト / docs はこの制約の対象外。",
+        "",
+        "今回のスコープ外: あらゆる git mv / 削除、グループ C の個別判定 (TBC のまま)。",
+    ], top=Inches(1.1), size=16, vertical_anchor=MSO_ANCHOR.MIDDLE, height=Inches(5.8))
+    return s
+
+
+def slide_overview(prs):
+    s = prs.slides.add_slide(prs.slide_layouts[6])
+    add_title_bar(s, "2. 全体像 — 約60フォルダ → 4分類")
+    add_table(s,
+        ["分類", "意味", "移動方針"],
+        [
+            ["A — プロジェクト所有・現役",
+             "Phase L モジュール + Python ラッパー + MCP + プロジェクト docs",
+             "自由に編集可 (自分たちの資産)"],
+            ["B — 上流現役",
+             "ルート README 記載のモジュール。継承物",
+             "ats-fukuyama サインオフ必須"],
+            ["C — バリアント / ミラー",
+             "個人名付き・派生フォルダ。アーカイブ候補",
+             "TBC — ユーザーが分類"],
+            ["D — ドキュメント整理",
+             "重複した doc 根、ビルド生成物、薄いフォルダ、散乱物",
+             "docs/ 内で整理 (自分たちの資産)"],
+        ],
+        top=Inches(1.4),
+        col_widths=[Inches(3.4), Inches(5.7), Inches(3.0)],
+        row_height=Inches(0.85),
+    )
+    add_text_block(s, [
+        "以降のスライドで使う凡例。「最終更新」= 最終 git コミット日。",
+        "多くは 2026-04-17/18 (一括インポート) で、それ以降の日付が実際に編集したフォルダの印。",
+    ], top=Inches(5.6), size=13, color=COLOR_ACCENT)
+    return s
+
+
 # ---- メイン ----------------------------------------------------------------
 
 
 BUILDERS = [
     slide_title,
+    slide_scope,
+    slide_overview,
 ]
 
 

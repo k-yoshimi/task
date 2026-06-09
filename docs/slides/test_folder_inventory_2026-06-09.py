@@ -11,7 +11,7 @@ sys.path.insert(0, str(HERE))  # so `import build_slides` inside the script reso
 import build_folder_inventory_2026_06_09 as deck  # noqa: E402
 
 # Bumped as slides are added, task by task.
-EXPECTED_SLIDES = 1
+EXPECTED_SLIDES = 3
 
 
 def test_build_produces_deck():
