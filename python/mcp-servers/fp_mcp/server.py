@@ -30,8 +30,62 @@ The server is intentionally small — the real heavy lifting is in
 :mod:`fplib`. This file mirrors ``tr_mcp/server.py``; adding the
 remaining modules (ti / wr / wrx / tot) should be a matter of copying
 this file and swapping the backing library.
+
+fd-isolation (Fortran WRITE(6) vs MCP JSON-RPC)
+-----------------------------------------------
+Fortran WRITE(6,...) targets OS fd 1, which is also the JSON-RPC write
+pipe to the MCP client parent.  Any Fortran diagnostic line corrupts the
+pipe: the client logs "Failed to parse JSONRPC message from server" for
+each junk line, and in the worst case the session drops with
+"Connection closed".
+
+FP is a heavy offender: ``FPWRTPRF`` prints the whole radial profile
+table to unit 6 on every time step, so the damage grows linearly with
+NTMAX (measured client-side: 150 parse errors at NTMAX=1, 211 at
+NTMAX=2, i.e. ~61 junk lines per extra step).
+
+Fix (same as eq_mcp/tr_mcp): at startup, BEFORE any mcp/logging import
+touches sys.stdout:
+  1. dup fd 1 (JSON-RPC write pipe) to a fresh fd; redirect fd 1 → stderr
+     so Fortran WRITE(6,...) goes to the subprocess stderr (backend log).
+  2. Rebuild sys.stdout around the saved fd so the MCP framework's stdio
+     transport still writes to the correct pipe.
+
+After this:
+  - Fortran WRITE(6,...) → fd 1 → stderr (harmless backend log)
+  - MCP sys.stdout.write → saved fd → original JSON-RPC write pipe
+
+NOTE: We do NOT redirect fd 0 (stdin) to /dev/null because the Fortran
+library uses stdin internally; redirecting it increases crash rates.
 """
 from __future__ import annotations
+
+import os as _os
+import sys as _sys
+
+# Skip the redirect dance for --print-tools / --help / similar one-shot
+# modes that print to the terminal.
+_ONESHOT_FLAGS = {"--print-tools", "--help", "-h", "--version"}
+_is_oneshot = any(a in _ONESHOT_FLAGS for a in _sys.argv[1:])
+
+if not _is_oneshot:
+    # ---------- fd-isolation (Fortran WRITE(6) vs MCP JSON-RPC) ----------
+    # fd 1 originally points at the parent's JSON-RPC write pipe. Fortran
+    # WRITE(6,...) also targets fd 1, corrupting the pipe. We dup the pipe
+    # to a fresh fd and redirect fd 1 → stderr so Fortran writes go to the
+    # subprocess stderr (visible in backend log; harmless to JSON-RPC).
+    #
+    # The MCP framework writes via sys.stdout, so we rebuild sys.stdout to
+    # write to the saved (original-pipe) fd. Line buffering keeps JSON-RPC
+    # records flushing per-message.
+    #
+    # NOTE: We do NOT redirect fd 0 (stdin) to /dev/null because the
+    # Fortran library uses stdin internally; redirecting it increases crash
+    # rates (~20% → ~50%) — see the tr_mcp/eq_mcp note.
+    _mcp_pipe_fd = _os.dup(1)
+    _os.dup2(2, 1)
+    _sys.stdout = _os.fdopen(_mcp_pipe_fd, "w", buffering=1, encoding="utf-8")
+    # ----------------------------------------------------------------------
 
 import os
 import sys
