@@ -99,7 +99,8 @@ class TestStateSchema(unittest.TestCase):
     def test_schema_top_level(self) -> None:
         schema = srv.STATE_SCHEMA
         self.assertEqual(schema["type"], "object")
-        for k in ("NRMAX", "NSAMAX", "NPMAX", "NTHMAX", "NTG2", "TIMEFP", "profile"):
+        for k in ("NRMAX", "NSAMAX", "NPMAX", "NTHMAX", "NTG2", "TIMEFP",
+                  "scalars", "profile"):
             self.assertIn(k, schema["properties"])
 
     def test_profile_items_cover_all_2d_fields(self) -> None:
@@ -107,6 +108,13 @@ class TestStateSchema(unittest.TestCase):
         props = items["properties"]
         for field in ("NSA", "RNT", "RWT", "RTT", "RJT", "RPCT", "RPWT"):
             self.assertIn(field, props)
+
+    def test_scalars_cover_all_global_fields(self) -> None:
+        """The schema must document every field fplib actually emits."""
+        from fplib.state import SCALAR_FIELDS
+
+        props = srv.STATE_SCHEMA["properties"]["scalars"]["properties"]
+        self.assertEqual(sorted(props), sorted(SCALAR_FIELDS))
 
     def test_describe_state_schema_tool(self) -> None:
         out = srv.handle_describe_state_schema()
@@ -198,7 +206,7 @@ class _MockFplib:
                 return {
                     "NRMAX": 0, "NSAMAX": 0, "NPMAX": 0,
                     "NTHMAX": 0, "NTG2": 0, "TIMEFP": 0.0,
-                    "profile": [],
+                    "scalars": {}, "profile": [],
                 }
 
         return _S()

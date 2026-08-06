@@ -18,7 +18,9 @@
 !   fp_get_state  -> populates the fp_state_c struct from the same set of
 !                    FPCOMM scalars/arrays that fpregress.f90 dumps:
 !                    NRMAX, NSAMAX, NPMAX, NTHMAX, NTG2, TIMEFP, and
-!                    profile arrays RNT/RWT/RTT/RJT/RPCT/RPWT(NR,NSA).
+!                    profile arrays RNT/RWT/RTT/RJT/RPCT/RPWT(NR,NSA),
+!                    plus the volume-integrated global scalars that
+!                    FPWRTGLB otherwise only WRITEs to unit 6.
 !   fp_finalize   -> fp_deallocate (+ ntg1/ntg2) and clears g_* flags.
 !
 ! The Fortran-side names are fp_api_* to avoid colliding with the existing
@@ -33,8 +35,9 @@ MODULE fp_api
   USE fp_state, ONLY: fp_state_c, FP_MAX_NRMAX, FP_MAX_NSAMAX
   USE fpcomm,   ONLY: rkind, &
        NRMAX, NSAMAX, NPMAX, NTHMAX, NTG2, TIMEFP, &
-       NTMAX, &
-       RNT, RWT, RTT, RJT, RPCT, RPWT
+       NTMAX, NTG1, TVOLR, &
+       RNT, RWT, RTT, RJT, RPCT, RPWT, &
+       PIT, PWT, PPCT, PPWT, PWRT, PWMT
   USE fp_param_registry, ONLY: fp_param_set, fp_param_set_str
   USE plinit,            ONLY: pl_init
   USE equnit,            ONLY: eq_init
@@ -240,11 +243,18 @@ CONTAINS
   ! in Fortran column-major order, which matches the C-side declaration
   ! double RNT[FP_MAX_NSAMAX][FP_MAX_NRMAX] (row-major) byte-for-byte.
   ! Only state%RNT(1:NRMAX, 1:NSAMAX) carries valid runtime data.
+  !
+  ! The 7 appended global scalars are the species sums FPWRTGLB builds
+  ! before printing them (fp/fpsave.f90:260-311). They are the only part
+  ! of the state that sees the volume element VOLR / TVOLR: the six
+  ! profile arrays are per-unit-volume moments and stay bit-identical
+  ! when only the equilibrium changes (MODELD=0, no wave, no CD), so
+  ! without these an EQ->FP handoff is invisible to the caller.
   !-------------------------------------------------------------------
   FUNCTION fp_api_get_state(state) RESULT(ierr) BIND(C, NAME="fp_get_state")
     TYPE(fp_state_c), INTENT(OUT) :: state
     INTEGER(C_INT) :: ierr
-    INTEGER :: nr, nsa, ntg_last
+    INTEGER :: nr, nsa, ntg_last, ntg1_last
 
     ! Always zero the struct so callers never see uninitialized memory.
     state%nrmax  = 0
@@ -259,6 +269,13 @@ CONTAINS
     state%RJT  = 0.0_C_DOUBLE
     state%RPCT = 0.0_C_DOUBLE
     state%RPWT = 0.0_C_DOUBLE
+    state%TOTAL_IP         = 0.0_C_DOUBLE
+    state%STORED_ENERGY    = 0.0_C_DOUBLE
+    state%COLLISION_POWER  = 0.0_C_DOUBLE
+    state%ABSORPTION_POWER = 0.0_C_DOUBLE
+    state%ABSORPTION_WR    = 0.0_C_DOUBLE
+    state%ABSORPTION_WM    = 0.0_C_DOUBLE
+    state%PLASMA_VOLUME    = 0.0_C_DOUBLE
 
     IF (.NOT. g_initialized) THEN
        ierr = FP_ERR_NOT_INIT
@@ -297,6 +314,30 @@ CONTAINS
              state%RPWT(nr, nsa) = RPWT(nr, nsa, ntg_last)
           END DO
        END DO
+    END IF
+
+    ! Global scalars. TVOLR and the P*T(NSA,NTG1) accumulators only
+    ! exist once fp_prep has run (TVOLR: fp/fpprep.f90:231-234; the
+    ! arrays: fpcomm::fp_allocate_ntg1) and only carry a sample once
+    ! FPSGLB has bumped NTG1 (fp/fploop.f90:200). Before that they stay
+    ! at the zeros set above rather than exposing uninitialised memory.
+    IF (g_prepared) THEN
+       state%PLASMA_VOLUME = TVOLR
+       IF (NTG1 >= 1 .AND. ALLOCATED(PIT) .AND. ALLOCATED(PWT) .AND. &
+           ALLOCATED(PPCT) .AND. ALLOCATED(PPWT) .AND. &
+           ALLOCATED(PWRT) .AND. ALLOCATED(PWMT)) THEN
+          ntg1_last = MIN(NTG1, SIZE(PIT, 2))
+          DO nsa = 1, MIN(NSAMAX, SIZE(PIT, 1))
+             ! Species sums, mirroring FPWRTGLB's rtotal* accumulators
+             ! (fp/fpsave.f90:277-286).
+             state%TOTAL_IP         = state%TOTAL_IP         + PIT (nsa, ntg1_last)
+             state%STORED_ENERGY    = state%STORED_ENERGY    + PWT (nsa, ntg1_last)
+             state%COLLISION_POWER  = state%COLLISION_POWER  + PPCT(nsa, ntg1_last)
+             state%ABSORPTION_POWER = state%ABSORPTION_POWER + PPWT(nsa, ntg1_last)
+             state%ABSORPTION_WR    = state%ABSORPTION_WR    + PWRT(nsa, ntg1_last)
+             state%ABSORPTION_WM    = state%ABSORPTION_WM    + PWMT(nsa, ntg1_last)
+          END DO
+       END IF
     END IF
 
     ierr = FP_OK

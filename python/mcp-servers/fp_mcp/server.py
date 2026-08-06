@@ -176,7 +176,10 @@ STATE_SCHEMA: Dict[str, Any] = {
         "Snapshot of FPCOMM. Profile arrays are [NSAMAX][NRMAX] in the C "
         "layout (row-major), truncated from the FP_MAX_NSAMAX=8 x "
         "FP_MAX_NRMAX=100 storage. Larger meshes require bumping these "
-        "caps in fp/fp_api.h and rebuilding libfpapi.so."
+        "caps in fp/fp_api.h and rebuilding libfpapi.so. The `scalars` "
+        "block carries the volume-integrated globals; the profile arrays "
+        "are per-unit-volume moments and are insensitive to the "
+        "equilibrium on their own."
     ),
     "properties": {
         "NRMAX":  {"type": "integer", "description": "radial points in use"},
@@ -185,6 +188,30 @@ STATE_SCHEMA: Dict[str, Any] = {
         "NTHMAX": {"type": "integer", "description": "pitch-angle mesh size"},
         "NTG2":   {"type": "integer", "description": "long-time-axis counter"},
         "TIMEFP": {"type": "number",  "description": "simulation time [s]"},
+        "scalars": {
+            "type": "object",
+            "description": (
+                "7 volume-integrated global plasma scalars at the latest "
+                "NTG1 sample, summed over species: TOTAL_IP [MA], "
+                "STORED_ENERGY [MJ], COLLISION_POWER [MW], "
+                "ABSORPTION_POWER [MW], ABSORPTION_WR [MW], "
+                "ABSORPTION_WM [MW], PLASMA_VOLUME [m^3]. Unlike the "
+                "per-unit-volume profile arrays these depend on the "
+                "equilibrium through the volume element, so they are what "
+                "makes an EQ->FP handoff (MODELG=3 + KNAMEQ) observable. "
+                "All zero before the first run."
+            ),
+            "properties": {
+                "TOTAL_IP":         {"type": "number", "description": "total plasma current [MA]"},
+                "STORED_ENERGY":    {"type": "number", "description": "stored energy [MJ]"},
+                "COLLISION_POWER":  {"type": "number", "description": "total collision power [MW]"},
+                "ABSORPTION_POWER": {"type": "number", "description": "total absorbed wave power [MW]"},
+                "ABSORPTION_WR":    {"type": "number", "description": "ray-tracing (WR) share of the absorbed power [MW]"},
+                "ABSORPTION_WM":    {"type": "number", "description": "full-wave (WM) share of the absorbed power [MW]"},
+                "PLASMA_VOLUME":    {"type": "number", "description": "plasma volume TVOLR [m^3]"},
+            },
+            "additionalProperties": {"type": "number"},
+        },
         "profile": {
             "type": "array",
             "description": "per-species profile list, length = NSAMAX",
@@ -202,7 +229,10 @@ STATE_SCHEMA: Dict[str, Any] = {
             },
         },
     },
-    "required": ["NRMAX", "NSAMAX", "NPMAX", "NTHMAX", "NTG2", "TIMEFP", "profile"],
+    "required": [
+        "NRMAX", "NSAMAX", "NPMAX", "NTHMAX", "NTG2", "TIMEFP",
+        "scalars", "profile",
+    ],
 }
 
 

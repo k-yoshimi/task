@@ -88,6 +88,13 @@ class TestFpStateFromC(unittest.TestCase):
                 s.RJT[ns][ir] = v + 0.3
                 s.RPCT[ns][ir] = v + 0.4
                 s.RPWT[ns][ir] = v + 0.5
+        s.TOTAL_IP = 1.5
+        s.STORED_ENERGY = 5.25
+        s.COLLISION_POWER = -0.5
+        s.ABSORPTION_POWER = 2.0
+        s.ABSORPTION_WR = 1.25
+        s.ABSORPTION_WM = 0.75
+        s.PLASMA_VOLUME = 28.4
         return s
 
     def test_from_c_slices_correctly(self):
@@ -105,6 +112,17 @@ class TestFpStateFromC(unittest.TestCase):
         self.assertAlmostEqual(st.RTT[0][1], 1.2)
         self.assertAlmostEqual(st.RPWT[1][0], 100.5)
 
+    def test_from_c_copies_global_scalars(self):
+        from fplib.state import SCALAR_FIELDS
+
+        c = self._populated_state(nr=3, nsa=2)
+        st = FpState.from_c(c)
+        self.assertEqual(sorted(st.scalars), sorted(SCALAR_FIELDS))
+        self.assertAlmostEqual(st.scalars["TOTAL_IP"], 1.5)
+        self.assertAlmostEqual(st.scalars["STORED_ENERGY"], 5.25)
+        self.assertAlmostEqual(st.scalars["COLLISION_POWER"], -0.5)
+        self.assertAlmostEqual(st.scalars["PLASMA_VOLUME"], 28.4)
+
     def test_to_dict_shape(self):
         c = self._populated_state(nr=2, nsa=2)
         d = FpState.from_c(c).to_dict()
@@ -112,6 +130,9 @@ class TestFpStateFromC(unittest.TestCase):
         self.assertEqual(d["NSAMAX"], 2)
         self.assertIn("NPMAX", d)
         self.assertIn("TIMEFP", d)
+        # `scalars` mirrors the TrState.to_dict() top-level shape.
+        self.assertIsInstance(d["scalars"], dict)
+        self.assertAlmostEqual(d["scalars"]["PLASMA_VOLUME"], 28.4)
         self.assertEqual(len(d["profile"]), 2)
         p0 = d["profile"][0]
         self.assertEqual(p0["NSA"], 1)
@@ -128,6 +149,7 @@ class TestFpStateFromC(unittest.TestCase):
         d2 = json.loads(s)
         self.assertEqual(d2["NRMAX"], 2)
         self.assertEqual(d2["profile"][0]["NSA"], 1)
+        self.assertAlmostEqual(d2["scalars"]["STORED_ENERGY"], 5.25)
 
 
 # =====================================================================
