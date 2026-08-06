@@ -217,16 +217,17 @@ class TestEquivalence(unittest.TestCase):
         from trlib.tests.fixtures import tr_iter01_params as f
         self._check_case(f)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "#190: tr_tst2 baseline at test_run/baselines/tr_tst2/metrics.json "
-            "is missing AJRFT (pre-AJRFT 13-scalar shape). PR #187 added AJRFT "
-            "to TR's dump path; #193 regenerated tr_iter01 baseline but tr_tst2 "
-            "baseline regen is blocked by upstream eq_tst2 drift (~3e-9 > 1e-10). "
-            "Remove this xfail when #190 closes."
-        ),
-    )
+    # #190 xfail REMOVED here, deliberately and necessarily. Its reason was
+    # "tr_tst2 baseline ... is missing AJRFT ... baseline regen is blocked by
+    # upstream eq_tst2 drift". Both halves are now resolved: the regenerated
+    # baseline in this commit carries 14 scalars including scalars.AJRFT (it
+    # is the one key the regen ADDS), and the eq_tst2 drift was the stale
+    # eqdata.TST-2 blob, also replaced here.
+    #
+    # The removal is not optional: with strict=True and no xfail_strict
+    # override anywhere in this repo, a now-passing test_tst2 would report
+    # XPASS(strict) and fail CI red. Leaving the marker in place would trade
+    # one red for another.
     def test_tst2(self):
         from trlib.tests.fixtures import tr_tst2_params as f
         self._check_case(f)

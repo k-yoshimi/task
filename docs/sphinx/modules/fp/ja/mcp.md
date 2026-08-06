@@ -16,7 +16,7 @@ MCP サーバページ (`docs/sphinx/modules/tr/ja/mcp.md`) を参照.
 
 1. **Python 3.10 以上**
 2. **`libfpapi.so` がビルド済み** (`make -C fp libfpapi.so`)
-3. **`mcp` パッケージ** (`pip install 'mcp>=0.9'`)
+3. **`mcp` パッケージ** (`pip install 'mcp>=0.9,<2'`)
 4. **十分な RAM** — 5D グリッドのため数百 MB〜数 GB 必要
 
 ## インストール

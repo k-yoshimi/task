@@ -42,7 +42,7 @@ MCP (Model Context Protocol) は Anthropic が策定した **「LLM と外部ツ
 
 1. **Python 3.10 以上**
 2. **`libtrapi.so` がビルド済み** (`make -C tr libtrapi.so`)
-3. **`mcp` パッケージ** (`pip install 'mcp>=0.9'`)
+3. **`mcp` パッケージ** (`pip install 'mcp>=0.9,<2'`)
 
 ## インストール
 
@@ -304,7 +304,7 @@ MCP サーバの標準エラー出力が LLM クライアントに渡ります.
 |---|---|
 | `libtrapi.so not found` | `make -C tr libtrapi.so` 後, `TRLIB_PATH` を絶対パスで設定 |
 | `ModuleNotFoundError: trlib` | `PYTHONPATH` にリポジトリ `python/` を追加 |
-| `ModuleNotFoundError: mcp` | `pip install 'mcp>=0.9'`. 仮想環境を確認 |
+| `ModuleNotFoundError: mcp` | `pip install 'mcp>=0.9,<2'`. 仮想環境を確認 |
 | `invalid parameter` | `describe_parameters` で名前を確認 (大小区別あり, 1-origin) |
 | `calculation failed` | `NSMAX`, `PN`, `PT`, `DT` の整合性. `finalize` → `init` でリセット |
 

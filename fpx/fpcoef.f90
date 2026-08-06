@@ -309,6 +309,7 @@
 
 !     ----- NBI source term -----
 
+      WRITE(6,*) '@@@ point 1:',NSA,MODEL_NBI,MODELA
       IF(MODEL_NBI.eq.1)THEN
          IF(MODELA.eq.0)THEN
             CALL NBI_SOURCE_A0(NSA)
@@ -525,12 +526,15 @@
             DO NSAX=1,NSAMAX
                IF(NS_NSA(NSAX).EQ.NSSPB(NBEAM)) NSABEAM=NSAX
             ENDDO
+            WRITE(6,*) '@@@ point nbi-1'
             IF(NSABEAM.NE.0) THEN
+               WRITE(6,*) '@@@ point nbi-2'
                PSP=SQRT(2.D0*AMFP(NSA)**2*SPBENG(NBEAM)*AEE &
                     /AMFP(NSABEAM))/PTFP0(NSA)
                PANGSP=PI*SPBPANG(NBEAM)/180.D0 ! poloidal angle at beam deposit
                ANGSP=PI*SPBANG(NBEAM)/180.D0 ! pitch angle at phi = PANGSP
 
+               WRITE(6,*) '@@@ point nbi-3: PSP=',PSP
                SUML = 0.D0
                DO NR=NRSTART,NREND
                   PSI = (1.D0+EPSRM2(NR))/(1.D0+EPSRM2(NR)*COS(PANGSP) )
@@ -547,6 +551,7 @@
                         ENDDO
                      ENDIF
                   ENDDO
+                  WRITE(6,*) '@@@ point nbi-4: SUML=',SUML
                ENDDO
 
                CALL p_theta_integration(SUML)
@@ -561,6 +566,9 @@
                            IF(THG(NTH).LE.TH0B.AND.THG(NTH+1).GT.TH0B) THEN
                               SPPB(NTH,NP,NR,NSA)=SPPB(NTH,NP,NR,NSA) &
                                    +PZ(NSABEAM)*SPBTOT(NBEAM)*SPL/SUML
+                              WRITE(6,'(A,4I4,ES12.4)') &
+                                   '@@@ point nbi-5: SPPB=', &
+                                   NTH,NP,NR,NSA,SPPB(NTH,NP,NR,NSA)
                            ENDIF
                         ENDDO
                      ENDIF

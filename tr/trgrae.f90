@@ -18,7 +18,9 @@
       IF(K2.EQ.'4') CALL TRGRE4(INQ)
       IF(K2.EQ.'5') CALL TRGRE5(INQ)
       IF(K2.EQ.'6') CALL TRGRE6(INQ)
-      IF(K2.EQ.'Q'.AND.MODELG.GE.3) CALL EQGOUT(0)
+!     MODE=1 so both the (sigma,theta) GS solution (C series, plasma shape)
+!     and the flux-surface-averaged quantities (S series) can be displayed.
+      IF(K2.EQ.'Q'.AND.MODELG.GE.3) CALL EQGOUT(1)
 
       IF(RHOA.NE.1.D0) NRMAX=NRAMAX
       RETURN

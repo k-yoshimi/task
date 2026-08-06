@@ -2,7 +2,11 @@
 
 MODULE ticomm_parm
 
-  USE plcomm,pm=>pa
+  ! pt_pl=>PT: the merge added PT(NSM) to plcomm_parm, but ti owns a local
+  ! PT(NSM) (computed from PTPR/PTPP in tiinit). Rename plcomm's PT away so
+  ! ti's local PT stays authoritative (P0a = no behaviour change; folding ti
+  ! onto plcomm's shared PT is P2 param-dedup, not this merge).
+  USE plcomm,pm=>pa,pt_pl=>PT
   USE commpi
 
 !     NSM=100 ! imported from plcomm

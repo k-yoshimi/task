@@ -266,7 +266,7 @@
       NSUMAX = 65
 
       NRVMAX = 50
-      NTVMAX = 200
+      NTVMAX = 400
 !
 !     *** CONTROL PARAMETERS ***
 !
@@ -277,7 +277,7 @@
 !        NLPNW  : Maximum iteration number in newton method
 !
       EPSEQ  = 1.D-6
-      NLPMAX = 20
+      NLPMAX = 100
       EPSNW  = 1.D-2
       DELNW  = 1.D-2
       NLPNW  = 20

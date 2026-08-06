@@ -190,7 +190,7 @@ These are checked against the compile-time maxima by `validate()`.
 | `NTHMAX` | int | 64  | poloidal mesh in flux coordinates |
 | `NSUMAX` | int | 65  | number of boundary points |
 | `NRVMAX` | int | 50  | radial mesh for surface averaging |
-| `NTVMAX` | int | 200 | poloidal mesh for surface averaging |
+| `NTVMAX` | int | 400 | poloidal mesh for surface averaging |
 | `NPFCMAX` | int | 0  | number of PF coils |
 
 ## 10. Iteration / convergence
@@ -198,7 +198,7 @@ These are checked against the compile-time maxima by `validate()`.
 | Name | Type | Default | Meaning |
 |---|---|---|---|
 | `EPSEQ`  | double | 1×10⁻⁶ | convergence tolerance for equilibrium iteration |
-| `NLPMAX` | int    | 20     | maximum number of equilibrium iterations |
+| `NLPMAX` | int    | 100    | maximum number of equilibrium iterations |
 | `EPSNW`  | double | 1×10⁻² | Newton-method convergence tolerance |
 | `DELNW`  | double | 1×10⁻² | derivative step size for Newton method |
 | `NLPNW`  | int    | 20     | maximum Newton iterations |

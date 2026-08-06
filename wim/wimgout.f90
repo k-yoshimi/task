@@ -68,7 +68,18 @@ CONTAINS
                   PTR1,PTL1,PTR2,PTL2,PT, &
                   PRR1,PRL1,PRR2,PRL2
     COMPLEX(rkind):: CEX,CEY,CBY,CBX,CPRIN,CPLIN,CEP,CEM
+    CHARACTER(LEN=2):: KID(3)
 
+    SELECT CASE(id1)
+    CASE(1)
+       KID(1)='ER'
+       KID(2)='EL'
+       KID(3)='EP'
+    CASE(2)
+       KID(1)='EX'
+       KID(2)='EY'
+       KID(3)='EZ'
+    END SELECT
     WRITE(6,*) ZMIN,ZMAX
     XMIN=GUCLIP(ZMIN)
     XMAX=GUCLIP(ZMAX)
@@ -124,7 +135,8 @@ CONTAINS
        GDATA2(NX)=REAL(CEP)
        GDATA3(NX)=AIMAG(CEP)
     END DO
-
+    IF(wave_dump.GT.0) CALL wave_dump_sub(1,nxmax,gx,gdata2,gdata3,KID(1))
+       
     CALL GMNMX1(GDATA1,1,NXMAX,1,GAMIN,GAMAX)
     CALL GQSCAL(0.0,GAMAX,GMIN,GMAX,SCAL)
     IF(ID2.EQ.1) THEN
@@ -151,11 +163,11 @@ CONTAINS
        ELSE IF(ID1.EQ.2) THEN
           CEM=CE(3*NX+1)
        END IF
-
        GDATA1(NX)= ABS(CEM)
        GDATA2(NX)=REAL(CEM)
        GDATA3(NX)=IMAG(CEM)
     END DO
+    IF(wave_dump.GT.0) CALL wave_dump_sub(2,nxmax,gx,gdata2,gdata3,KID(2))
 
     CALL GMNMX1(GDATA1,1,NXMAX,1,GAMIN,GAMAX)
     CALL GQSCAL(0.0,GAMAX,GMIN,GMAX,SCAL)
@@ -182,6 +194,7 @@ CONTAINS
        GDATA2(NX)=REAL(CE(3*NX+2))
        GDATA3(NX)=IMAG(CE(3*NX+2))
     END DO
+    IF(wave_dump.GT.0) CALL wave_dump_sub(3,nxmax,gx,gdata2,gdata3,KID(3))
 
     CALL GMNMX1(GDATA1,1,NXMAX,1,GAMIN,GAMAX)
     CALL GQSCAL(0.0,GAMAX,GMIN,GMAX,SCAL)
@@ -345,4 +358,40 @@ CONTAINS
     IF(ALLOCATED(GDATA3)) DEALLOCATE(GDATA3)
     RETURN
   END SUBROUTINE wimgra
+
+  ! --- dump wave field data for movie ---
+  
+  SUBROUTINE wave_dump_sub(nd,nxmax,gx,gwr,gwi,kid)
+
+    USE wimcomm
+    IMPLICIT NONE
+    INTEGER,INTENT(IN):: nd,nxmax
+    REAL,INTENT(IN):: gx(nxmax),gwr(nxmax),gwi(nxmax)
+    CHARACTER(LEN=2):: kid
+    INTEGER,SAVE:: id_wave_dump_save
+    INTEGER:: nx
+
+    IF(nd.eq.1) THEN
+       IF(id_wave_dump.EQ.0) THEN
+          OPEN(fid_wave_dump,FILE=kid_wave_dump,FORM='FORMATTED',ERR=9000)
+          WRITE(6,*) '## wave_dump: OPENED'
+       END IF
+       id_wave_dump=id_wave_dump+1
+       WRITE(fid_wave_dump,'(2I6)') id_wave_dump,1
+       WRITE(fid_wave_dump,'(2I6)') 3,nxmax
+    END IF
+    
+    WRITE(fid_wave_dump,'(I6,A)') nd,kid
+    DO nx=1,nxmax
+       WRITE(fid_wave_dump,'(I6,3ES12.4)') nx,gx(nx),gwr(nx),gwi(nx)
+    END DO
+    RETURN
+    
+9000 CONTINUE
+    WRITE(6,*) 'XX wave_dump_sub: file open error: '
+    WRITE(6,*) '                  fid_wave_dump=',fid_wave_dump
+    WRITE(6,*) '                  kid_wave_dump=',kid_wave_dump
+    WRITE(6,*) '                  id_wave_dump= ',id_wave_dump
+    STOP
+  END SUBROUTINE wave_dump_sub
 END Module wimgout

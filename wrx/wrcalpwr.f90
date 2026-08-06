@@ -16,7 +16,7 @@ CONTAINS
     USE plprof,ONLY: pl_mag_old,pl_rzsu
     USE libgrf
     IMPLICIT NONE
-    INTEGER:: nrs,nray,nstp,nrs1,nrs2,ndrs,locmax
+    INTEGER:: nrs,nray,nstp,nrs1,nrs2,locmax
     INTEGER:: nrl1,nrl2,ndrl,nsu,nrl,nsa
     INTEGER:: nstpmax_all
     REAL(rkind):: drs,xl,yl,zl,rs1,rs2,sdrs,delpwr,pwrmax,dpwr,ddpwr
@@ -70,9 +70,9 @@ CONTAINS
 
     !     ----- Setup for RADIAL DEPOSITION PROFILE (Major radius) -----
 
-    drl=(rlmax-rlmin)/(nrlmax-1)
+    drl=(rlmax-rlmin)/nrlmax
     DO nrl=1,nrlmax
-       pos_nrl(nrl)=rlmin+(nrl-1)*drl
+       pos_nrl(nrl)=rlmin+(dble(nrl)-0.5D0)*drl
     ENDDO
     DO nray=1,nraymax
        DO nsa=1,nsamax_wr
@@ -97,56 +97,58 @@ CONTAINS
           xl=rays(1,nstp,nray)
           yl=rays(2,nstp,nray)
           zl=rays(3,nstp,nray)
-          CALL pl_mag_old(xl,yl,zl,rs1)
+          CALL pl_mag_old(xl,yl,zl,rs1)  ! nstp:   rs1
           xl=rays(1,nstp+1,nray)
           yl=rays(2,nstp+1,nray)
           zl=rays(3,nstp+1,nray)
-          CALL pl_mag_old(xl,yl,zl,rs2)
-          IF(rs1.LE.1.D0.OR.rs1.LE.1.D0) THEN
-             nrs1=INT(rs1/drs)+1
-             nrs2=INT(rs2/drs)+1
+          CALL pl_mag_old(xl,yl,zl,rs2)  ! nstp+1: rs2
+
+          IF(rs1.LE.1.D0.OR.rs2.LE.1.D0) THEN
+             nrs1=INT(rs1/drs)+1   ! (nrs1-1)*drs < rs1 < nrs1*drs
+             nrs2=INT(rs2/drs)+1   ! (nrs2-1)*drs < rs2 < nrs2*drs
              IF(nrs1.GT.nrsmax) THEN
                 nrs1=nrsmax
-                IF(nrs2.GT.nrsmax) EXIT
+                IF(nrs2.GT.nrsmax) EXIT ! both points out of rs < 1.0
              ENDIF
              IF(nrs2.GT.nrsmax) nrs2=nrsmax
-                   
-             ndrs=ABS(nrs2-nrs1)
-             IF(ndrs.EQ.0) THEN
+             
+             IF(nrs1.EQ.nrs2) THEN ! nrs1=nrs2
+                                   !    (nrs1-1)*drs < rs1,rs2 < nrs1*drs
                 DO nsa=1,nsamax_wr
+                   delpwr=pwr_nsa_nstp_nray(nsa,nstp+1,nray)
                    pwr_nrs_nsa_nray(nrs1,nsa,nray) &
                         =pwr_nrs_nsa_nray(nrs1,nsa,nray) &
-                        +pwr_nsa_nstp_nray(nsa,nstp+1,nray)
+                        +delpwr
                 END DO
-             ELSE IF(nrs1.lt.nrs2) THEN
-                sdrs=(rs2-rs1)/drs
+             ELSE IF(nrs2.LT.nrs1) THEN  ! rs2 < rs1 ; nrs2 < nrs1
+                                         ! rs2 < nrs2*drs < (nrs1-1)*drs < rs1
                 DO nsa=1,nsamax_wr
-                   delpwr=pwr_nsa_nstp_nray(nsa,nstp+1,nray)/sdrs
+                   delpwr=pwr_nsa_nstp_nray(nsa,nstp+1,nray)/(rs1-rs2)
                    pwr_nrs_nsa_nray(nrs1,nsa,nray) &
                         =pwr_nrs_nsa_nray(nrs1,nsa,nray) &
-                        +(DBLE(nrs1)-rs1/drs)*delpwr
+                        +(rs1-DBLE(nrs1-1)*drs)*delpwr
+                   DO nrs=nrs1-1,nrs2+1,-1
+                      pwr_nrs_nsa_nray(nrs,nsa,nray) &
+                           =pwr_nrs_nsa_nray(nrs,nsa,nray)+drs*delpwr
+                   ENDDO
+                   pwr_nrs_nsa_nray(nrs2,nsa,nray) &
+                        =pwr_nrs_nsa_nray(nrs2,nsa,nray) &
+                        +(DBLE(nrs2)*drs-rs2)*delpwr
+                END DO
+             ELSE IF(nrs1.lt.nrs2) THEN  ! rs1 < rs2 ; nrs1 < nrs2
+                                         ! rs1 < nrs1*drs < (nrs2-1)*drs < rs2
+                DO nsa=1,nsamax_wr
+                   delpwr=pwr_nsa_nstp_nray(nsa,nstp+1,nray)/(rs2-rs1)
+                   pwr_nrs_nsa_nray(nrs1,nsa,nray) &
+                        =pwr_nrs_nsa_nray(nrs1,nsa,nray) &
+                        +(DBLE(nrs1)*drs-rs1)*delpwr
                    DO nrs=nrs1+1,nrs2-1
                       pwr_nrs_nsa_nray(nrs,nsa,nray) &
-                           =pwr_nrs_nsa_nray(nrs,nsa,nray)+delpwr
+                           =pwr_nrs_nsa_nray(nrs,nsa,nray)+drs*delpwr
                    ENDDO
                    pwr_nrs_nsa_nray(nrs2,nsa,nray) &
                         =pwr_nrs_nsa_nray(nrs2,nsa,nray) &
-                        +(rs2/drs-DBLE(nrs2-1))*delpwr
-                END DO
-             ELSE
-                sdrs=(rs1-rs2)/drs
-                DO nsa=1,nsamax_wr
-                   delpwr=pwr_nsa_nstp_nray(nsa,nstp+1,nray)/sdrs
-                   pwr_nrs_nsa_nray(nrs2,nsa,nray) &
-                        =pwr_nrs_nsa_nray(nrs2,nsa,nray) &
-                        +(DBLE(nrs2)-rs2/drs)*delpwr
-                   DO nrs=nrs2+1,nrs1-1
-                      pwr_nrs_nsa_nray(nrs,nsa,nray) &
-                           =pwr_nrs_nsa_nray(nrs,nsa,nray)+delpwr
-                   ENDDO
-                   pwr_nrs_nsa_nray(nrs1,nsa,nray) &
-                        =pwr_nrs_nsa_nray(nrs1,nsa,nray) &
-                        +(rs1/drs-DBLE(nrs1-1))*delpwr
+                        +(rs2-DBLE(nrs2-1)*drs)*delpwr
                 END DO
              END IF
           ENDIF
@@ -245,7 +247,6 @@ CONTAINS
 
     IF (.NOT. skip_graphics) CALL pages
 
-    dx=1.D0/(nstpmax+1)
     ! Clamp upper bound so xtemp(nstp+1) and ytemp(nstp+1,...) stay
     ! within their (0:nstpmax) declared bounds. The historic
     ! MAXVAL(...)+1 overshoots by 1 when a ray uses all NSTPMAX steps
@@ -257,14 +258,27 @@ CONTAINS
     ! caller chooses NSTPMAX = SMAX/DELS exactly (e.g. test_wrxlib.py
     ! TestWrxlibRun: NSTPMAX=2000, SMAX=2.0, DELS=1e-3).
     nstpmax_all=MIN(MAXVAL(nstpmax_nray(1:nraymax))+1, nstpmax-1)
+    ! Guard the divisor: nstpmax_all collapses to 0 when NSTPMAX<=1
+    ! (MIN(MAXVAL(...)+1, nstpmax-1) -> nstpmax-1 = 0), which would make
+    ! dx = 1/0. Reviewers (in-house + codex) flagged this merge-interaction
+    ! div-by-zero (kyoshimi's nstpmax-1 clamp + bpsi's 1/nstpmax_all divisor).
+    dx=1.D0/MAX(nstpmax_all,1)
     DO nstp=0,nstpmax_all
        xtemp(nstp+1)=nstp*dx
     END DO
     DO nray=1,nraymax
        DO nsa=1,nsamax_wr
-          DO nstp=0,nstpmax_all
+          ! Clamp to nstpmax_all so ytemp(nstp+1) stays within (0:nstpmax):
+          ! a ray that uses all NSTPMAX steps has nstpmax_nray(nray)=nstpmax,
+          ! which would overrun ytemp at nstp+1=nstpmax+1 (the merge re-introduced
+          ! bpsi's unclamped nstpmax_nray bound over kyoshimi's nstpmax_all clamp).
+          DO nstp=0,MIN(nstpmax_nray(nray),nstpmax_all)
              ytemp(nstp+1,nsa,nray)=pwr_nsa_nstp_nray(nsa,nstp,nray)
           END DO
+          DO nstp=MIN(nstpmax_nray(nray),nstpmax_all)+1,nstpmax_all
+             ytemp(nstp+1,nsa,nray)=0.D0
+          END DO
+          
        END DO
     END DO
     ! Print loop: ytemp(:,*,2) is only valid for NRAYMAX>=2; emit a
@@ -369,7 +383,6 @@ CONTAINS
           ENDIF
        END DO
     ENDDO
-   
 !    CALL PAGES
 !    CALL grd1d(1,pos_nrs,pwr_nrs_nray,nrsmax,nrsmax,nraymax, &
 !         '@pwr-nrs vs. pos-nrs@')

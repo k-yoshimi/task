@@ -3,7 +3,7 @@ C
       USE libmpi 
       USE commpi
       USE libmtx 
-      USE plcomm
+      USE plcomm,pt_pl=>PT  ! merge: plcomm_parm gained PT(NSM); wm uses PT as an implicit local scalar
       IMPLICIT COMPLEX*16(C),REAL*8(A-B,D-F,H,O-Z), INTEGER(I-N)
 C     
       include '../dpseki/dpcom1.inc'

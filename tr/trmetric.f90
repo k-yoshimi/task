@@ -15,13 +15,16 @@ CONTAINS
 
       SUBROUTINE tr_set_metric(ierr)
 
-      USE trcomm, ONLY : modelg, nrmax, knameq, knameq2
-      USE trbpsd, ONLY: tr_bpsd_init,tr_bpsd_put,tr_bpsd_get
+      USE trcomm, ONLY : modelg, nrmax, knameq, knameq2, qpinv, rips
+      USE trbpsd, ONLY: tr_bpsd_init,tr_bpsd_put,tr_bpsd_get, &
+                        tr_rip_eq, tr_eq_init
       USE equnit, ONLY: eq_parm,eq_prof,eq_calc,eq_load
       USE plvmec, ONLY: pl_vmec
       implicit none
       integer, intent(out):: ierr
       character(len=80):: line
+      integer:: iter
+      real(8):: sfac
 
       CALL trstgf
       CALL trgfrg
@@ -52,8 +55,23 @@ CONTAINS
 !         call trgout
       elseif(modelg.eq.9) then
          call eq_prof ! initial calculation of eq
-         call eq_calc         ! recalculate eq
-         call tr_bpsd_get(ierr)  ! 
+!        --- Initial q-scaling. The cylindrical initial q (set in trprof) is
+!            not consistent with the commanded Ip on the real 2D equilibrium
+!            metric. Iterate the q-solver, scaling q (q ~ 1/Ip) until the
+!            equilibrium Ip matches RIPS, giving a consistent initial state. ---
+         do iter=1,30
+            call eq_calc          ! q-solver with current q
+            call tr_bpsd_get(ierr)
+            if(ierr.ne.0) write(6,*) 'XX tr_bpsd_get: ierr=',ierr
+            if(rips.le.0.d0) exit
+            sfac=tr_rip_eq/rips
+            if(abs(sfac-1.d0).lt.1.d-3) exit
+            qpinv(1:nrmax)=qpinv(1:nrmax)/sfac  ! q -> q*sfac (only q is scaled)
+            call tr_bpsd_put(ierr)              ! push scaled q to EQ
+         enddo
+!        Init done: hand over the converged (Ip=RIPS) equilibrium. From here
+!        the transport owns psi_p (RDP) and the q-solver honors it.
+         tr_eq_init=.false.
 !         call trgout
       endif
 

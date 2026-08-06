@@ -19,6 +19,10 @@ module tx_coefficients
        &     fact = 1.d0 ! <= SOL loss accelerator
   integer(4), save :: ICALA = 0!, ICALA2 = 0
   integer(4) :: L3, L6, L8
+  ! NOTE:
+  !   These workspaces are module-wide shared arrays.
+  !   Current TXLOOP usage is serial-safe, but OpenMP parallel calls to TXCALA
+  !   would require thread-private workspaces.
   
   public :: TXCALA
 
@@ -48,8 +52,37 @@ contains
     !   ELM  : Elemental matrix of one term, equation, element   !
     !************************************************************!
 
-    allocate(ELM(1:NEMAX,1:4,0:NCM,1:NQMAX), source=0.d0)
-    allocate(DTf(1:NQMAX))
+    NSMP = NSM + 1
+    call ensure_txcala_workspace(NSMP)
+
+    ! Replace per-iteration allocate(...,source=0) with explicit clear.
+    ELM = 0.d0
+    Dbrpft = 0.d0
+    rrtinv = 0.d0
+    aatinv = 0.d0
+    bthcoinv = 0.d0
+    ParatoZeta = 0.d0
+    ZetatoPara = 0.d0
+    aatq = 0.d0
+    PsitdotVBth = 0.d0
+    fipolinv = 0.d0
+    fipolsdt = 0.d0
+    dZetatoPara = 0.d0
+    ribi = 0.d0
+    ribsdt = 0.d0
+    RatCXSNBe = 0.d0
+    RatCXSNBi = 0.d0
+    Ratdenhyd = 0.d0
+    UsrgV = 0.d0
+    fipolsdtPNsV = 0.d0
+    BUsparVbbt = 0.d0
+    dlnPNsV = 0.d0
+    BpBVsdiag = 0.d0
+    tormflux = 0.d0
+    dtormflux = 0.d0
+    ribsdtNs = 0.d0
+    Ratden = 0.d0
+    zChi = 0.d0
 
     !     Preconditioning
 
@@ -87,22 +120,6 @@ contains
     L3 = abs(iSUPG3) * 100
     L6 =     iSUPG6  * 100
     L8 =     iSUPG8  * 100
-
-    !     Coefficients
-
-    NSMP = NSM + 1
-
-    allocate(Dbrpft, source=array_init_NR)
-    allocate(rrtinv, aatinv, bthcoinv, ParatoZeta, ZetatoPara, &
-       &     aatq, PsitdotVBth, fipolinv, fipolsdt, dZetatoPara, ribi, ribsdt, &
-       &     RatCXSNBe, RatCXSNBi, Ratdenhyd, source=array_init_NR)
-    allocate(UsrgV, fipolsdtPNsV, BUsparVbbt, dlnPNsV, BpBVsdiag, tormflux, dtormflux, &
-       &     ribsdtNs, source=array_init_NRNS)
-    !allocate(RatPNbinv, source=array_init_NRNS)
-    ! not working with ifort15, but working with ifort18
-    !    allocate(Ratden(0:NRMAX,NSMP,NSMP), zChi(0:NRMAX,NSM,NSM),source=0.d0)
-    allocate(Ratden(0:NRMAX,NSMP,NSMP), zChi(0:NRMAX,NSM,NSM))
-    Ratden = 0.d0 ; zChi = 0.d0
 
     ! Initialize arrays
     ALC  = 0.d0
@@ -272,18 +289,90 @@ contains
     call BOUNDARY(NRMAX,LQn1,1, suft(NRMAX)*rGASPF)
     call BOUNDARY(NRMAX,LQnz,1, suft(NRMAX)*rGASPFz)
 
-    deallocate(ELM, DTf)
-    deallocate(Dbrpft)
-    deallocate(rrtinv, aatinv, bthcoinv, ParatoZeta, ZetatoPara, &
-         &     aatq, PsitdotVBth, fipolinv, fipolsdt, fipolsdtPNsV, dZetatoPara, ribi, ribsdt, &
-         &     RatCXSNBe, RatCXSNBi, Ratdenhyd)
-    deallocate(UsrgV, BUsparVbbt, dlnPNsV, BpBVsdiag, tormflux, dtormflux, ribsdtNs)
-    deallocate(Ratden, zChi)
-    !deallocate(RatPNbinv)
-
     if(ICALA == 0) ICALA = 1
 
   end subroutine TXCALA
+
+  subroutine ensure_txcala_workspace(NSMP)
+
+    integer(4), intent(in) :: NSMP
+    logical :: need_elm, need_dtf, need_nr, need_nrns, need_ratden, need_zchi
+
+    need_elm = .not. allocated(ELM)
+    if(.not. need_elm) then
+       need_elm = (lbound(ELM,1) /= 1) .or. (ubound(ELM,1) /= NEMAX) .or. &
+            &     (lbound(ELM,2) /= 1) .or. (ubound(ELM,2) /= 4)     .or. &
+            &     (lbound(ELM,3) /= 0) .or. (ubound(ELM,3) /= NCM)   .or. &
+            &     (lbound(ELM,4) /= 1) .or. (ubound(ELM,4) /= NQMAX)
+    end if
+    if(need_elm) then
+      if(allocated(ELM)) deallocate(ELM)
+      allocate(ELM(1:NEMAX,1:4,0:NCM,1:NQMAX))
+    end if
+
+    need_dtf = .not. allocated(DTf)
+    if(.not. need_dtf) then
+       need_dtf = (lbound(DTf,1) /= 1) .or. (ubound(DTf,1) /= NQMAX)
+    end if
+    if(need_dtf) then
+      if(allocated(DTf)) deallocate(DTf)
+      allocate(DTf(1:NQMAX))
+    end if
+
+    need_nr = .not. allocated(Dbrpft)
+    if(.not. need_nr) then
+       need_nr = (lbound(Dbrpft,1) /= 0) .or. (ubound(Dbrpft,1) /= NRMAX)
+    end if
+    if(need_nr) then
+      if(allocated(Dbrpft)) deallocate(Dbrpft)
+      if(allocated(rrtinv)) then
+        deallocate(rrtinv, aatinv, bthcoinv, ParatoZeta, ZetatoPara, &
+             &     aatq, PsitdotVBth, fipolinv, fipolsdt, dZetatoPara, ribi, ribsdt, &
+             &     RatCXSNBe, RatCXSNBi, Ratdenhyd)
+      end if
+      allocate(Dbrpft(0:NRMAX))
+      allocate(rrtinv(0:NRMAX), aatinv(0:NRMAX), bthcoinv(0:NRMAX), ParatoZeta(0:NRMAX), ZetatoPara(0:NRMAX), &
+           &   aatq(0:NRMAX), PsitdotVBth(0:NRMAX), fipolinv(0:NRMAX), fipolsdt(0:NRMAX), dZetatoPara(0:NRMAX), &
+           &   ribi(0:NRMAX), ribsdt(0:NRMAX), RatCXSNBe(0:NRMAX), RatCXSNBi(0:NRMAX), Ratdenhyd(0:NRMAX))
+    end if
+
+    need_nrns = .not. allocated(UsrgV)
+    if(.not. need_nrns) then
+       need_nrns = (lbound(UsrgV,1) /= 0) .or. (ubound(UsrgV,1) /= NRMAX) .or. &
+            &      (lbound(UsrgV,2) /= 1) .or. (ubound(UsrgV,2) /= NSM)
+    end if
+    if(need_nrns) then
+      if(allocated(UsrgV)) then
+        deallocate(UsrgV, fipolsdtPNsV, BUsparVbbt, dlnPNsV, BpBVsdiag, tormflux, dtormflux, ribsdtNs)
+      end if
+      allocate(UsrgV(0:NRMAX,1:NSM), fipolsdtPNsV(0:NRMAX,1:NSM), BUsparVbbt(0:NRMAX,1:NSM), &
+           &   dlnPNsV(0:NRMAX,1:NSM), BpBVsdiag(0:NRMAX,1:NSM), tormflux(0:NRMAX,1:NSM), &
+           &   dtormflux(0:NRMAX,1:NSM), ribsdtNs(0:NRMAX,1:NSM))
+    end if
+
+    need_ratden = .not. allocated(Ratden)
+    if(.not. need_ratden) then
+       need_ratden = (lbound(Ratden,1) /= 0) .or. (ubound(Ratden,1) /= NRMAX) .or. &
+            &        (lbound(Ratden,2) /= 1) .or. (ubound(Ratden,2) /= NSMP) .or. &
+            &        (lbound(Ratden,3) /= 1) .or. (ubound(Ratden,3) /= NSMP)
+    end if
+    if(need_ratden) then
+      if(allocated(Ratden)) deallocate(Ratden)
+      allocate(Ratden(0:NRMAX,1:NSMP,1:NSMP))
+    end if
+
+    need_zchi = .not. allocated(zChi)
+    if(.not. need_zchi) then
+       need_zchi = (lbound(zChi,1) /= 0) .or. (ubound(zChi,1) /= NRMAX) .or. &
+            &      (lbound(zChi,2) /= 1) .or. (ubound(zChi,2) /= NSM)   .or. &
+            &      (lbound(zChi,3) /= 1) .or. (ubound(zChi,3) /= NSM)
+    end if
+    if(need_zchi) then
+      if(allocated(zChi)) deallocate(zChi)
+      allocate(zChi(0:NRMAX,1:NSM,1:NSM))
+    end if
+
+  end subroutine ensure_txcala_workspace
 
 !***************************************************************
 !
@@ -557,6 +646,7 @@ contains
   subroutine LQe1CC
 
     integer(4) :: NEQ = LQe1, i = 1
+    real(8), dimension(1:NEMAX,1:4) :: int_tmp
 
     ELM(:,:,0,NEQ) = fem_int(1) * invDT
     NLC(0,NEQ) = LQe1
@@ -573,13 +663,14 @@ contains
 
     ! Ionization of n01, n02 and n03 by electron impact
 
-    ELM(:,:,3,NEQ) =   FSION * 1.D20 * fem_int(20,SiVizA,Var(:,i)%n)
+    int_tmp = fem_int(20,SiVizA,Var(:,i)%n)
+    ELM(:,:,3,NEQ) =   FSION * 1.D20 * int_tmp
     NLC(3,NEQ) = LQn1
 
-    ELM(:,:,4,NEQ) =   FSION * 1.D20 * fem_int(20,SiVizA,Var(:,i)%n) * ThntSW
+    ELM(:,:,4,NEQ) =   FSION * 1.D20 * int_tmp * ThntSW
     NLC(4,NEQ) = LQn2
 
-    ELM(:,:,5,NEQ) =   FSION * 1.D20 * fem_int(20,SiVizA,Var(:,i)%n) * BeamSW
+    ELM(:,:,5,NEQ) =   FSION * 1.D20 * int_tmp * BeamSW
     NLC(5,NEQ) = LQn3
 
     ! Increment of electrons due to effective ionization of impurities
@@ -1040,6 +1131,7 @@ contains
   subroutine LQe5CC
 
     integer(4) :: NEQ = LQe5, i = 1
+    real(8), dimension(1:NEMAX,1:4) :: int_tmp
 
     ! Temperature evolution
     
@@ -1114,13 +1206,14 @@ contains
        ELM(:,:,17,NEQ) = - achg(3) * 1.d-3 * fem_int(-20,PsitdotVBth,Var(:,3)%n,Var(:,3)%Uthhat)
        NLC(17,NEQ) = 0
 
-       ELM(:,:,18,NEQ) =   achg(i) * 1.d-3 * fem_int(  2,PsidotV)
+       int_tmp = fem_int(2,PsidotV)
+       ELM(:,:,18,NEQ) =   achg(i) * 1.d-3 * int_tmp
        NLC(18,NEQ) = LQe7
 
-       ELM(:,:,19,NEQ) =   achg(2) * 1.d-3 * fem_int(  2,PsidotV)
+       ELM(:,:,19,NEQ) =   achg(2) * 1.d-3 * int_tmp
        NLC(19,NEQ) = LQi7
 
-       ELM(:,:,20,NEQ) =   achg(3) * 1.d-3 * fem_int(  2,PsidotV)
+       ELM(:,:,20,NEQ) =   achg(3) * 1.d-3 * int_tmp
        NLC(20,NEQ) = LQz7
 !       ELM(:,:,18,NEQ) =   achg(i) * 1.d-3 * fem_int(-20,PsidotV,Var(:,i)%n,Var(:,i)%UphR)
 !       NLC(18,NEQ) = 0
@@ -1149,13 +1242,14 @@ contains
 
        ! Ionization loss of n01, n02 and n03 by electron impact
 
-       ELM(:,:,25,NEQ) = - (EION * 1.D-3) * FSION * 1.D20 * fem_int(20,SiVizA,Var(:,i)%n)
+       int_tmp = fem_int(20,SiVizA,Var(:,i)%n)
+       ELM(:,:,25,NEQ) = - (EION * 1.D-3) * FSION * 1.D20 * int_tmp
        NLC(25,NEQ) = LQn1
 
-       ELM(:,:,26,NEQ) = - (EION * 1.D-3) * FSION * 1.D20 * fem_int(20,SiVizA,Var(:,i)%n)
+       ELM(:,:,26,NEQ) = - (EION * 1.D-3) * FSION * 1.D20 * int_tmp
        NLC(26,NEQ) = LQn2
 
-       ELM(:,:,27,NEQ) = - (EION * 1.D-3) * FSION * 1.D20 * fem_int(20,SiVizA,Var(:,i)%n) * BeamSW
+       ELM(:,:,27,NEQ) = - (EION * 1.D-3) * FSION * 1.D20 * int_tmp * BeamSW
        NLC(27,NEQ) = LQn3
 
        ! Collisional NBI heating (Perp + Tan)
@@ -1371,6 +1465,7 @@ contains
   subroutine LQi1CC
 
     integer(4) :: NEQ = LQi1, i = 2
+    real(8), dimension(1:NEMAX,1:4) :: int_tmp
 
     ELM(:,:, 0,NEQ) = fem_int(1) * invDT
     NLC( 0,NEQ) = LQi1
@@ -1387,13 +1482,14 @@ contains
 
     ! Ionization of n01, n02 and n03 by electron impact
 
-    ELM(:,:, 3,NEQ) =     FSION * 1.D20 * fem_int(20,SiVizA,Var(:,1)%n)
+    int_tmp = fem_int(20,SiVizA,Var(:,1)%n)
+    ELM(:,:, 3,NEQ) =     FSION * 1.D20 * int_tmp
     NLC( 3,NEQ) = LQn1
 
-    ELM(:,:, 4,NEQ) =     FSION * 1.D20 * fem_int(20,SiVizA,Var(:,1)%n) * ThntSW
+    ELM(:,:, 4,NEQ) =     FSION * 1.D20 * int_tmp * ThntSW
     NLC( 4,NEQ) = LQn2
 
-    ELM(:,:, 5,NEQ) =     FSION * 1.D20 * fem_int(20,SiVizA,Var(:,1)%n) * BeamSW
+    ELM(:,:, 5,NEQ) =     FSION * 1.D20 * int_tmp * BeamSW
     NLC( 5,NEQ) = LQn3
 
     ! Loss to divertor plasma region

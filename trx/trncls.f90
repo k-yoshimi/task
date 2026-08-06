@@ -278,12 +278,12 @@
 
          IF(k_potato.EQ.0) THEN
             IF(iflag.NE.-1) THEN
-               WRITE(6,*) "XX iflag=",iflag
+               WRITE(6,*) 'XX iflag=',iflag
                IERR=1
                RETURN
             ENDIF
          ELSE
-            IF(iflag.NE. 0) WRITE(6,*) "XX iflag=",iflag
+            IF(iflag.NE. 0) WRITE(6,*) 'XX iflag=',iflag
          ENDIF
          AJBSNC(NR)=p_bsjb/BB
          ETANC(NR) =p_etap
@@ -428,7 +428,7 @@
       z_pi=ACOS(-1.D0)
       z_protonmass=1.6726D-27
 
-      IF(iflag.ne.0) WRITE(nout,'(A3,I3)') "NR=",NR
+      IF(iflag.ne.0) WRITE(nout,'(A3,I3)') 'NR=',NR
 !Check warning flags
       IF(iflag.eq.-1) THEN
         label='WARNING:NCLASS-no potato orbit viscosity'

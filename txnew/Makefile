@@ -12,12 +12,27 @@ FFLAGS_NCLASS = $(OFLAGS)
 #FFLAGS_NCLASS = $(DFLAGS)
 
 #flag_GSAF = 0
-flag_GSAF = 1
+flag_GSAF ?= 1
+PROFILE ?= 0
+SOLVER_BENCH ?= 0
+SOLVER_VERIFY ?= 0
 
 #PREPRO = -fpp
 PREPRO = -cpp
 #PREPRO += -Ddebug # debug option
 PREPRO += -D_LAPACK=2 # 0: self-compiled, 1: LAPACK95, 2: LAPACK77
+
+ifeq ($(PROFILE),1)
+ PREPRO += -DTX_PROFILE
+endif
+
+ifeq ($(SOLVER_BENCH),1)
+ PREPRO += -DTX_SOLVER_BENCH
+endif
+
+ifeq ($(SOLVER_VERIFY),1)
+ PREPRO += -DTX_SOLVER_VERIFY
+endif
 
 ifeq ($(flag_GSAF),0)
  PREPRO += -DnonGSAF
@@ -77,6 +92,8 @@ PROG3= tx
 	$(FCFREE) $(PREPRO) $(FOMP) $(FFLAGS) -c $< -o $@ $(MODDIR) $(MODLA95) $(MODLIB)
 %.mod: %.f90 %.o
 	@:
+
+crosssec.o: PREPRO += -DDATADIR='"$(abspath data)"'
 
 #all: $(PROG2)
 #all: $(PROG3)

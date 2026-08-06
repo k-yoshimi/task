@@ -196,6 +196,7 @@
       IF(ierr.NE.0) &
            WRITE(6,*) 'XX eq_bpsd_get: spl1d qtrrho: ierr=',ierr
 
+!     q-solver honoring the transport-evolved q profile
       mdleqf=9
 
       END SUBROUTINE eq_bpsd_get

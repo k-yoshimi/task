@@ -359,9 +359,13 @@ contains
     real(8) :: xb, fp, fdp, gfun
     real(8), dimension(0:NRMAX) :: pres, ddPhidpsi, tmp
     ! Mainly for derivatives
-    real(8), dimension(:), allocatable :: dErdr, dpdr, dErdrS, ErVlc
-    real(8), dimension(:), allocatable :: dQdrho, dlnNedrhov
-    real(8), dimension(:,:), allocatable :: dTsdV, dPsdV, dNsdV, dNsdrho, dTsdrho
+    ! NOTE:
+    !   These SAVE workspaces are shared across calls to TXCALC.
+    !   Current usage is serial-safe, but future OpenMP parallel calls would need
+    !   thread-private workspaces.
+    real(8), dimension(:), allocatable, save :: dErdr, dpdr, dErdrS, ErVlc
+    real(8), dimension(:), allocatable, save :: dQdrho, dlnNedrhov
+    real(8), dimension(:,:), allocatable, save :: dTsdV, dPsdV, dNsdV, dNsdrho, dTsdrho
 
     MDANOMabs = abs(MDANOM)
     MDLNEOL   = mod(MDLNEO,10)
@@ -399,7 +403,12 @@ contains
     end select
     if(MDANOM > 0 .and. maxval(FSANOM) > 0.d0) pres(:)  = 0.5d0 * (pres(:) + pres0(:))
 
-    allocate(ErVlc, mold=ErV0)
+    if(.not. allocated(ErVlc)) then
+       allocate(ErVlc, mold=ErV0)
+    else if((lbound(ErVlc,1) /= lbound(ErV0,1)) .or. (ubound(ErVlc,1) /= ubound(ErV0,1))) then
+       deallocate(ErVlc)
+       allocate(ErVlc, mold=ErV0)
+    end if
     ErVlc(:) = 0.5d0 * (ErV_FIX(:) + ErV0(:))
 
     if(PROFM == 0.d0 .and. FSDFIX(2) /= 0.d0) then
@@ -434,13 +443,29 @@ contains
     !          parameters (ex. radial electric field, poloidal magnetic field) should be
     !          directly calculated.
 
-    allocate(dErdr, dpdr, mold=array_init_NR)
+    if(.not. allocated(dErdr)) then
+       allocate(dErdr, dpdr, mold=array_init_NR)
+    else if((lbound(dErdr,1) /= lbound(array_init_NR,1)) .or. (ubound(dErdr,1) /= ubound(array_init_NR,1))) then
+       deallocate(dErdr, dpdr)
+       allocate(dErdr, dpdr, mold=array_init_NR)
+    end if
     dErdr(:) = dfdx(rpt,ErVlc,NRMAX,0)
     dpdr (:) = dfdx(rpt,pres ,NRMAX,0)
 !    dpdr (:) = vro(:) / ravl * dfdx(vv ,pres ,NRMAX,0)
 
-    allocate(dQdrho, dlnNedrhov, mold=vv)
-    allocate(dTsdV, dPsdV, dNsdV, mold=array_init_NRNS)
+    if(.not. allocated(dQdrho)) then
+       allocate(dQdrho, dlnNedrhov, mold=vv)
+    else if((lbound(dQdrho,1) /= lbound(vv,1)) .or. (ubound(dQdrho,1) /= ubound(vv,1))) then
+       deallocate(dQdrho, dlnNedrhov)
+       allocate(dQdrho, dlnNedrhov, mold=vv)
+    end if
+    if(.not. allocated(dTsdV)) then
+       allocate(dTsdV, dPsdV, dNsdV, mold=array_init_NRNS)
+    else if((lbound(dTsdV,1) /= lbound(array_init_NRNS,1)) .or. (ubound(dTsdV,1) /= ubound(array_init_NRNS,1)) .or. &
+         &  (lbound(dTsdV,2) /= lbound(array_init_NRNS,2)) .or. (ubound(dTsdV,2) /= ubound(array_init_NRNS,2))) then
+       deallocate(dTsdV, dPsdV, dNsdV)
+       allocate(dTsdV, dPsdV, dNsdV, mold=array_init_NRNS)
+    end if
     do i = 1, NSM
        dTsdV(:,i) = dfdx(vv,Var(:,i)%T,NRMAX,0) ! [keV/m^3]
        dPsdV(:,i) = dfdx(vv,Var(:,i)%p,NRMAX,0) ! [10^{20}keV/m^6]
@@ -462,7 +487,13 @@ contains
       if( iflag /= 0 ) stop 'savgol_filter error for dlnNedrhov in txcalc.'
       
       !  Smoothing Er gradient for numerical stability
-      allocate(dErdrS, source=dErdr)
+      if(.not. allocated(dErdrS)) then
+         allocate(dErdrS, mold=dErdr)
+      else if((lbound(dErdrS,1) /= lbound(dErdr,1)) .or. (ubound(dErdrS,1) /= ubound(dErdr,1))) then
+         deallocate(dErdrS)
+         allocate(dErdrS, mold=dErdr)
+      end if
+      dErdrS(:) = dErdr(:)
       
 !!$      do NR = 0, NRMAX
 !!$         dErdrS(NR) = moving_average(NR,dErdr,NRMAX,NRA)
@@ -1217,7 +1248,13 @@ contains
 
     !     *** Linear growth rate for toroidal gamma_etai branch of the ITG mode ***
     !        (F.Crisanti et al, NF 41 (2001) 883)
-    allocate(dNsdrho, dTsdrho, mold=array_init_NRNS)
+    if(.not. allocated(dNsdrho)) then
+       allocate(dNsdrho, dTsdrho, mold=array_init_NRNS)
+    else if((lbound(dNsdrho,1) /= lbound(array_init_NRNS,1)) .or. (ubound(dNsdrho,1) /= ubound(array_init_NRNS,1)) .or. &
+         &  (lbound(dNsdrho,2) /= lbound(array_init_NRNS,2)) .or. (ubound(dNsdrho,2) /= ubound(array_init_NRNS,2))) then
+       deallocate(dNsdrho, dTsdrho)
+       allocate(dNsdrho, dTsdrho, mold=array_init_NRNS)
+    end if
     do i = 1, NSM
        dNsdrho(:,i) = vro(:) * dNsdV(:,i)
        dTsdrho(:,i) = vro(:) * dTsdV(:,i)
@@ -1525,11 +1562,6 @@ contains
 !    CALL NTVcalc
 !    rNuNTV(:) = 0.d0
 !    UastNC(:) = 0.d0
-
-    deallocate(dErdr,dpdr,dErdrS,ErVlc)
-    deallocate(dQdrho,dlnNedrhov)
-    deallocate(dTsdV,dTsdrho,dPsdV,dNsdrho)
-    if(allocated(dNsdV)) deallocate(dNsdV)
 
   contains
 

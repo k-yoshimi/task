@@ -72,7 +72,7 @@ CONTAINS
 
       NSMAX=4
       NSZMAX=0  ! the number of impurities
-      NSNMAX=0  ! the number of neutrals
+      NSNMAX=2  ! the number of neutrals
 
       NS_e=1
       NPA(NS_e)= 0  
@@ -103,19 +103,33 @@ CONTAINS
       DO NS=1,2
          PN(NS)   = 0.5D0
          PNS(NS)  = 0.05D0
+         PNM(NS)  = 0.0D0
          PT(NS)   = 1.5D0
          PTS(NS)  = 0.05D0
+         PTM(NS)  = 0.0D0
+         PTPR(NS) = 1.5D0
+         PTPP(NS) = 1.5D0
          PU(NS)   = 0.D0
          PUS(NS)  = 0.D0
+         PUM(NS)  = 0.D0
+         PUPR(NS) = 0.D0
+         PUPP(NS) = 0.D0
       END DO
 
       DO NS=3,NSM
          PN(NS)   = 0.D0
          PNS(NS)  = 0.0D0
+         PNM(NS)  = 0.0D0
          PT(NS)   = 1.5D0
          PTS(NS)  = 0.05D0
+         PTM(NS)  = 0.0D0
+         PTPR(NS) = 1.5D0
+         PTPP(NS) = 1.5D0
          PU(NS)   = 0.D0
          PUS(NS)  = 0.D0
+         PUM(NS)  = 0.D0
+         PUPR(NS) = 0.D0
+         PUPP(NS) = 0.D0
       END DO
 
       !    ==== PROFILE PARAMETERS ====
@@ -143,12 +157,17 @@ CONTAINS
       model_prof=0
       knam_prof='prof.data'
 
-      PROFN1 = 2.D0
-      PROFN2 = 0.5D0
-      PROFT1 = 2.D0
-      PROFT2 = 1.D0
-      PROFU1 = 2.D0
-      PROFU2 = 1.D0
+      DO NS=1,NSMAX
+         PROFN1(NS) = 2.D0
+         PROFN2(NS) = 0.5D0
+         PROFN3(NS) = 0.0D0
+         PROFT1(NS) = 2.D0
+         PROFT2(NS) = 1.D0
+         PROFT3(NS) = 0.D0
+         PROFU1(NS) = 2.D0
+         PROFU2(NS) = 1.D0
+         PROFU3(NS) = 0.D0
+      END DO
       PROFNU1=12.D0
       PROFNU2= 1.D0
       PROFJ1 =-2.D0
@@ -623,7 +642,7 @@ CONTAINS
       !  NPELMAX       : number of pellet source   (MAX=npelm)
       !  MDLPEL(npelm) : PELLET INJECTION MODEL TYPE
       !              0:OFF  1:GAUSSIAN  2:NAKAMURA  3:HO
-      !  PELTOT(npelm) : TOTAL NUMBER OF PARTICLES IN PELLET
+      !  PELIN(npelm)  : TOTAL NUMBER OF PARTICLES IN PELLET
       !  PELR0(npelm)  : RADIAL POSITION OF PELLET DEPOSITION (M)
       !  PELRW(npelm)  : RADIAL WIDTH OF PELLET DEPOSITION (M)
       !  PELRAD(npelm) : RADIUS OF PELLET (M)

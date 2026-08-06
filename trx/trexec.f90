@@ -255,7 +255,14 @@ CONTAINS
                      IF(RN(NR,NSSN).LT.1.D-70) THEN
                         RT(NR,NSSN)=0.03D0
                      ELSE
-                        RT(NR,NSSN) = XV(NEQ,NR)/RN(NR,NSSN)
+!                        RT(NR,NSSN) = XV(NEQ,NR)/RN(NR,NSSN)
+!                        correction pointedby Kawamura 0206/05/21
+                        IF(NSTN.EQ.0) THEN
+                           RT(NR,NSSN) = XV(NEQ,NR)/RN(NR,NSSN)
+                        ELSE
+                           RT(NR,NSSN) = 0.5D0*(XV(NEQ,NR) &
+                                +X(NEQRMAX*(NR-1)+NSTN))/RN(NR,NSSN)
+                        END IF
                      END IF
                      IF(RT(NR,NSSN).LE.0.D0) THEN
                         WRITE(6,'(A,2I6,ES12.4)') &

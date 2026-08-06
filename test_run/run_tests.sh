@@ -317,6 +317,35 @@ run_single_test() {
     local test_dir="$TEST_OUTPUT_DIR/$test_name"
     mkdir -p "$test_dir"
 
+    # Invalidate this case's own outputs BEFORE anything is staged into the
+    # directory. Two reasons, and the ordering matters for both:
+    #
+    #  - <module>_regress.dat is written mid-calculation (eq/eqcalq.f90:77),
+    #    not at exit, so "the file exists" is only a success signal if it
+    #    cannot be a previous run's file. Without this, a run that exits 0
+    #    without reaching the dumper inherits the stale dump, the regression
+    #    check compares THAT against the baseline, and the case reports PASS
+    #    having computed nothing.
+    #  - eqdata.* / *.gs are what a DEPENDENT consumes (copied from
+    #    $dep_dir below). A case that fails to regenerate them would
+    #    otherwise leave the previous invocation's files in place and let the
+    #    dependent run green against stale input.
+    #
+    # This must run BEFORE the dependency copy (further down) and before the
+    # tot-module input staging, or it would delete the very files those steps
+    # just put here. test_dir persists across runs -- it is only removed
+    # under --clean, and only after every case -- and regen-baselines.yml
+    # invokes this script once per fixture in a fresh process, so
+    # COMPLETED_TESTS is empty each time and dependencies are genuinely
+    # re-run into a directory that already has last iteration's output.
+    if [[ -n "$module" ]]; then
+        rm -f "$test_dir/${module}_regress.dat"
+        # One `eqdata*` glob, not eqdata.* plus eqdata-*: eq/eqinit.f90:100
+        # defaults KNAMEQ to the bare name `eqdata`, which neither of the
+        # two narrower patterns matches.
+        rm -f "$test_dir"/eqdata* "$test_dir"/*.gs
+    fi
+
     # Copy module-specific parameter files
     case "$module" in
         tx)
@@ -366,7 +395,7 @@ run_single_test() {
             local dep_dir="$TEST_OUTPUT_DIR/$dep"
             if [[ -d "$dep_dir" ]]; then
                 # Copy output files (eqdata.*, etc.)
-                cp "$dep_dir"/eqdata.* "$test_dir/" 2>/dev/null || true
+                cp "$dep_dir"/eqdata* "$test_dir/" 2>/dev/null || true
                 cp "$dep_dir"/*.gs "$test_dir/" 2>/dev/null || true
             fi
         done
@@ -387,8 +416,7 @@ run_single_test() {
         eq) mod_env=(env EQ_REGRESS_DUMP=1) ;;
         tot)
             mod_env=(env TOT_REGRESS_DUMP=1)
-            cp "$SCRIPT_DIR/inputs/eqdata."* "$test_dir/" 2>/dev/null || true
-            cp "$SCRIPT_DIR/inputs/eqdata-"* "$test_dir/" 2>/dev/null || true
+            cp "$SCRIPT_DIR/inputs/eqdata"* "$test_dir/" 2>/dev/null || true
             cp "$SCRIPT_DIR/inputs/${test_name}.eqparm" "$test_dir/eqparm" 2>/dev/null || true
             cp "$SCRIPT_DIR/inputs/${test_name}.trparm" "$test_dir/trparm" 2>/dev/null || true
             ;;
@@ -417,6 +445,16 @@ run_single_test() {
             ;;
     esac
 
+    # Timestamp reference for the post-run freshness check, written HERE --
+    # after every staging step (the dependency copy and the tot input copy
+    # above), immediately before the binary. Written earlier, as it first
+    # was, it accomplished nothing: `cp` without -p stamps the destination
+    # with the current time, so every staged file came out NEWER than the
+    # sentinel and satisfied the check the sentinel exists to defeat.
+    if [[ -n "$module" ]]; then
+        : > "$test_dir/.pre_run"
+    fi
+
     if [[ $VERBOSE -eq 1 ]]; then
         echo ""
         "${mod_env[@]}" timeout "$timeout" "$binary" < "$stdin_provider" 2>&1 | tee "$log_file"
@@ -428,24 +466,113 @@ run_single_test() {
 
     cd "$SCRIPT_DIR"
 
-    # Check result - CLOSED message is the primary success indicator
+    # Check result. "CLOSED" is the historical success indicator, but it is
+    # emitted by GSAF's GSCLOS -- which is NOT in this repo. On a
+    # graphics-free build (make.header with an empty GFLIBS, i.e. every CI
+    # build) the module Makefiles link <mod>_static_stubs.o instead, whose
+    # GSCLOS is an empty subroutine (eq/eq_static_stubs.f90:227-228, and
+    # identically in tr/ and tot/). No log then contains "CLOSED", the
+    # `exit_code -eq 0` branch below reports FAIL (no CLOSED message), and
+    # COMPLETED_TESTS is never set -- so every dependent case is skipped as
+    # "dependency failed". That made this script unusable on any
+    # graphics-free build; the only reason it went unnoticed is that
+    # python-tests.yml invokes the binaries directly and never calls it.
+    #
+    # So accept a second, equivalent signal: a clean exit that produced the
+    # regression dump the module was asked for. That artefact is the actual
+    # object of these runs, and REGRESS_DUMP is enabled for exactly the
+    # modules checked below.
+    local dump_produced=0
+    if [[ -n "$module" && -s "$test_dir/${module}_regress.dat" ]]; then
+        dump_produced=1
+    fi
     if [[ $exit_code -eq 124 ]]; then
         echo -e "${YELLOW}TIMEOUT${NC} (exceeded ${timeout}s)"
         FAILED=$((FAILED + 1))
-    elif grep -q "CLOSED" "$log_file" 2>/dev/null; then
-        # CLOSED message found - calculation completed successfully.
+    elif grep -q "CLOSED" "$log_file" 2>/dev/null \
+         || { [[ $exit_code -eq 0 ]] && [[ $dump_produced -eq 1 ]]; }; then
+        # Calculation completed successfully.
         # For TR module, also verify numerical metrics against baseline.
-        local reg_ok=1
+        # check_regression.sh distinguishes its failures: 1 = metrics drift,
+        # 2 = dump missing/malformed, 3 = baseline missing, 4 = bad prefix.
+        # Collapsing them into one boolean reported "REGRESSION (metrics
+        # drift)" for a run that produced NO metrics at all -- and then, per
+        # the COMPLETED_TESTS rule below, let its dependents proceed on
+        # whatever stale eqdata was lying around. Only 1 means "ran, produced
+        # artefacts, disagrees with the baseline"; 2 and 3 mean the run or the
+        # repo is broken.
+        local reg_rc=0
         if [[ "$module" == "tr" || "$module" == "fp" || "$module" == "ti" || "$module" == "wr" || "$module" == "wrx" || "$module" == "eq" || "$module" == "tot" ]]; then
-            if ! "$SCRIPT_DIR/scripts/check_regression.sh" \
+            "$SCRIPT_DIR/scripts/check_regression.sh" \
                     "$test_name" "$test_dir" "$SCRIPT_DIR/baselines" "1e-10" \
-                    > "$test_dir/regression.log" 2>&1; then
-                reg_ok=0
-            fi
+                    > "$test_dir/regression.log" 2>&1 || reg_rc=$?
         fi
-        if [[ $reg_ok -eq 0 ]]; then
+        if [[ $reg_rc -eq 3 ]]; then
+            # Baseline missing. The RUN succeeded -- check_regression.sh only
+            # reaches its exit 3 after finding the dump and writing
+            # metrics.json -- so the artefacts a dependent needs do exist.
+            # Marking it incomplete would skip the dependent, leave its output
+            # directory uncreated, and break precisely the BOOTSTRAP case a
+            # regeneration workflow exists for: a brand-new eq_* case has no
+            # baseline yet by definition, and its tr_* dependent would never
+            # run to produce one.
+            echo -e "${RED}FAIL${NC} (no baseline under $SCRIPT_DIR/baselines/$test_name; see $test_dir/regression.log)"
+            FAILED=$((FAILED + 1))
+            # ...but only if the artefacts a DEPENDENT consumes are actually
+            # there. exit 3 proves the DUMP exists, which is weaker: the dump
+            # is written at the tail of EQCALQ (the menu's `r`), while
+            # eqdata.* comes from EQSAVE (the menu's `s`), later. A bootstrap
+            # script that reaches `r` but not `s` would otherwise be marked
+            # complete and let its dependent run with no equilibrium file at
+            # all -- and under regen-baselines.yml that is not even red: the
+            # run_tests.sh call is `|| true`'d and the dump/`jq` gates both
+            # pass, so a metrics.json computed without an equilibrium would be
+            # uploaded as the artifact intended to BECOME the baseline.
+            # `-newer .pre_run` and `-type f`: the gate must mean "THIS run
+            # wrote an equilibrium", not "an eqdata file is present". Files
+            # staged before the binary (a dependency's blob at the copy
+            # below, or the tot input staging) would otherwise
+            # satisfy it, and in an eq_A -> eq_B -> tr_C chain an eq_B that
+            # reached `r` but not `s` would be marked complete on eq_A's
+            # blob. `-type f` also rejects a directory named eqdata*.
+            if [[ -n "$(find "$test_dir" -maxdepth 1 -type f -name 'eqdata*' \
+                             -newer "$test_dir/.pre_run" -print -quit 2>/dev/null)" ]]; then
+                COMPLETED_TESTS[$test_name]=1
+            else
+                echo -e "         ${YELLOW}(and no eqdata produced -- dependents will be skipped)${NC}"
+            fi
+        elif [[ $reg_rc -ge 2 ]]; then
+            local reason
+            case $reg_rc in
+                2) reason="regression dump missing or malformed" ;;
+                *) reason="check_regression.sh exit $reg_rc" ;;
+            esac
+            echo -e "${RED}FAIL${NC} ($reason; see $test_dir/regression.log)"
+            FAILED=$((FAILED + 1))
+            # NOT marked complete: no usable dump means no artefacts a
+            # dependent can consume, so letting one proceed would run it
+            # against a previous invocation's leftovers.
+        elif [[ $reg_rc -eq 1 ]]; then
             echo -e "${RED}REGRESSION${NC} (metrics drift; see $test_dir/regression.log)"
             FAILED=$((FAILED + 1))
+            # Still mark it complete FOR DEPENDENTS. COMPLETED_TESTS answers
+            # "did this case produce output a dependent can consume?", which
+            # is a different question from "did it match its baseline". The
+            # run reached GSCLOS/produced its dump and wrote its eqdata; a
+            # metrics drift says the BASELINE is out of date, not that the
+            # artefacts are unusable.
+            #
+            # Conflating the two made a drifted eq_iter01 skip tr_iter01 as
+            # "dependency failed", so tr_iter01's output directory was never
+            # created -- which is fatal precisely for a baseline-REGENERATION
+            # run, where every case is expected to drift. Measured on the
+            # first-ever run of regen-baselines.yml (30514627136): eq_iter01
+            # and eq_tst2 REGRESSED as expected, and tr_iter01/tr_tst2 were
+            # then skipped and produced nothing.
+            #
+            # The verdict is unchanged -- FAILED is still incremented, so the
+            # script still exits nonzero and a drift never reads as a pass.
+            COMPLETED_TESTS[$test_name]=1
         elif [[ $exit_code -ne 0 ]]; then
             echo -e "${GREEN}PASS${NC} (warning: exit code $exit_code)"
             PASSED=$((PASSED + 1))
@@ -456,7 +583,20 @@ run_single_test() {
             COMPLETED_TESTS[$test_name]=1
         fi
     elif [[ $exit_code -eq 0 ]]; then
-        echo -e "${RED}FAIL${NC} (no CLOSED message)"
+        # Clean exit, but neither "CLOSED" nor a regression dump: the run
+        # went nowhere useful. Name both missing signals -- "no CLOSED
+        # message" alone sent the graphics-free case chasing a red herring.
+        #
+        # But only name the dump for modules that HAVE a dumper. `tx` has
+        # no entry in the mod_env case above, so no *_REGRESS_DUMP is ever
+        # enabled for it -- reporting "no tx_regress.dat" would name an
+        # artefact nobody asked for. tx_std therefore still cannot pass on
+        # a graphics-free build; that needs a tx dumper, not a message fix.
+        if [[ ${#mod_env[@]} -gt 0 ]]; then
+            echo -e "${RED}FAIL${NC} (no CLOSED message and no ${module}_regress.dat)"
+        else
+            echo -e "${RED}FAIL${NC} (no CLOSED message; ${module} has no regression dumper)"
+        fi
         FAILED=$((FAILED + 1))
         if [[ $VERBOSE -eq 1 ]]; then
             echo "  Last 10 lines of log:"

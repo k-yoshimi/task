@@ -232,3 +232,29 @@ C     L-2: stub. Real dispatch lands in eq_param_registry.f90 (L-3).
       OK = 0
       RETURN
       END
+
+C     ------------------------------------------------------------------
+C     EQ_COMMON_GET_PSI_RZ : copy PSIRZ(NRG,NZG) 2-D scalar field to a
+C     caller-owned buffer in Fortran column-major order
+C     (PSI_OUT(IR,IZ); R index varies fastest). Limited to the current
+C     NRGMAX x NZGMAX. Mirrors EQ_COMMON_GET_RZ_GRID.
+C     ------------------------------------------------------------------
+      SUBROUTINE EQ_COMMON_GET_PSI_RZ(NR_COPY, NZ_COPY, PSI_OUT)
+      USE plcomm
+      USE eqcom0_mod
+      USE eqcom1_mod
+      IMPLICIT COMPLEX*16(C),REAL*8(A,B,D-F,H,O-Z)
+      INTEGER NR_COPY, NZ_COPY
+      REAL*8  PSI_OUT(NR_COPY, NZ_COPY)
+      INTEGER I, J, LIMR, LIMZ
+      LIMR = NR_COPY
+      IF (LIMR .GT. NRGMAX) LIMR = NRGMAX
+      LIMZ = NZ_COPY
+      IF (LIMZ .GT. NZGMAX) LIMZ = NZGMAX
+      DO J = 1, LIMZ
+         DO I = 1, LIMR
+            PSI_OUT(I, J) = PSIRZ(I, J)
+         END DO
+      END DO
+      RETURN
+      END

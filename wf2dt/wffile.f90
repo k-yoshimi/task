@@ -1,4 +1,18 @@
-!     $Id: wffile.f90,v 1.1 2011/07/19 07:16:11 maruyama Exp $
+! wffile.f90
+
+MODULE wffile
+
+  PUBLIC wffelm
+  PUBLIC wfwelm
+  PUBLIC wfrelm
+  PUBLIC wfwant
+  PUBLIC wfrant
+  PUBLIC wfwfld
+  PUBLIC wfrfld
+  PUBLIC wfsave
+  PUBLIC wfload
+
+CONTAINS
 
 !     ******* OUTPUT FORMATTED ELEMENT DATA *******
 
@@ -452,17 +466,14 @@ SUBROUTINE wfsave
      
   ENDIF
 
-  WRITE(26) NNMAX,NEMAX,NSDMAX,NBNOD,NBSID
+  WRITE(26) NNMAX,NEMAX,NSDMAX,NBNOD,NBSID,NSMAX
   WRITE(26) RNODE,ZNODE
   WRITE(26) KANOD,KBNOD
   WRITE(26) NDELM,KNELM,NSDELM
   WRITE(26) NDSID,KASID,KBSID
   WRITE(26) CESD
   WRITE(26) CEND
-  WRITE(26) CBF
-  WRITE(26) CBP
-  WRITE(26) NSDBS,NNDBS
-  WRITE(26) CEBSD,CEBND
+  WRITE(26) PABS
   CLOSE(26)
   
   WRITE(6,*) '## wf2d data saved in FILE: ',KFNAMF
@@ -480,11 +491,10 @@ SUBROUTINE wfload
   use wfcomm
   USE femmeshprep
   implicit none
-  integer :: IST
+  integer :: node,IST,ierr
   CHARACTER KNAME*32
   LOGICAL LEX
 
-        
 1 WRITE(6,*) '## ENTER FIELD FILE NAME: ',KFNAMF
   READ(5,'(A32)',ERR=1,END=9000) KNAME
   IF(KNAME(1:2).NE.'/ ') KFNAMF=KNAME
@@ -502,24 +512,41 @@ SUBROUTINE wfload
   ENDIF
 30 CONTINUE
      
-  WRITE(26) NNMAX,NEMAX,NSDMAX,NBNOD,NBSID
+  READ(26) NNMAX,NEMAX,NSDMAX,NBNOD,NBSID,NSMAX
+  WRITE(6,'(A,6I6)') 'NNMAX,NEMAX,NSDMAX,NBNOD,NBSID,NSMAX=', &
+       NNMAX,NEMAX,NSDMAX,NBNOD,NBSID,NSMAX
   CALL wf_node_allocate
   CALL wf_elm_allocate
   CALL wfsid_allocate
-  WRITE(26) NNMAX,NEMAX,NSDMAX,NBNOD,NBSID
-  WRITE(26) RNODE,ZNODE
-  WRITE(26) KANOD,KBNOD
-  WRITE(26) NDELM,KNELM,NSDELM
-  WRITE(26) NDSID,KASID,KBSID
-  WRITE(26) CESD
-  WRITE(26) CEND
-  WRITE(26) CBF
-  WRITE(26) CBP
-  WRITE(26) NSDBS,NNDBS
-  WRITE(26) CEBSD,CEBND
+  CALL wffld_allocate
+  
+  READ(26) RNODE,ZNODE
+  READ(26) KANOD,KBNOD
+  READ(26) NDELM,KNELM,NSDELM
+  READ(26) NDSID,KASID,KBSID
+  READ(26) CESD
+  READ(26) CEND
+  READ(26) PABS
   CLOSE(26)
   
   WRITE(6,*) '## wf2d data loaded from FILE: ',KFNAMF
+
+  bdrmin=rnode(1)
+  bdrmax=rnode(1)
+  bdzmin=znode(1)
+  bdzmax=znode(1)
+  DO node=2,nnmax
+     bdrmin=MIN(bdrmin,rnode(node))
+     bdrmax=MAX(bdrmax,rnode(node))
+     bdzmin=MIN(bdzmin,znode(node))
+     bdzmax=MAX(bdzmax,znode(node))
+  END DO
+
+  CALL wfindx
+  CALL wffepi
+  CALL wfwpre(ierr)
   
 9000 RETURN
 END SUBROUTINE wfload
+
+END MODULE wffile

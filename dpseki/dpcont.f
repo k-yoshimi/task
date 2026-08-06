@@ -6,7 +6,8 @@ C
 C
       USE plcomm
       USE pllocal
-      USE plparm,ONLY: pl_parm,pl_view
+      USE plparm,ONLY: pl_parm
+      USE plview,ONLY: pl_view  ! merge: bpsi moved pl_view plparm->plview
       USE libchar
       INCLUDE 'dpcomm.inc'
       DIMENSION GX(NGXM),GY(NGYM),GZ(NGXM,NGYM)

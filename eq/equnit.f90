@@ -108,7 +108,10 @@
 
       implicit none
 !-----------------------------------------------------------------------
-      call eqgout(0)
+!     MODE=1: the coupled eq_calc has done EQCALC+EQCALQ (same as the
+!     standalone solve), so both the (sigma,theta) GS solution (C series)
+!     and the flux-surface-averaged quantities (S series) are available.
+      call eqgout(1)
       return
       end subroutine eq_gout
 !=======================================================================

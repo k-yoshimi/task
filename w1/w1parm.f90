@@ -9,7 +9,7 @@ Module w1parm
        NXMAX,NZMAX,NPRINT,NFILE,NGRAPH,NLOOP,NSYM, &
        NMODEL,NALPHA,NDMAX,XDMAX,IHARM,NSYS,NGDSP,model_prof, &
        EPSH,ZEFF,WVYSIZ,NCDTYP,NXABS,IELEC, &
-       MDLWG,MDLWGS,WGZ1,WGZ2,WGAMP,WGKZ,job_id,nfile_data, &
+       MDLWG,MDLWGS,WGZ1,WGZ2,WGAMP,WGNZ,job_id,nfile_data, &
        xgmin,xgmax,ygmin,ygmax
   
   PRIVATE
@@ -94,7 +94,7 @@ CONTAINS
          '        NXMAX,NZMAX,NPRINT,NFILE,NGRAPH,NLOOP,NSYM,', &
          '        NMODEL,NALPHA,NDMAX,XDMAX,IHARM,NSYS,NGDSP,model_prof,', &
          '        EPSH,ZEFF,WVYSIZ,NCDTYP,NXABS,IELEC', &
-         '        MDLWG,MDLWGS,WGZ1,WGZ2,WGAMP,WGKZ,job_id,nfile_data', &
+         '        MDLWG,MDLWGS,WGZ1,WGZ2,WGAMP,WGNZ,job_id,nfile_data', &
          '        xgmin,xgmax,ygmin,ygmax'
     RETURN
 
@@ -142,7 +142,7 @@ CONTAINS
                  'EPSH  ',EPSH  ,'ZEFF  ',ZEFF, &
                  'WVYSIZ',WVYSIZ,'XDMAX ',XDMAX, &
                  'WGZ1  ',WGZ1  ,'WGZ1  ',WGZ2,  &
-                 'WGAMP ',WGAMP ,'WGKZ  ',WGKZ, &
+                 'WGAMP ',WGAMP ,'WGNZ  ',WGNZ, &
                  'xgmin ',xgmin ,'xgmax ',xgmax, &
                  'ygmin ',ygmin ,'ygmax ',ygmax
 

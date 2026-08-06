@@ -536,7 +536,7 @@ def build_server() -> Any:
     if not MCP_AVAILABLE:
         raise RuntimeError(
             "Python MCP SDK (`mcp`) is not installed. "
-            "Install it with: pip install 'mcp>=0.9'"
+            "Install it with: pip install 'mcp>=0.9,<2'"
         )
 
     mcp = FastMCP(  # type: ignore[misc]
@@ -714,7 +714,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not MCP_AVAILABLE:
         sys.stderr.write(
             "error: Python MCP SDK (`mcp`) is not installed.\n"
-            "       pip install 'mcp>=0.9'\n"
+            "       pip install 'mcp>=0.9,<2'\n"
         )
         return 2
 

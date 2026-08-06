@@ -92,7 +92,22 @@ def _compare_with_baseline(actual: dict, case_name: str, tol: str = "1e-10") -> 
 
     Raises :class:`AssertionError` on any drift so the unittest framework
     reports it as a FAIL rather than an ERROR.
+
+    When ``REGEN_OUTPUT_DIR`` is set (CI baseline-capture mode) the freshly
+    computed ``actual`` is ALSO written to
+    ``$REGEN_OUTPUT_DIR/<case>/metrics.json`` so the CI compiler's values can be
+    downloaded and committed as the new baseline. The diff/assert below is
+    unchanged — this is purely additive capture.
     """
+    # NOTE: keep this capture block in sync with the totlib copy.
+    regen_dir = os.environ.get("REGEN_OUTPUT_DIR")
+    if regen_dir:
+        try:
+            out_path = Path(regen_dir) / case_name / "metrics.json"
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(json.dumps(actual, indent=2))
+        except OSError:
+            pass  # capture is best-effort; never let it change pass/fail
     baseline_json = BASELINES_DIR / case_name / "metrics.json"
     if not baseline_json.exists():
         raise unittest.SkipTest(f"baseline missing: {baseline_json}")

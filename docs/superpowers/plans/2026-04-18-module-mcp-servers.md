@@ -32,7 +32,7 @@ python/
     ├── tr_mcp/              # ← this PR のリファレンス実装
     │   ├── __init__.py
     │   ├── server.py        # FastMCP server (9 tools)
-    │   ├── pyproject.toml   # mcp>=0.9 + path dep on trlib
+    │   ├── pyproject.toml   # mcp>=0.9,<2 + path dep on trlib
     │   ├── README.md        # 初心者向け使い方 (です・ます調)
     │   └── tests/
     │       ├── __init__.py
@@ -71,7 +71,7 @@ python/
 
 ## 5. Dependencies
 
-- `mcp>=0.9` （Python MCP SDK, [GitHub](https://github.com/modelcontextprotocol/python-sdk)）。
+- `mcp>=0.9,<2` （Python MCP SDK, [GitHub](https://github.com/modelcontextprotocol/python-sdk)）。
 - Path dep on `python/<mod>lib/` （例: `trlib`）。`pip install -e .` で local 開発インストール。
 - Python 3.10+ を要求 (MCP SDK の最低ライン)。trlib 自体は 3.8+ だが MCP 側で 3.10+ に引き上げる。
 - 追加の外部依存なし（numpy なども不要）。

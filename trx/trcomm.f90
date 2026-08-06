@@ -10,9 +10,14 @@ MODULE trcomm_parm
 !     RR,RA,RKAP,RDLT,BB,RIP,
 !     NSM,NSMAX,
 !     NPA(NSM),
-!     PA(NSM),PZ(NSM),PN(NSM),PNS(NSM),PTPR(NSM),PTPP(NSM),PTS(NSM),
-!     PU(NSM),PUS(NSM),ID_NS(NSM),KID_NS(NSM)
-!     PROFN1,PROFN2,PROFT1,PROFT2,PROFU1,PROFU2
+!     PA(NSM),PZ(NSM),NPA(NSM),
+!     ID_NS(NSM),KID_NS(NSM)
+!     PN(NSM),PNS(NSM),PNM(NSM),
+!     PT(NSM),PTS(NSM),PTM(NSM),PTPR(NSM),PTPP(NSM),
+!     PU(NSM),PUS(NSM),PUM(NSM),PUPR(NSM),PUPP(NSM),
+!     PROFN1(NSM),PROFN2(NSM),PROFN3(NSM),
+!     PROFT1(NSM),PROFT2(NSM),PROFT3(NSM),
+!     PROFU1(NSM),PROFU2(NSM),PROFU3(NSM),
 !     MODELG,model_prof,MODELQ,MODEL_NPROF
 !     KNAMEQ,KNAMEQ2,KNAMTR
 !     MODEFR,MODEFW,IDEBUG
@@ -50,7 +55,6 @@ MODULE trcomm_parm
 
   ! === plasma parameters ===
 
-  REAL(rkind),DIMENSION(NSM):: PT
   REAL(rkind):: RIPS,RIPE
   
   ! === profile parameters ===
@@ -923,7 +927,7 @@ MODULE trcomm
     return
 
  900 continue
-    write(6,*) "XX  TRCOMM ALLOCATION ERROR IERR=",ierr
+    write(6,*) 'XX  TRCOMM ALLOCATION ERROR IERR=',ierr
     call DEALLOCATE_ERR_TRCOMM
     return
 

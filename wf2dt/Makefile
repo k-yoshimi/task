@@ -11,8 +11,8 @@ include ../mtxp/make.mtxp
 #LIB_MTX=$(LIBXMTX_KSP)
 #LIBX_MTX=$(LIBX_MTX_KSP)
 
-FFLAGS = $(OFLAGS)
-#FFLAGS = $(DFLAGS) -Wall
+#FFLAGS = $(OFLAGS)
+FFLAGS = $(DFLAGS) -Wall
 
 OBJDIR   = ./obj
 ${OBJDIR}/%.o:%.f
@@ -24,9 +24,9 @@ MODINCLUDE= -I./$(MOD) -I../pl/$(MOD) -I../eq/$(MOD) \
             -I../dp/$(MOD) -I../lib/$(MOD) -I../mtxp/$(MOD) \
             -I../../bpsd/$(MOD)
 
-SRCS = 	wfcomm.f90 femmeshprep.f90 feminterpolate.f90 \
-        wfinit.f90 wfparm.f90 wfload.f90 wfprof.f90 \
-        wfdiv.f90 wflib.f90 wfsub.f90 wffile.f90 \
+SRCS = 	wfcomm.f90 femmeshprep.f90 feminterpolate.f90 wfglib.f90 \
+        wfinit.f90 wfparm.f90 wffile.f90 wfload.f90 wfprof.f90 \
+        wfdiv.f90 wflib.f90 wfsub.f90 wfgsubn.f90 wfgoutn.f90 \
         wfindx.f90 wfsort.f90 wfgsub.f90 wfant.f90 wfwave.f90 \
 	wfsolv.f90 wfgout.f90 wfmenu.f90
 
@@ -89,6 +89,9 @@ $(OBJDIR)/wfload.o: wfload.f90 wfcomm.f90
 $(OBJDIR)/wfindx.o: wfindx.f90 wfcomm.f90
 $(OBJDIR)/wfgout.o: wfgout.f90 wfcomm.f90 feminterpolate.f90
 $(OBJDIR)/wfgsub.o: wfgsub.f90 wfcomm.f90
+$(OBJDIR)/wfgoutn.o: wfgoutn.f90 wfcomm.f90 feminterpolate.f90
+$(OBJDIR)/wfgsubn.o: wfgsubn.f90 wfcomm.f90
+$(OBJDIR)/wfglib.o: wfglib.f90 wfcomm.f90
 $(OBJDIR)/wfefwg.o: wfefwg.f90 wfcomm.f90
 $(OBJDIR)/wfgdum.o: wfgdum.f90
 #	$(FCFREE) $(FFLAGS) -c $< 

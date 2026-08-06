@@ -65,7 +65,7 @@ MCP (Model Context Protocol) は、Anthropic が策定した **「LLM と外部�
 
 3. **`mcp` パッケージ (Python MCP SDK)**
 
-   `pip install 'mcp>=0.9'` で入ります。後述の「インストール」手順に同梱しています。
+   `pip install 'mcp>=0.9,<2'` で入ります。後述の「インストール」手順に同梱しています。
 
 ## 3. インストール
 
@@ -327,7 +327,7 @@ export PYTHONPATH=/absolute/path/to/task/python:$PYTHONPATH
 
 ### Q3. `ModuleNotFoundError: No module named 'mcp'` と言われます
 
-- MCP SDK が入っていません。`pip install 'mcp>=0.9'` を実行してください。
+- MCP SDK が入っていません。`pip install 'mcp>=0.9,<2'` を実行してください。
 - 仮想環境を使っている場合は、その環境の Python が LLM クライアント側から使われているかも確認してください。
 
 ### Q4. `invalid parameter: ...` が返ってきました

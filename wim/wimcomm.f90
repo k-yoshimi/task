@@ -18,7 +18,9 @@ MODULE wimcomm
   COMPLEX(rkind):: CPTOT
   REAL(rkind),DIMENSION(0:1,0:1):: D0,D1,D2
   REAL(rkind),DIMENSION(0:1,0:1,0:1):: D3
-
+  INTEGER:: wave_dump,id_wave_dump,fid_wave_dump
+  CHARACTER(LEN=256):: kid_wave_dump
+  
 CONTAINS
 
   SUBROUTINE wim_allocate

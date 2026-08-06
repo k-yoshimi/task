@@ -190,6 +190,9 @@ docs/manual/*.blg
 /bpsd/
 /gsaf/
 
+# Downstream task-web worktrees (created under .worktrees/ by task-web dev flow)
+.worktrees/
+
 # Per-machine Claude Code workspace state.
 # .claude/commands/ and .claude/hooks/ ARE tracked — they are project
 # workflow assets that benefit all collaborators. Settings and worktree

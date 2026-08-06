@@ -61,10 +61,14 @@ MODULE plcomm_parm
            proft_travis_p,proft_travis_q,proft_travis_w
 
       REAL(rkind),DIMENSION(NSM):: & 
-           PA,PZ,PN,PNS,PNM,PTPR,PTPP,PTS,PTM, &
+           PA,PZ, &
+           PN,PNS,PNM, &
+           PT,PTS,PTM,PTPR,PTPP, &
            PU,PUS,PUM,PUPR,PUPP, &
+           PROFN1,PROFN2,PROFN3, &
+           PROFT1,PROFT2,PROFT3, &
+           PROFU1,PROFU2,PROFU3, &
            RHOITB,PNITB,PTITB,PUITB, &
-           PROFN1,PROFN2,PROFN3,PROFT1,PROFT2,PROFT3,PROFU1,PROFU2,PROFU3, &
            PZCL,PNUC
       INTEGER,DIMENSION(NSM)::NPA,ID_NS
       CHARACTER(len=4),DIMENSION(NSM)::KID_NS

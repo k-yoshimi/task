@@ -17,7 +17,7 @@ the `tr` module (`docs/sphinx/modules/tr/en/mcp.md`).
 
 1. **Python 3.10 or newer**
 2. **`libtiapi.so` already built** (`make -C ti libtiapi.so`)
-3. **The `mcp` package** (`pip install 'mcp>=0.9'`)
+3. **The `mcp` package** (`pip install 'mcp>=0.9,<2'`)
 
 ## Installation
 

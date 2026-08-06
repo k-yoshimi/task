@@ -110,9 +110,11 @@ MODULE libnf
 
   ! *** library subroutines ***
 
-  PUBLIC set_usigmav_nf    ! set_usigmav_nf
-  PUBLIC sigma_nf          ! sigma_nf(id_nf,energy)
-  PUBLIC sigmav_nf         ! sigmav_nf(id_nf,temperature)
+  PUBLIC set_usigmav_nf  ! set_usigmav_nf
+  PUBLIC sigma_nf        ! sigma_nf(id_nf,energy)       Reaction rate fitting
+  PUBLIC sigmav_nf       ! sigmav_nf(id_nf,temperature) Maxwellian fitting
+  PUBLIC sigmav_nf_int   ! sigmav_nf(id_nf,temperature) Maxwellian integral 
+  PUBLIC sigmav_nfb_int  ! sigmav_nfb(id_nf,temperature) Slowing Down integral 
 
 CONTAINS
   
@@ -126,16 +128,16 @@ CONTAINS
     INTEGER:: ntemp,id,ierr
 
     SELECT CASE(model_pnf)
-    CASE(0)
+    CASE(0) ! no fusion reaction
        nnfmax=0
        RETURN
-    CASE(1)
+    CASE(1) ! DT
        nnfmax=1
-    CASE(2,12)
+    CASE(2,12) ! DT+DD 
        nnfmax=4
-    CASE(3)
+    CASE(3)    ! DT+DD+DHe3
        nnfmax=6
-    CASE(4,14)
+    CASE(4,14) ! DT+DD+DHe3+TT+THe3
        nnfmax=13
     CASE DEFAULT
        WRITE(6,*) 'XX Error libnf: undefined model_pnf: model_pnf=',model_pnf
@@ -512,6 +514,9 @@ CONTAINS
     RETURN
   END FUNCTION sigmav_nf_int
 
+
+
+  
   ! --- p-B reaction ---
   !        Ref. A. Tantori and F Belloni, Nucl. Fusion 63 (2023) 086001 (9pp)
   !     cross section --- sigma

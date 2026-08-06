@@ -47,14 +47,18 @@ jobs:
         # dlopen at runtime. Without these the tests SKIP and CI gives a
         # false pass — which previously masked real fp/eq drift.
         #
-        # Use Ubuntu 24.04's default gfortran (13.2.0). PR #138
+        # Use Ubuntu 24.04's default gfortran (13.3.0; the apt metapackage
+        # prints 4:13.2.0-7ubuntu1, which is not the compiler). PR #138
         # experimented with gfortran-14 from the toolchain PPA on the
         # hypothesis that the SIGABRT class was a 13.2 codegen bug; the
         # actual root cause was the BPSD species_kid OOB write fixed
         # by the patch applied in the next step. With gfortran-14 the
         # FP results drift from the Phase-0 baselines (generated with
         # 13.x) by ~1e-9 — beyond the 1e-10 equivalence tolerance — so
-        # we stay on the system 13.2.
+        # we stay on the image default. (That default is gfortran 13.3.0,
+        # measured; the "13.2" in this comment and in older commit
+        # messages is the apt metapackage revision 4:13.2.0-7ubuntu1 --
+        # see docs/baseline-policy.md.)
         #
         # X11 is intentionally NOT installed: each lib*api.so excludes
         # graphics archives (see fp/Makefile:318), so X11 is never
@@ -151,7 +155,55 @@ jobs:
           # (MCP_AVAILABLE = False). See server.py's optional-import
           # block; CI now exercises the FastMCP construction path that
           # production users hit.
-          pip install mcp
+          # Pinned below 2.0: mcp 2.0.0 removed `mcp.server.fastmcp`
+          # entirely (replaced by MCPServer/Server with a different
+          # decorator API), so every server.py falls back to
+          # MCP_AVAILABLE=False and the stdio servers refuse to start.
+          # Porting the 7 servers to the 2.x API is its own change.
+          pip install 'mcp>=0.9,<2'
+          # Tripwire. MCP_AVAILABLE is set by a bare `except Exception`,
+          # so ANY future breakage of the FastMCP import path -- a bad
+          # transitive resolution, a circular import, a real regression --
+          # would silently turn the 7 server test-suites green-by-skip.
+          # In THIS environment those tests must actually run, so assert it.
+          PYTHONPATH=python:python/mcp-servers python -c "import eq_mcp.server as s; assert s.MCP_AVAILABLE, 'FastMCP import is broken -- the mcp pin regressed; the MCP suites would skip instead of run'"
+          # numpy = the array dtype the python wrappers (python/<mod>lib/
+          # _ffi.py) use for state arrays. It is guarded as optional there
+          # (try/except ImportError), but the TEST suite assumes it present:
+          # mcp-servers/<mod>/tests/test_server.py does a bare `import numpy`
+          # (collection-ERRORS without it, interrupting the whole run) and
+          # eqlib/tests/test_get_psi_rz.py importorskip's it (silently SKIPs).
+          # Same run-don't-skip rationale as the mcp install above
+          # (CLAUDE.md §Test-suite discipline). The build finally compiling
+          # on the merge branch is what first let CI reach pytest and surface
+          # this latent gap (base develop never got past the build either).
+          pip install numpy
+
+      - name: Provide ../task symlink (module Makefiles hardcode ../task/make.header)
+        # bpsd/Makefile and the module Makefiles `include ../task/make.header`,
+        # assuming the repo is checked out under a dir named `task`. On a
+        # differently-named repo (e.g. the task-merge merge/test sandbox) the
+        # checkout is $GITHUB_WORKSPACE/../<repo>, so `../task` does not resolve
+        # and the bpsd build dies: "No rule to make target '../task/make.header'".
+        # Symlink ../task -> the checkout so the relative include is repo-name
+        # agnostic. Guarded below: `ln` does not no-op when the repo is
+        # already named `task` (see the inline note).
+        run: |
+          set -e
+          link="$(dirname "$GITHUB_WORKSPACE")/task"
+          if [ "$link" = "$GITHUB_WORKSPACE" ]; then
+            # Repo is literally named `task`: ../task already resolves to the
+            # checkout, so there is nothing to do. Without this guard `ln -sfn`
+            # does NOT no-op -- the destination is a real directory, so ln falls
+            # back to link-into-directory mode and drops a self-referential
+            # `task -> .` symlink INSIDE the checkout (verified on GNU coreutils
+            # 8.32 and on BSD ln; both exit 0). Harmless today, but a symlink
+            # loop for any future recursive find/tar/artifact-glob step.
+            echo "checkout is already .../task - no symlink needed"
+          else
+            ln -sfn "$GITHUB_WORKSPACE" "$link"
+            ls -ld "$link"
+          fi
 
       - name: Build PIC support libraries (bpsd, lib, mtxp, pl, eq, dp, ob)
         # Pre-build all shared support libraries so each module Makefile
@@ -269,10 +321,21 @@ jobs:
           for case in tot_demo2014_short tot_ht6m_short; do
             mkdir -p "test_run/test_output/$case"
             # Stage namelist companions at the literal names totmain
-            # reads. `|| true` keeps demo2014 (which has neither
-            # companion) silent — same convention as run_tests.sh.
-            cp "test_run/inputs/${case}.eqparm" "test_run/test_output/$case/eqparm" 2>/dev/null || true
-            cp "test_run/inputs/${case}.trparm" "test_run/test_output/$case/trparm" 2>/dev/null || true
+            # reads. ht6m REQUIRES both -- .trparm is what sets
+            # modelg=3 / knameq='eqdata-HT6M'. Losing it silently would
+            # run from defaults, produce a plausible non-empty eqdata,
+            # pass `test -s` below, and surface later as library-looking
+            # drift in test_equivalence.py. demo2014 ships neither
+            # companion, so it stays best-effort -- same convention as
+            # run_tests.sh, but no longer applied where it can hide a
+            # real staging failure.
+            if [ "$case" = "tot_ht6m_short" ]; then
+              cp "test_run/inputs/${case}.eqparm" "test_run/test_output/$case/eqparm"
+              cp "test_run/inputs/${case}.trparm" "test_run/test_output/$case/trparm"
+            else
+              cp "test_run/inputs/${case}.eqparm" "test_run/test_output/$case/eqparm" 2>/dev/null || true
+              cp "test_run/inputs/${case}.trparm" "test_run/test_output/$case/trparm" 2>/dev/null || true
+            fi
             ( cd "test_run/test_output/$case" && \
                 ../../../tot/tot < "../../inputs/${case}.in" > output.log 2>&1 )
           done
@@ -285,11 +348,32 @@ jobs:
           test -s "test_run/test_output/tot_ht6m_short/eqdata-HT6M" \
             || { echo "ERROR: eqdata-HT6M not produced or empty"; tail -50 "test_run/test_output/tot_ht6m_short/output.log"; exit 1; }
           ls -l test_run/test_output/tot_demo2014_short/ test_run/test_output/tot_ht6m_short/
+          # Same two digests the mono job now prints, so the eqdata each
+          # job actually feeds test_equivalence.py can be compared
+          # straight from the logs rather than inferred.
+          echo "tier1 (generated here):"
+          sha256sum test_run/test_output/tot_ht6m_short/eqdata-HT6M
+          echo "tier2 (committed fixture):"
+          sha256sum python/totlib/tests/fixtures/eqdata-HT6M \
+            || echo "(tier2 fixture absent)"
 
       - name: Run pytest (FFI + layout + serialization coverage)
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-          PYTHONPATH: python
+          # python/mcp-servers is on the path so `import <mod>_mcp` and the
+          # `python -m <mod>_mcp.server` subprocesses in mcp-servers/<mod>/
+          # tests/test_{server,save_tool,get_psi_rz_tool}.py resolve. The
+          # subprocesses inherit this env (test passes env={**os.environ}),
+          # so PYTHONPATH must carry it. The wrappers under python/ stay
+          # pure-Python (no install needed), per each mcp pyproject.
+          PYTHONPATH: python:python/mcp-servers
+          # Baseline-capture: the equivalence tests' _compare_with_baseline ALSO
+          # dumps each case's freshly computed `actual` metrics.json under this
+          # dir (additive — does NOT change pass/fail), so the CI compiler's
+          # values can be downloaded from the artifact below and committed as
+          # updated baselines after an intended physics change. See
+          # docs/superpowers/decisions/2026-06-29-tot-ht6m-qsolver-baseline.md.
+          REGEN_OUTPUT_DIR: regen-output
           # WRX_RUN_OK default ON (2026-04-22): the original SIGABRT
           # cause was libgrf::grd1d from wr_calc_pwr walking an
           # uninitialized grf_attr_type; PR #123 set WRX_NO_GRAPHICS=1
@@ -328,10 +412,24 @@ jobs:
             -ra \
             --maxfail=50
 
+      - name: Upload captured equivalence metrics (CI-compiler baselines)
+        if: always()
+        # The equivalence tests dumped each case's actual metrics.json under
+        # regen-output/ (REGEN_OUTPUT_DIR above). `always()` so this runs even
+        # when an equivalence test FAILs (which is exactly when a baseline needs
+        # updating). Download + commit the relevant case(s) as the new
+        # baseline after the physics change has been reviewed/approved.
+        uses: actions/upload-artifact@v4
+        with:
+          name: equivalence-actuals-${{ matrix.python-version }}-${{ github.run_id }}
+          path: regen-output/
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Show collected vs skipped summary
         if: always()
         env:
-          PYTHONPATH: python
+          PYTHONPATH: python:python/mcp-servers
         run: |
           python -m pytest python/ --collect-only -q | tail -5 || true
 
@@ -352,15 +450,24 @@ jobs:
     name: mono build (Linux libtotapi_mono.so)
     runs-on: ubuntu-latest
     # Generous cap: full PIC chain + 5 per-module .so + mono link
-    # is roughly 5-8 minutes on the GitHub runner. 15 min leaves slack.
-    timeout-minutes: 15
+    # is roughly 5-8 minutes on the GitHub runner. The eqdata step
+    # adds the full NON-PIC chain on top (`make -C tot libs`, ~16
+    # archives) plus two short tot runs — measured at 51s from a
+    # pristine clone on an M-series Mac, so call it 2-4 min on the
+    # runner. 15 was already only ~2x the estimate; 20 keeps the
+    # same slack rather than trading a fast red for a timeout red.
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install Fortran/C build deps
-        # Same toolchain as the pytest job (Ubuntu 24.04 default
-        # gfortran 13.2). No Python / pytest needed here.
+        # Same toolchain as the pytest job. The image's gfortran is 13.3.0
+        # and has been since at least 2026-06-28 (measured: runs 28327720495
+        # and 30516807586 both log `GNU Fortran (Ubuntu 13.3.0-...) 13.3.0`).
+        # The "13.2" quoted in older commit messages is the apt metapackage
+        # revision 4:13.2.0-7ubuntu1, not the compiler. No Python / pytest
+        # needed here.
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -508,7 +615,81 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest pytest-forked pytest-timeout pytest-mock
 
+      - name: Generate Layer 1 (1e-10 equivalence) eqdata baselines (demo2014 + ht6m)
+        # KEEP IN SYNC with the identically-named step in the `pytest`
+        # job, with ONE intended divergence: the `make -C tot libs` line
+        # below, which that job already has as a separate earlier step.
+        #
+        # Without this step the two jobs feed test_equivalence.py from
+        # DIFFERENT tiers of `_isolated_cwd_with_eqdata`
+        # (python/totlib/tests/test_equivalence.py:103-115):
+        #
+        #   tier 1  test_run/test_output/<case>/eqdata-*   copied always
+        #   tier 2  python/totlib/tests/fixtures/eqdata-*  copied only
+        #                                                  `if not exists`
+        #
+        # The pytest job runs this step, so it gets tier 1. This job did
+        # not, so it fell through to the committed tier-2 fixture — the
+        # one input that differed between the passing pytest run and the
+        # failing mono run. That made "mono diverges by 2.2e-06..3.7e-04
+        # on tot_ht6m_short" un-attributable: library or input?
+        #
+        # The committed fixture stays as the fallback for local runs
+        # (and is what test_mono_bpsd_smoke.py uses directly), so this
+        # does not make it dead weight.
+        run: |
+          set -eo pipefail
+          # `make -C tot libs` FIRST. This job builds only PIC artefacts
+          # (obj/pic + mod_pic), and tot/Makefile's `tot` target pulls in
+          # the NON-PIC chain: $(LIB_MTX) resolves to ../mtxp/libmtx*.o,
+          # whose first compile is `USE task_kinds` from lib/libtask.a,
+          # and $(LIBS) lists libgrf.a before libtask.a even though
+          # libgrf needs task_kinds.mod. Neither exists here. `libs`
+          # encodes the correct topological order in one recipe -- the
+          # same reason the pytest job runs it (see its comment above).
+          #
+          # Verified in a pristine clone with only make.header +
+          # make.mtxp provisioned: `make -C tot tot` alone dies with
+          # "Fatal Error: Cannot open module file 'task_kinds.mod'";
+          # `libs` then `tot` succeeds. Measured 50s + 1s on macOS.
+          make -C tot libs
+          make -C tot tot
+          for case in tot_demo2014_short tot_ht6m_short; do
+            mkdir -p "test_run/test_output/$case"
+            # ht6m REQUIRES both companions -- .trparm is what sets
+            # modelg=3 / knameq='eqdata-HT6M'. Losing it silently would
+            # run from defaults, produce a plausible non-empty eqdata,
+            # pass `test -s`, and surface later as library-looking drift:
+            # precisely the misattribution this step exists to kill. So
+            # ht6m copies hard and demo2014 (which ships neither) stays
+            # best-effort.
+            if [ "$case" = "tot_ht6m_short" ]; then
+              cp "test_run/inputs/${case}.eqparm" "test_run/test_output/$case/eqparm"
+              cp "test_run/inputs/${case}.trparm" "test_run/test_output/$case/trparm"
+            else
+              cp "test_run/inputs/${case}.eqparm" "test_run/test_output/$case/eqparm" 2>/dev/null || true
+              cp "test_run/inputs/${case}.trparm" "test_run/test_output/$case/trparm" 2>/dev/null || true
+            fi
+            ( cd "test_run/test_output/$case" && \
+                ../../../tot/tot < "../../inputs/${case}.in" > output.log 2>&1 )
+          done
+          test -s "test_run/test_output/tot_demo2014_short/eqdata.demo2014" \
+            || { echo "ERROR: eqdata.demo2014 not produced or empty"; tail -50 "test_run/test_output/tot_demo2014_short/output.log"; exit 1; }
+          test -s "test_run/test_output/tot_ht6m_short/eqdata-HT6M" \
+            || { echo "ERROR: eqdata-HT6M not produced or empty"; tail -50 "test_run/test_output/tot_ht6m_short/output.log"; exit 1; }
+          ls -l test_run/test_output/tot_demo2014_short/ test_run/test_output/tot_ht6m_short/
+          # Record both digests so the next divergence is attributable
+          # from the log alone. `|| echo` on tier 2 keeps the diagnostic
+          # a diagnostic: the fixture is slated for regeneration, and its
+          # absence must not fail THIS step and point at the wrong thing.
+          echo "tier1 (generated here):"
+          sha256sum test_run/test_output/tot_ht6m_short/eqdata-HT6M
+          echo "tier2 (committed fixture):"
+          sha256sum python/totlib/tests/fixtures/eqdata-HT6M \
+            || echo "(tier2 fixture absent)"
+
       - name: 1e-10 equivalence test against libtotapi_mono.so
+        id: mono_equivalence
         # Phase 2a deliverable (#201): with the unified
         # tot_graphics_stubs_mono.f90 in place, libtotapi_mono.so is
         # now dlopen-loadable via Python ctypes. Running the existing
@@ -530,6 +711,36 @@ jobs:
             --forked --timeout=120 --timeout-method=signal
 
       - name: Build default libtotapi.so (needed for Layer-C C-3 test)
+        # `!cancelled()` on this and the three mono steps that follow, so
+        # a red equivalence step no longer suppresses them. They answer
+        # DIFFERENT questions — "is mono a drop-in on the existing
+        # surface" vs "does mono share one BPSD broker / route all six
+        # wrappers / couple through the pipeline" — and the latter are
+        # the more diagnostic exactly when the former goes red. That was
+        # the position #226's mono failure left us in: the job died at
+        # the equivalence step and produced zero evidence about any of
+        # the mono-specific claims.
+        #
+        # The condition is `!cancelled()` AND the equivalence step was
+        # not itself SKIPPED, not a bare `!cancelled()`. A bare one also
+        # means "run after a failed BUILD step" — and on that path
+        # `Set up Python` and the pip install (still success()-gated)
+        # have skipped, so these steps would reach `python -m pytest`
+        # with no interpreter and report three red steps blaming Python
+        # tooling for a Fortran build failure. `conclusion != 'skipped'`
+        # is true exactly when the equivalence step actually ran, so an
+        # earlier build failure stops the job where it always did, while
+        # an equivalence FAILURE still yields the mono-specific evidence.
+        #
+        # The three test steps additionally assert their .so inputs
+        # exist, so they fail loudly rather than degrading into a green
+        # "3 skipped" via their own skipUnless — CLAUDE.md is explicit
+        # that a skip is invisibility, not evidence.
+        #
+        # This does not weaken the equivalence gate: that step's failure
+        # still fails the job (CLAUDE.md "equivalence tests at 1e-10 MUST
+        # pass"). It only stops that failure from suppressing evidence.
+        #
         # Phase 2b deliverable (#201): the Layer-C smoke test below
         # includes TestDistinguishesPerModule which checks that the
         # default per-module libtotapi.so reports tot_is_mono() == 0,
@@ -538,10 +749,13 @@ jobs:
         # present for that. Build it AFTER the mono inspect / mono
         # equivalence steps so a regression in the mono path can't
         # be masked by a default-path failure.
+        if: ${{ !cancelled() && steps.mono_equivalence.conclusion != 'skipped' }}
         run: |
           make -C tot libtotapi.so
 
       - name: Layer-C BPSD broker smoke (mono image vs default)
+        # See the preceding step for why this is not gated on success.
+        if: ${{ !cancelled() && steps.mono_equivalence.conclusion != 'skipped' }}
         # Phase 2b deliverable (#201): verifies the runtime distinction
         # between the monolithic libtotapi_mono.so and the default
         # libtotapi.so. Three cases:
@@ -566,10 +780,21 @@ jobs:
           MONO_LIB_PATH: ${{ github.workspace }}/tot/libtotapi_mono.so
           TOTLIB_PATH: ${{ github.workspace }}/tot/libtotapi.so
         run: |
+          # `!cancelled()` means this also runs after a failed BUILD step.
+          # Without these two lines the missing .so would trip the tests'
+          # own skipUnless and the step would report "3 skipped" as a
+          # green tick -- CLAUDE.md: "a SKIPped test is not verification,
+          # it is invisibility". Assert the inputs instead.
+          test -f "$MONO_LIB_PATH" || { echo "ERROR: $MONO_LIB_PATH missing — the mono build failed earlier in this job"; exit 1; }
+          test -f "$TOTLIB_PATH"   || { echo "ERROR: $TOTLIB_PATH missing — the default libtotapi.so build failed"; exit 1; }
           python -m pytest python/totlib/tests/test_mono_bpsd_smoke.py -v \
             --forked --timeout=120 --timeout-method=signal
 
       - name: Mono routing sanity (Phase 2c PR-A)
+        # Un-gated for the same reason as the two steps above: this is
+        # one of the mono-specific claims that a red equivalence step
+        # used to suppress entirely.
+        if: ${{ !cancelled() && steps.mono_equivalence.conclusion != 'skipped' }}
         # #208 PR-A — verify that setting MONO_LIB_PATH routes all 6
         # wrappers (eqlib/trlib/fplib/tilib/wrxlib/totlib) to the
         # monolithic image instead of each loading its per-module .so.
@@ -584,10 +809,14 @@ jobs:
           TOTLIB_PATH: ${{ github.workspace }}/tot/libtotapi.so
           PYTHONPATH: python
         run: |
+          test -f "$MONO_LIB_PATH" || { echo "ERROR: $MONO_LIB_PATH missing — the mono build failed earlier in this job"; exit 1; }
+          test -f "$TOTLIB_PATH"   || { echo "ERROR: $TOTLIB_PATH missing — the default libtotapi.so build failed"; exit 1; }
           python -m pytest python/totlib/tests/test_mono_routing.py \
                  --forked --timeout=120 --timeout-method=signal -v
 
       - name: Mono pipeline coupling (Phase 2c PR-B)
+        # Un-gated for the same reason as the three steps above.
+        if: ${{ !cancelled() && steps.mono_equivalence.conclusion != 'skipped' }}
         # #208 PR-B — drives eq -> tr through TotPipeline.run_pipeline
         # on the mono image and asserts the ("eq","tr") verify rule
         # fires (TestEqToTrPipelineCoupling). Also exercises the
@@ -607,5 +836,127 @@ jobs:
           TOTLIB_PATH: ${{ github.workspace }}/tot/libtotapi.so
           PYTHONPATH: python
         run: |
+          test -f "$MONO_LIB_PATH" || { echo "ERROR: $MONO_LIB_PATH missing — the mono build failed earlier in this job"; exit 1; }
+          test -f "$TOTLIB_PATH"   || { echo "ERROR: $TOTLIB_PATH missing — the default libtotapi.so build failed"; exit 1; }
           python -m pytest python/totlib/tests/test_mono_pipeline_coupling.py \
                  --forked --timeout=120 --timeout-method=signal -v
+
+  uncovered-modules-build:
+    # Compile-only coverage for the modules the pytest job does NOT build.
+    #
+    # The pytest job builds tr/fp/ti/wr/wrx/eq/tot; `make -C tot libs` adds
+    # pl/dp/wmx/ob/adf11/adpost. That leaves equ/ trx/ txnew/ wf2dt/ wim/ wm/
+    # trm/ wmf/ wmfn/ with NO CI coverage at all — and every one of them is
+    # substantially touched by the bpsi merge. In PR #226 that gap let a batch
+    # of hard compile/link breakages (a bare PT added to plcomm_parm colliding
+    # with local PTs, pl_view moving plparm->plview, raw DGETRF/DGETRS with no
+    # LAPACK shim) reach human review instead of being caught by the pipeline.
+    #
+    # Scope: BUILD ONLY, and library targets rather than the standalone
+    # binaries — the binaries pull in graphics (gsaf) and MPI link paths that
+    # this headless runner deliberately does not provide. Compiling every
+    # source in these directories is what catches the defect class above.
+    #
+    # NOT included, because they do not build on `develop` either (verified
+    # byte-identical there, so they are pre-existing rather than merge
+    # regressions — adding them would make this job red on day one):
+    #   fpx    — fpcomm.f90 `IF(ALLOCATED(SAVPOS))` where SAVPOS is not
+    #            declared ALLOCATABLE in that scope
+    #   wmseki — 'pl_wmxprf'/'wmspl_prof' not found in module plprof
+    #   dpseki — links only against the MPI mtxp variant
+    # Add them here as they are fixed.
+    name: build modules not covered by pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Fortran/C build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gfortran gcc make
+          gfortran --version | head -1
+
+      - name: Clone BPSD (patched fork k-yoshimi/bpsd@develop)
+        run: |
+          set -e
+          git clone --depth 1 --branch develop \
+            https://github.com/k-yoshimi/bpsd.git "$GITHUB_WORKSPACE/../bpsd"
+          ls -la "$GITHUB_WORKSPACE/../bpsd" | head -5
+
+      - name: Provision mtxp/make.mtxp from nompi template
+        run: cp mtxp/make.mtxp.nompi mtxp/make.mtxp
+
+      - name: Provision make.header for Linux gfortran (no graphics)
+        # KEEP IN SYNC with the pytest and mono-build jobs' identically-named
+        # steps. Same caveat as there: a flag that drifts in one heredoc and
+        # not the others means CI validates a different compiler-flag shape
+        # than the artifacts we ship.
+        run: |
+          cat > make.header <<'HEADER_EOF'
+          ### CI-generated make.header (Linux gfortran, no graphics, no MPI)
+          LAPACK = nolapack.f
+          LIBLA =
+          MODLA95 =
+          MDSPLUS = nomdsplus.f
+          MDSLIB =
+          MF77 = mpif77
+          MF90 = mpif90
+          MF95 = mpif90
+          MFC  = $(MF90)
+
+          ## linux gfortran (64bit), no graphics linkage (libXapi.so path)
+          GFLIBS=
+          OFLAGS = -g -O3 -m64 -std=legacy
+          DFLAGS = -g -m64 -fbounds-check -ffpe-trap=invalid,zero,overflow -fbacktrace -fcheck=all -std=legacy
+          FCFIXED = gfortran -ffixed-form
+          FCFREE = gfortran -ffree-form
+          MOD = mod
+          MODDIR = -Jmod
+          LD=ld
+          LDFLAGS=-r -o
+          FPP=
+          HEADER_EOF
+          head -10 make.header
+
+      - name: Build support libraries
+        # Non-PIC counterparts of the pytest job's PIC support step; these
+        # provide the .mod files the uncovered modules compile against.
+        run: |
+          set -e
+          make -C "$GITHUB_WORKSPACE/../bpsd" libbpsd.a
+          make -C lib libtask.a libgrf.a libmds.a
+          make -C mtxp libmtxnompi.o libmtxbnd.o
+          make -C pl libpl.a
+          make -C eq libeq.a
+          make -C dp libdp.a
+          # trx/ and trm/ compile against trlib's .mod files (trcdbm,
+          # cytran_mod, modmmm95, modmmm7_1, mixed_Bohm_gyro_Bohm) via
+          # `-I../trlib/$(MOD)`, and neither libtr2.a target bootstraps it.
+          # Only trlib/mod/dummy is tracked, so a fresh clone has none of them.
+          make -C trlib libtrm.a
+          # equ/: `libequ.a: $(OBJS)` covers SRCS only, while equcomm.f90 (which
+          # defines aaa_mod, USEd by most of SRCS) lives in the separate SRCC/OBJC
+          # variable. Building the library target alone therefore cannot succeed
+          # from clean -- equcomm.o has to come first.
+          make -C equ obj/equcomm.o
+
+      - name: Compile the uncovered modules
+        # Library targets only — see the job comment.
+        run: |
+          set -e
+          fail=0
+          for spec in equ:libequ.a trx:libtr2.a txnew:libtx3.a wf2dt:libwf.a \
+                      wim:libwim.a trm:libtr2.a wm:libwm.a wmf:libwm.a wmfn:libwm.a; do
+            dir="${spec%%:*}"; target="${spec#*:}"
+            echo "::group::make -C $dir $target"
+            if make -C "$dir" "$target"; then
+              echo "OK   $dir/$target"
+            else
+              echo "::error title=$dir failed to build::make -C $dir $target"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$fail"

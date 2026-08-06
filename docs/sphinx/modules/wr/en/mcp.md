@@ -17,7 +17,7 @@ general MCP-protocol introduction, see the corresponding page in the
 
 1. **Python 3.10 or newer**
 2. **`libwrapi.so` already built** (`make -C wr libwrapi.so`)
-3. **The `mcp` package** (`pip install 'mcp>=0.9'`)
+3. **The `mcp` package** (`pip install 'mcp>=0.9,<2'`)
 
 ## Installation
 

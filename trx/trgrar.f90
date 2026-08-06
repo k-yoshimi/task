@@ -121,7 +121,7 @@
          GYR(NR,1) = GUCLIP(POH(NR) * 1.D-6)
          GYR(NR,2) = GUCLIP(PNB_NR(NR) * 1.D-6)
          GYR(NR,3) = GUCLIP(PNF_NR(NR) * 1.D-6)
-         GYR(NR,4) = GUCLIP(PRSUM(NR) * 1.D-6)
+         GYR(NR,4) = GUCLIP(-PRSUM(NR) * 1.D-6)
       ENDDO
       DO NS=1,NSMAX
       DO NR=1,NRMAX
@@ -129,10 +129,10 @@
       ENDDO
       ENDDO
       CALL TRGR1D( 3.0,12.0,11.0,17.0,GRM,GYR,NRMP,NRMAX,NSMAX+4, &
-     &            '@POH,PNB,PNF,PR,PRF [MW/m$+3$=]  vs r@',2+INQ)
+     &            '@POH,PNB,PNF,PRSUM,PRF [MW/m$+3$=]  vs r@',2+INQ)
 
       DO NR=1,NRMAX
-         GYR(NR,1) = GUCLIP(POH(NR) * 1.D-6)
+         GYR(NR,1) = GUCLIP(PRSUM(NR) * 1.D-6)
          GYR(NR,2) = GUCLIP(PRB(NR) * 1.D-6)
          GYR(NR,3) = GUCLIP(PRC(NR) * 1.D-6)
          GYR(NR,4) = GUCLIP(PRL(NR) * 1.D-6)
@@ -140,7 +140,7 @@
          GYR(NR,6) = GUCLIP(PIE(NR) * 1.D-6)
       ENDDO
       CALL TRGR1D(15.5,24.5,11.0,17.0,GRM,GYR,NRMP,NRMAX,6, &
-     &            '@POH,PRB,PRC,PRL,PCX,PIE [MW/m$+3$=]  vs r@',2+INQ)
+     &            '@PRSUM,PRB,PRC,PRL,PCX,PIE [MW/m$+3$=]  vs r@',2+INQ)
 
       DO NR=1,NRMAX
          GYR(NR+1,1) = GUCLIP(AK(NR,1))

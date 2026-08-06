@@ -69,23 +69,28 @@ CONTAINS
       if(ierr.ne.0) GOTO 9000
       NT=NT+1
 
-!     *** SET GEOMETRY VIA TASK/EQ ***
+!     Refresh metric-derived quantities on the current metric and record a
+!     CONSISTENT snapshot BEFORE updating the equilibrium, so the recorded Ip
+!     is not the transient (new metric x not-yet-re-equilibrated psi_p) state.
+      call tr_bpsd_get(IERR)
+      if(ierr.ne.0) return
+      CALL tr_eval(NT,IERR)
+      IF(IERR.NE.0) GOTO 9000
+
+!     *** SET GEOMETRY VIA TASK/EQ (metric update for the NEXT step) ***
 
       IF(NTEQIT.NE.0) THEN
          IF(MOD(NT,NTEQIT).EQ.0) THEN
-            if(modelg.eq.8) THEN
-!               call equ_calc
-            endif
             IF(modelg.eq.9) THEN
                call eq_calc
-            endif
+               call tr_bpsd_get(IERR)
+               if(ierr.ne.0) return
+!              Re-prepare transport coefficients on the updated metric
+               CALL TRCALC(IERR)
+               IF(IERR.NE.0) GOTO 9000
+            ENDIF
          ENDIF
       ENDIF
-      call tr_bpsd_get(IERR)
-      if(ierr.ne.0) return
-
-      CALL tr_eval(NT,IERR)
-      IF(IERR.NE.0) GOTO 9000
 
 !     *** READING DATA FROM UFILES FOR NEXT STEP ***
 

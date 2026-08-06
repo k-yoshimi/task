@@ -1,17 +1,58 @@
 name: regen-baselines
 
-# Issue #197: in-CI baseline regen for fixtures that exhibit
-# cross-host compiler-version drift (notably eq_tst2 / tr_tst2 at
-# ~3e-9 between clavius gfortran 13.3 and CI gfortran 13.2).
-# Generates metrics.json in CI's own environment, uploads as
-# artifact for the user to download and commit.
+# Issue #197: in-CI baseline regen for fixtures that exhibit cross-host
+# drift (notably eq_tst2 / tr_tst2 at ~3e-9 between clavius and CI).
+# Generates metrics.json in CI's own environment, uploads as an artifact
+# for the user to download and commit.
+#
+# NOTE on #197's framing: it attributes that drift to a compiler-VERSION
+# difference, "clavius gfortran 13.3 vs CI gfortran 13.2". The CI half of
+# that is definitely wrong, and the two halves rest on very different
+# evidence -- stated separately on purpose:
+#
+#   CI = gfortran 13.3.0. MEASURED: runs 28327720495 (2026-06-28, the run
+#   d1f7f9e7 itself cites) and 30516807586 (2026-07-30) both log
+#   `GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0`. The "13.2"
+#   repeated across this repo reads the gcc-defaults metapackage revision
+#   `4:13.2.0-7ubuntu1` from the apt step. The two are not adjacent and the
+#   distance varies by job: measured on run 30516807586, 4 lines in the
+#   build-only jobs and 149 in the pytest jobs.
+#
+#   clavius = gfortran 13.3.0. NOT verified here: clavius is not reachable
+#   from CI, and the three places that state it
+#   (docs/superpowers/specs/2026-05-26-platform-keyed-baselines-design.md:29,
+#   docs/superpowers/specs/2026-05-12-tot-ajrft-triangle-design.md:347,
+#   docs/superpowers/plans/2026-05-26-platform-keyed-baselines-implementation.md:1085)
+#   all cite one memory file, `reference_clavius_baseline_regen.md`, which
+#   is not in this tree. Treat as documented, not established.
+#
+# So: if the clavius docs are right, both sides are 13.3.0 and #197's stated
+# cause does not exist at all; if they are not, the cause is still not the
+# one named, because CI is not 13.2. The ~3e-9 drift itself is real and
+# measured -- only its attribution is in question, and it is NOT re-diagnosed
+# here. Generating in CI sidesteps it either way. Worth raising on #197.
 
 on:
+  # NOTE: this workflow is currently UNREACHABLE, and that is a maintainer
+  # decision to make, not ours. `workflow_dispatch` resolves only on the
+  # default branch, and k-yoshimi/task's default branch (`master`) carries
+  # no `.github/` at all --
+  #   .../contents/.github/workflows/regen-baselines.yml?ref=master -> 404
+  #   gh run list --workflow regen-baselines.yml -> 404 "not found on the
+  #      default branch"
+  # so it has never run here.
+  #
+  # The artefacts in this commit were produced by adding a temporary
+  # `push: branches: ['regen/**']` trigger on a scratch branch of the
+  # author's fork: HengyuLi-Ozaki-lab/task @ regen/eqdata-2026-07, run
+  # 30514856222. That trigger is deliberately NOT included here -- shipping
+  # a push trigger nobody asked for is the maintainers' call. To make this
+  # dispatchable permanently, land `.github/` on master.
   workflow_dispatch:
     inputs:
       fixtures:
-        description: 'Space-separated fixture names (default: eq_tst2 tr_tst2)'
-        default: 'eq_tst2 tr_tst2'
+        description: 'Space-separated fixture names'
+        default: 'eq_iter01 eq_tst2 tot_demo2014_short tot_ht6m_short eq_jt60 tr_iter01 tr_tst2'
         required: false
 
 # Stacked manual triggers on the same ref cancel the in-flight run —
@@ -31,14 +72,15 @@ jobs:
   regen:
     name: regen-baselines (Python 3.11)
     # Pinned to ubuntu-24.04 (NOT ubuntu-latest) — baseline reproducibility
-    # depends on a stable gfortran version. Ubuntu 24.04's default is
-    # gfortran 13.2.0 (which is what python-tests.yml's `ubuntu-latest`
-    # currently resolves to; the regen workflow pins explicitly because
-    # baseline reproducibility cannot tolerate the silent image rotation).
+    # depends on a stable gfortran version. Measured on run 30514856222:
+    # gfortran 13.3.0 (an earlier version of this comment said 13.2.0).
+    # python-tests.yml's `ubuntu-latest` resolves to the same image and
+    # the same 13.3.0 today; the regen workflow pins explicitly because
+    # baseline reproducibility cannot tolerate a silent image rotation.
     #
     # KNOWN DIVERGENCE RISK (Bugbot LOW, 2026-05-13): when GitHub rotates
     # `ubuntu-latest` to a newer image, python-tests.yml will silently move
-    # to a newer gfortran while this workflow stays on 13.2. CI will then
+    # to a newer gfortran while this workflow stays on 13.3.0. CI will then
     # fail at 1e-10 against baselines this workflow produced — the same
     # class of failure #197 itself tracks. Mitigation when that happens:
     # pin python-tests.yml to `ubuntu-24.04` too (small separate PR), then
@@ -48,7 +90,13 @@ jobs:
     # Re-pin to the next LTS
     # when GitHub deprecates this image and regenerate baselines once.
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Raised with the default fixture list (2 cases -> 7). Per-case
+    # `timeout` caps in test_definitions.conf total 900s for those seven
+    # (60+60+240+240+60+120+120), and run_tests.sh re-runs eq_iter01 and
+    # eq_tst2 as dependencies in their own processes, so the worst case is
+    # ~1020s of case timeouts alone -- before `make -C tot libs` and three
+    # binary builds. 20 minutes was genuinely tight, not merely unpadded.
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -119,6 +167,31 @@ jobs:
           HEADER_EOF
           head -10 make.header
 
+      - name: Provide ../task symlink (module Makefiles hardcode ../task/make.header)
+        # Same fix as python-tests.yml (d4afbaca): bpsd/Makefile and the module
+        # Makefiles `include ../task/make.header`, assuming the checkout dir is
+        # named `task`. On a differently-named repo (the task-merge sandbox) the
+        # checkout is $GITHUB_WORKSPACE/../<repo>, so `../task` does not resolve
+        # and the bpsd build dies "No rule to make target '../task/make.header'".
+        # Symlink ../task -> the checkout. Guarded: `ln` does not no-op when
+        # the repo is already named `task` (see the inline note).
+        run: |
+          set -e
+          link="$(dirname "$GITHUB_WORKSPACE")/task"
+          if [ "$link" = "$GITHUB_WORKSPACE" ]; then
+            # Repo is literally named `task`: ../task already resolves to the
+            # checkout, so there is nothing to do. Without this guard `ln -sfn`
+            # does NOT no-op -- the destination is a real directory, so ln falls
+            # back to link-into-directory mode and drops a self-referential
+            # `task -> .` symlink INSIDE the checkout (verified on GNU coreutils
+            # 8.32 and on BSD ln; both exit 0). Harmless today, but a symlink
+            # loop for any future recursive find/tar/artifact-glob step.
+            echo "checkout is already .../task - no symlink needed"
+          else
+            ln -sfn "$GITHUB_WORKSPACE" "$link"
+            ls -ld "$link"
+          fi
+
       - name: Build the dependency chain (canonical `tot libs` topology)
         shell: bash
         run: |
@@ -145,6 +218,7 @@ jobs:
           ls -l eq/eq tr/tr2 tot/tot
 
       - name: Regenerate metrics.json per fixture
+        id: metrics
         shell: bash
         # Pass workflow input through env to avoid shell-injection at the
         # `${{ ... }}` interpolation site (Bugbot MEDIUM, 2026-05-13).
@@ -154,9 +228,22 @@ jobs:
         # case-statement at the dispatch step further restricts to
         # tr_*/eq_*/tot_* prefixes, exit-on-mismatch.
         env:
-          FIXTURES: ${{ inputs.fixtures }}
+          # `inputs.fixtures` is EMPTY on a push event, which would make the
+          # loop body never execute and the job go green having produced
+          # nothing. The literal default must therefore be repeated here; it
+          # is NOT redundant with the `default:` above.
+          #
+          # tr_m0904 is deliberately absent: tr_m0904_params.py is MODELG=2
+          # with no KNAMEQ, so it is not downstream of eqdata, and it carries
+          # its own strict xfail (#224) that regeneration would flip red for
+          # an unrelated reason.
+          FIXTURES: ${{ inputs.fixtures || 'eq_iter01 eq_tst2 tot_demo2014_short tot_ht6m_short eq_jt60 tr_iter01 tr_tst2' }}
         run: |
           set -eo pipefail
+          # A whitespace-only value makes the for-loop run zero iterations
+          # and the step exit 0 having produced nothing -- a silent green.
+          [ -n "${FIXTURES//[[:space:]]/}" ] || { echo "ERROR: FIXTURES is empty"; exit 1; }
+          echo "fixtures: $FIXTURES"
           mkdir -p regen-output
           for fixture in $FIXTURES; do
             echo "::group::regen $fixture"
@@ -227,7 +314,127 @@ jobs:
           echo "=== regen-output/ summary ==="
           find regen-output -type f -name '*.json' -exec ls -l {} \;
 
+      - name: Collect regenerated eqdata blobs into the fixture layout
+        # Runs when the metrics loop ACTUALLY RAN, pass or fail: if one
+        # fixture dies mid-loop the blobs earlier fixtures already wrote
+        # are still worth having. But NOT after a failed BUILD step --
+        # then test_run/test_output/ does not exist at all and this would
+        # stack a confusing "eqdata.ITER01 missing" red on top of a
+        # Fortran build failure. Same standard a12af230 set in
+        # python-tests.yml when it rejected a bare `!cancelled()`.
+        if: ${{ !cancelled() && steps.metrics.conclusion != 'skipped' }}
+        shell: bash
+        # The six committed eqdata fixture paths are FOUR distinct blobs
+        # (eqlib/ and trlib/ carry byte-identical copies of ITER01 and
+        # TST-2), and all four currently pin NTVMAX=200 while
+        # eq/eqinit.f90:269 defaults to 400. eq/eqfile.f90:162 (EQRTSK)
+        # reads NTVMAX back OUT of the blob and overwrites the in-memory
+        # value, so a stale blob silently reverts the parameter for every
+        # consumer -- which is what failed tot_ht6m_short with 210
+        # mismatches before a12af230 made the mono job generate its own.
+        #
+        # Which case writes which blob (eq/in/*.in KNAMEQ, and
+        # test_run/test_definitions.conf for the dependency edges):
+        #   eq_iter01          -> eqdata.ITER01    (tr_iter01 copies it via
+        #                                           run_tests.sh:398)
+        #   eq_tst2            -> eqdata.TST-2     (likewise tr_tst2)
+        #   tot_ht6m_short     -> eqdata-HT6M
+        #   tot_demo2014_short -> eqdata.demo2014
+        # Collect from the eq_*/tot_* dirs, never from tr_*, whose copies
+        # are just that -- copies.
+        run: |
+          set -eo pipefail
+          collect() {
+            local case_name="$1" blob="$2"; shift 2
+            local src="test_run/test_output/$case_name/$blob"
+            test -s "$src" || { echo "ERROR: $src missing or empty"; ls -la "test_run/test_output/$case_name/" 2>&1 || true; exit 1; }
+            BLOB="$src" python3 - <<'PY'
+          import os, struct
+          p = os.environ["BLOB"]
+          d = open(p, "rb").read()
+          off, count, hits = 0, 0, []
+          # Native-endian blob; "<" is correct for the pinned ubuntu-24.04
+          # x86-64 runner and would need revisiting on a big-endian host.
+          while off < len(d):
+              if len(d) - off < 8:
+                  raise SystemExit(f"{p}: truncated at byte {off} (no room for a record header)")
+              (n,) = struct.unpack("<i", d[off:off + 4])
+              if len(d) - off < 8 + n:
+                  raise SystemExit(f"{p}: truncated -- record {count} declares {n} bytes, only {len(d) - off - 8} remain")
+              (t,) = struct.unpack("<i", d[off + 4 + n:off + 8 + n])
+              assert t == n, f"{p}: record {count} trailer {t} != header {n}"
+              # Collect ALL 32-byte records rather than taking the first.
+              # Records 3/4/5 and 7-11 are 8*N-byte REAL(8) arrays, so a
+              # grid with NRGMAX/NZGMAX/NPSMAX == 4 would put a 32-byte
+              # record AHEAD of the real header and the decoder would read
+              # mantissa bytes as NSGMAX..NTVMAX -- which can accidentally
+              # equal 400 and ship a stale blob, the one outcome this step
+              # exists to prevent.
+              if n == 32:
+                  hits.append(struct.unpack("<8i", d[off + 4:off + 36]))
+              off += n + 8
+              count += 1
+          assert len(hits) == 1, f"{p}: expected exactly one 32-byte record, found {len(hits)} -- cannot identify the NSGMAX..NTVMAX header unambiguously"
+          hdr = hits[0]
+          # THE point of this step. Without it a regen run can quietly ship
+          # another 200-era blob and we learn about it from a red 1e-10 gate
+          # days later.
+          # Parsed from eq/eqinit.f90, NOT hardcoded. A literal 400 would
+          # deadlock the exact remediation this workflow IS: bump eqinit to
+          # 800, the fixture-freshness test fires and sends you here, the
+          # regen produces a correct 800 blob -- and a hardcoded check then
+          # says "expected 400, stale blob, do NOT commit" about a freshly
+          # correct file. Same rule as
+          # python/eqlib/tests/test_eqdata_fixture_freshness.py.
+          import re
+          src = open("eq/eqinit.f90").read().splitlines()
+          # IGNORECASE and the fixed-form comment markers must match
+          # test_eqdata_fixture_freshness.py exactly. They did not, briefly:
+          # the F90 modernisation this rule exists for could rename
+          # `NTVMAX` to lowercase, the pytest guard would pass, and THIS
+          # step -- the remediation that guard sends people to -- would
+          # hard-fail with "found []" on a correct source and a correct blob.
+          hits = [int(m.group(1)) for ln in src
+                  if not ln.lstrip().startswith("!")
+                  and not (ln[:1] in ("C", "c", "*") and ln[1:2] != " ")
+                  for m in [re.match(r"^\s*NTVMAX\s*=\s*(\d+)\s*(?:!.*)?$", ln, re.IGNORECASE)] if m]
+          assert len(hits) == 1, f"expected one uncommented NTVMAX default in eq/eqinit.f90, found {hits}"
+          want = hits[0]
+          assert hdr[7] == want, f"{p}: NTVMAX={hdr[7]}, eq/eqinit.f90 says {want} -- stale blob, do NOT commit"
+          print(f"    header={hdr} records={count} bytes={len(d)}")
+          PY
+            # mkdir -p + cp, not `install -D`: -D is GNU-only (BSD install
+            # errors out with a usage message). This workflow has never
+            # executed anywhere, so every avoidable platform assumption in
+            # it is one more way for the first real run to fail.
+            for dest in "$@"; do
+              mkdir -p "regen-output/fixtures/$dest"
+              cp "$src" "regen-output/fixtures/$dest/$blob"
+            done
+          }
+          echo "::group::collect eqdata blobs"
+          # Destinations are the REAL repo paths, so that
+          #   cp -r regen-output/fixtures/. .
+          # from the repo root IS the commit procedure. Staging under a
+          # short name like fixtures/eqlib/ would leave whoever commits
+          # the artifact guessing where each blob goes.
+          collect eq_iter01          eqdata.ITER01   python/eqlib/tests/fixtures python/trlib/tests/fixtures
+          collect eq_tst2            eqdata.TST-2    python/eqlib/tests/fixtures python/trlib/tests/fixtures
+          collect tot_ht6m_short     eqdata-HT6M     python/totlib/tests/fixtures
+          collect tot_demo2014_short eqdata.demo2014 python/totlib/tests/fixtures
+          echo "::endgroup::"
+          echo "=== regenerated eqdata digests ==="
+          find regen-output/fixtures -type f | sort | while read -r f; do sha256sum "$f"; done
+
       - name: Upload regenerated baselines as artifact
+        # Survives a failed NTVMAX assertion in the collect step, so the
+        # safety check does not also discard the metrics.json files the long
+        # step above just produced. But gated on the metrics step having RUN:
+        # with a bare always(), a failed BUILD leaves regen-output/ absent
+        # (it is created inside the metrics step) and `if-no-files-found:
+        # error` then stacks a second, misleading red on top of the Fortran
+        # failure -- the same thing the collect step was re-gated to avoid.
+        if: ${{ !cancelled() && steps.metrics.conclusion != 'skipped' }}
         uses: actions/upload-artifact@v4
         with:
           name: baselines-${{ github.run_id }}

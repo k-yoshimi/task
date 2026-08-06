@@ -35,7 +35,10 @@ CONTAINS
 
     NTSET=0             ! tabulation setup (do no change)
     TMAXST=0.D0         ! tabulation setup (do no change)
-
+    wave_dump=0         ! 1 to dump complex wave data for movie
+    id_wave_dump=0      ! initial wave dump number, increased one by one
+    fid_wave_dump=28    ! file id of wave dump data file
+    kid_wave_dump='wim.data' ! file name of wave dump data file
     idebug_wim(1)=0     ! 1: draw kernel functions
 
     RETURN

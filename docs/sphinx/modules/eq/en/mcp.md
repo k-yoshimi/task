@@ -46,7 +46,7 @@ Differences from `tr_mcp`:
 
 1. **Python 3.10 or later**
 2. **`libeqapi.so` already built** (`make -C eq libeqapi.so`)
-3. **The `mcp` package** (`pip install 'mcp>=0.9'`)
+3. **The `mcp` package** (`pip install 'mcp>=0.9,<2'`)
 
 ## Installation
 
@@ -231,7 +231,7 @@ this directly saves tokens and retries.
 |---|---|
 | `libeqapi.so not found` | run `make -C eq libeqapi.so`, then set `EQLIB_PATH` to the absolute path |
 | `ModuleNotFoundError: eqlib` | add the repo's `python/` to `PYTHONPATH` |
-| `ModuleNotFoundError: mcp` | `pip install 'mcp>=0.9'`; check the virtualenv |
+| `ModuleNotFoundError: mcp` | `pip install 'mcp>=0.9,<2'`; check the virtualenv |
 | `EQDSK file missing` | confirm the file referenced by `KNAMEQ` is in the current directory |
 | `EqlibCalculationFailedError: ierr=3` | check the physical consistency of inputs; relax `EPSEQ` or raise `NLPMAX` |
 
