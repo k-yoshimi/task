@@ -11,6 +11,7 @@ from __future__ import annotations
 import ctypes
 import functools
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -18,7 +19,8 @@ from typing import Optional
 @functools.lru_cache(maxsize=None)
 def mono_lib_path() -> Optional[Path]:
     """Return Path to libtotapi_mono.so if MONO_LIB_PATH is set and
-    points at a valid mono image; return None otherwise.
+    points at a valid mono image; return None otherwise. On Windows the
+    path returned is absolute, whatever MONO_LIB_PATH held.
 
     Raises:
         FileNotFoundError: MONO_LIB_PATH set, file missing.
@@ -44,6 +46,12 @@ def mono_lib_path() -> Optional[Path]:
             "var or build the mono image: "
             "`make -C tot libtotapi_mono.so`."
         )
+    if sys.platform == "win32":
+        # A bare relative name passes exists() from the working directory,
+        # where Windows' DLL search does not look: LoadLibrary would miss
+        # the image or the gfortran runtime DLLs beside it. Probe the
+        # absolute path, and hand that to the per-module loaders.
+        p = Path(os.path.abspath(p))
     # Wrap CDLL so wrong-arch / non-ELF / dep-broken .so files
     # surface as the friendly RuntimeError, NOT a raw OSError with a
     # cryptic dlerror string.
