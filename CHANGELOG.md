@@ -8,6 +8,22 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **FP library: `fp_get_state` returns seven global scalars** after the
+  profile arrays: `TOTAL_IP` [MA], `STORED_ENERGY` [MJ], `COLLISION_POWER`,
+  `ABSORPTION_POWER`, `ABSORPTION_WR`, `ABSORPTION_WM` [MW] (species sums at
+  the latest `NTG1` sample, what FP otherwise only writes to unit 6) and
+  `PLASMA_VOLUME` [m^3]. They are what shows an EQ to FP handoff: the six
+  profiles are local quantities and stay bit-identical when only the
+  equilibrium changes (without radial transport, waves or current drive).
+  `fp_state_t` grows by 56 bytes at its end, so `libfpapi.so` and
+  its callers are rebuilt together; `FpState.scalars`, `to_dict()["scalars"]`
+  and the `scalars` object of fp_mcp's state carry them, and an FP step of
+  the `totlib` pipeline keeps them beside `timefp` and its counts. They are
+  zero until the first run, and again after a `fp_set_param` until the next
+  run that is made.
+
 ### Changed
 
 - **FP library: `fp_run` refuses `NRMAX` above `FP_MAX_NRMAX` (100).** Such a

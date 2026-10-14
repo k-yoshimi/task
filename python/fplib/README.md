@@ -197,6 +197,29 @@ via `state.to_dict()` (JSON-serialisable, layout compatible with
 | `RJT` | list[list[float]] | `[nsamax][nrmax]` current density profile |
 | `RPCT` | list[list[float]] | `[nsamax][nrmax]` collisional power profile |
 | `RPWT` | list[list[float]] | `[nsamax][nrmax]` wave-absorbed power profile |
+| `scalars` | dict[str, float] | the seven volume-integrated globals below |
+
+`scalars` holds the seven doubles that `fp_state_t` carries after the
+profile arrays: the first six are summed over the kinetic species at the
+latest global-diagnostic sample (`NTG1`), and `PLASMA_VOLUME` is `TVOLR`,
+the sum of the radial cell volumes. All seven are zero until the first
+`run()`, and again after a `set_param` until the next `run()` that is
+made, while the profiles are still those of the last run:
+
+| Key | Unit | Meaning |
+|---|---|---|
+| `TOTAL_IP` | MA | total plasma current |
+| `STORED_ENERGY` | MJ | stored energy |
+| `COLLISION_POWER` | MW | total collisional power |
+| `ABSORPTION_POWER` | MW | total absorbed wave power |
+| `ABSORPTION_WR` | MW | ray-tracing (WR) part of the absorbed power |
+| `ABSORPTION_WM` | MW | full-wave (WM) part of the absorbed power |
+| `PLASMA_VOLUME` | m^3 | plasma volume (`TVOLR`) |
+
+`state.to_dict()` puts them under a top-level `"scalars"` key.
+`fp_state_t` grows at its end only: a `libfpapi.so` built before these
+members existed must be rebuilt (`make -C fp libfpapi.so`) together with
+this wrapper.
 
 Memory-layout note: C declares `RNT[NSAMAX][NRMAX]` (row-major); the
 Fortran backend declares `RNT(NRMAX, NSAMAX)` (column-major). Both lay

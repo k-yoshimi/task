@@ -28,6 +28,7 @@ if str(PYTHON_ROOT) not in sys.path:
     sys.path.insert(0, str(PYTHON_ROOT))
 
 from fplib import _ffi  # noqa: E402
+from fplib import state  # noqa: E402
 
 
 REPO = HERE.parents[3]
@@ -63,13 +64,24 @@ class TestFpStateCLayout(unittest.TestCase):
         ):
             self.assertIn(n, names, f"missing field {n}")
 
+    def test_global_scalars_are_appended_last(self):
+        # ABI contract: the 7 global scalars sit at the END of the
+        # struct so every pre-existing member keeps its offset. If a
+        # future field is inserted before them, this fails.
+        names = [f[0] for f in _ffi.FpStateC._fields_]
+        self.assertEqual(names[-7:], list(state.SCALAR_FIELDS))
+        for n in state.SCALAR_FIELDS:
+            self.assertEqual(
+                dict(f[:2] for f in _ffi.FpStateC._fields_)[n], ctypes.c_double
+            )
+
     def test_size_matches_header_math(self):
-        # 5 ints + 1 double + 6 * NSA*NR doubles. Compilers may pad the
-        # 5 ints to a multiple of 8 before the first double, so we
-        # accept the natural rounding range.
+        # 5 ints + 1 double + 6 * NSA*NR doubles + 7 scalar doubles.
+        # Compilers may pad the 5 ints to a multiple of 8 before the
+        # first double, so we accept the natural rounding range.
         nr = _ffi.FP_MAX_NRMAX
         nsa = _ffi.FP_MAX_NSAMAX
-        exp_core = 8 + 6 * nr * nsa * 8
+        exp_core = 8 + 6 * nr * nsa * 8 + len(state.SCALAR_FIELDS) * 8
         sz = ctypes.sizeof(_ffi.FpStateC)
         # 5 ints = 20 bytes, padded up to either 24 (8-byte align) or
         # possibly 32 on pathological ABIs.

@@ -139,7 +139,15 @@ run is made without that species' collisions with its own kind).
 `nthmax`, `ntg2`), the simulation time `timefp` (double), and six 2-D
 profile arrays `RNT`, `RWT`, `RTT`, `RJT`, `RPCT`, `RPWT` of shape
 `[FP_MAX_NSAMAX][FP_MAX_NRMAX]` = `[8][100]`. The runtime copy uses
-only the `[0:nsamax][0:nrmax]` slice.
+only the `[0:nsamax][0:nrmax]` slice. After the arrays come seven
+doubles: six volume-integrated globals summed over the species at the
+latest `NTG1` sample, `TOTAL_IP` [MA], `STORED_ENERGY` [MJ],
+`COLLISION_POWER`, `ABSORPTION_POWER`, `ABSORPTION_WR`, `ABSORPTION_WM`
+[MW], and `PLASMA_VOLUME` [m^3] (`TVOLR`). They are zero until the first
+run, and again after a `fp_set_param` until the next run that is made,
+while the profiles above are still those of the last run. The
+struct grows at its end only, and `fp/fp_state.f90`, `fp/fp_api.h` and
+`fplib._ffi.FpStateC` change together with a rebuilt `libfpapi.so`.
 
 ### Fortran backend
 
@@ -173,7 +181,7 @@ only the `[0:nsamax][0:nrmax]` slice.
   to the bracket syntax.
 - `fplib.FpState` is a `@dataclass` snapshot; `to_dict()` is
   JSON-serialisable and uses a
-  `{"NRMAX": ..., "NSAMAX": ..., "profile": [{"NSA": i, "RNT": ...}, ...]}`
+  `{"NRMAX": ..., "NSAMAX": ..., "scalars": {"TOTAL_IP": ..., ...}, "profile": [{"NSA": i, "RNT": ...}, ...]}`
   layout so downstream tools can diff wrapper output against `fp`
   CLI runs.
 

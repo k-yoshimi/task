@@ -90,6 +90,6 @@ For the complete attribute list see the `WrState` autodoc in
 |---|---|---|---|
 | **Time** | yes (`nt`) | yes (`timefp`) | **no** (spatial integration) |
 | **Dimensions** | radius × species | 5D phase space (moments) | **rays × steps** + radial profiles |
-| **Scalars** | 13 (T, BETAN, ...) | 1 (timefp) | **4** (peak position + value) |
+| **Scalars** | 13 (T, BETAN, ...) | 7 global (+ `timefp`) | **4** (peak position + value) |
 | **Main output** | profiles | moments | **ray trajectories + absorption profile** |
 | **Physical units** | fluid quantities | distribution-function moments | RF power deposition |

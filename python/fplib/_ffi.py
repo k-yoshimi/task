@@ -57,6 +57,12 @@ FP_ERR_NOT_IMPL = 4
 #   In C, RNT[NSAMAX][NRMAX] is row-major.
 #   In Fortran the matching declaration is RNT(NRMAX, NSAMAX) column-major.
 #   Both lay out the same bytes; only the index order differs.
+#
+# ABI note: ``_fields_`` must match fp/fp_api.h::fp_state_t (and
+# fp/fp_state.f90::fp_state_c) member-for-member, in order. New members
+# are only ever appended, and libfpapi.so must be rebuilt in the same
+# commit -- reading a stale .so through a longer layout yields garbage
+# in the trailing members.
 # ---------------------------------------------------------------------
 _PROFILE_2D = (ctypes.c_double * FP_MAX_NRMAX) * FP_MAX_NSAMAX
 
@@ -75,6 +81,14 @@ class FpStateC(ctypes.Structure):
         ("RJT", _PROFILE_2D),
         ("RPCT", _PROFILE_2D),
         ("RPWT", _PROFILE_2D),
+        # --- global (volume-integrated) plasma scalars ---------------
+        ("TOTAL_IP", ctypes.c_double),
+        ("STORED_ENERGY", ctypes.c_double),
+        ("COLLISION_POWER", ctypes.c_double),
+        ("ABSORPTION_POWER", ctypes.c_double),
+        ("ABSORPTION_WR", ctypes.c_double),
+        ("ABSORPTION_WM", ctypes.c_double),
+        ("PLASMA_VOLUME", ctypes.c_double),
     ]
 
 

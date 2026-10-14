@@ -75,7 +75,7 @@ def _baseline():
     rjt_volint = compute_rjt_volint(
         fp_state, R0=TR_PARAMS["RR"], a=TR_PARAMS["RA"]
     )
-    fp_scalars = _state_to_scalars(fp_state)   # adapter handles missing .scalars
+    fp_scalars = _state_to_scalars(fp_state)   # the globals, timefp and the counts
     fp.close()
 
     tr = Trlib()

@@ -454,6 +454,69 @@ def test_state_to_scalars_without_scalars_extracts_top_level():
     assert out == {"nrmax": 10.0, "timefp": 0.5}
 
 
+def test_state_to_scalars_keeps_fp_top_level_beside_its_scalars():
+    """A real FpState gives its seven globals AND the numeric top-level
+    attributes that were the FP pipeline scalars before FpState had a
+    ``scalars`` dict (``timefp`` among them)."""
+    from fplib.state import SCALAR_FIELDS, FpState
+    from totlib.pipeline import _state_to_scalars
+
+    state = FpState(
+        nrmax=3, nsamax=1, npmax=20, nthmax=20, ntg2=2, timefp=0.25,
+        RNT=[[1.0, 2.0, 3.0]],
+        scalars={name: float(i + 1) for i, name in enumerate(SCALAR_FIELDS)},
+    )
+    out = _state_to_scalars(state)
+    assert out == {
+        "nrmax": 3.0, "nsamax": 1.0, "npmax": 20.0, "nthmax": 20.0,
+        "ntg2": 2.0, "timefp": 0.25,
+        **state.scalars,
+    }
+    assert len(out) == 6 + len(SCALAR_FIELDS)
+    # Must be a copy, not the state's own dict
+    out["TOTAL_IP"] = 99.0
+    assert state.scalars["TOTAL_IP"] == 1.0
+
+
+def test_state_to_scalars_knows_fp_state_under_another_package_name():
+    """``python.fplib.state.FpState`` (the repository root on sys.path) is
+    a different class object from ``fplib.state.FpState``: it is told by
+    name and module, not by identity. A class that only shares the name
+    is not an FpState."""
+    from totlib.pipeline import _state_to_scalars
+
+    def make(module):
+        cls = type("FpState", (), {"__module__": module})
+        state = cls()
+        state.timefp = 0.5
+        state.nrmax = 3
+        state.scalars = {"TOTAL_IP": 1.0}
+        return state
+
+    assert _state_to_scalars(make("python.fplib.state")) == {
+        "timefp": 0.5, "nrmax": 3.0, "TOTAL_IP": 1.0,
+    }
+    assert _state_to_scalars(make("elsewhere.state")) == {"TOTAL_IP": 1.0}
+    assert _state_to_scalars(make("state")) == {"TOTAL_IP": 1.0}
+    assert _state_to_scalars(make(None)) == {"TOTAL_IP": 1.0}
+
+
+def test_state_to_scalars_adds_no_top_level_to_other_states():
+    """A state of another module that has a ``scalars`` dict keeps exactly
+    that dict: its top-level counts are not pipeline scalars."""
+    from dataclasses import dataclass, field
+    from totlib.pipeline import _state_to_scalars
+
+    @dataclass
+    class TrLikeState:
+        nt: int = 5
+        nrmax: int = 50
+        nsmax: int = 2
+        scalars: dict = field(default_factory=lambda: {"WPT": 1.5})
+
+    assert _state_to_scalars(TrLikeState()) == {"WPT": 1.5}
+
+
 def test_coupling_rules_has_fp_to_tr():
     from totlib.pipeline import COUPLING_RULES
     rules = COUPLING_RULES.get(("fp", "tr"), [])

@@ -54,8 +54,10 @@ class CouplingRule:
     src_state_key (transfer-kind only) resolves a value from the source
     module's get_state():
 
-    * str  -> looked up in prev_state.scalars (only valid for modules
-      that expose a .scalars dict — Tr/Eq/Wr/Wrx/Ti).
+    * str  -> looked up in the flat scalars of the previous state
+      (see _state_to_scalars: a module's .scalars dict; for Fp also its
+      top-level timefp and counts; the numeric top-level attributes of a
+      state that has no such dict).
     * callable(prev_state, params) -> float. params is TotPipeline._params,
       a dict of every set_param call so far keyed as "<ns>:<bare>" (used
       by fp's compute_rjt_volint which needs tr's RR/RA).
@@ -146,18 +148,9 @@ class PipelineResult:
         return out
 
 
-def _state_to_scalars(state) -> Dict[str, float]:
-    """Extract a flat dict of numeric scalars from any module's state.
-
-    Modules that expose state.scalars dict (Tr, Eq, Wr, Wrx, Ti) — return
-    a shallow copy. Modules that don't (Fp) — extract numeric top-level
-    dataclass attributes (excluding bool, str, and non-numeric).
-
-    Per spec §5.3. Required because FpState lacks the uniform .scalars
-    dict the spec originally assumed (R1/R2 finding).
-    """
-    if hasattr(state, "scalars") and isinstance(state.scalars, dict):
-        return dict(state.scalars)
+def _top_level_numbers(state) -> Dict[str, float]:
+    """The numeric top-level attributes of a state, as floats (bool, str
+    and anything that is not a number are left out)."""
     out: Dict[str, float] = {}
     for name in dir(state):
         if name.startswith("_"):
@@ -170,6 +163,43 @@ def _state_to_scalars(state) -> Dict[str, float]:
         if isinstance(val, (int, float)):
             out[name] = float(val)
     return out
+
+
+def _is_fp_state(state) -> bool:
+    """True for fplib's ``FpState`` (or a subclass), told by the class's own
+    name and module: nothing is imported for the test, and the package may
+    have been imported under another name (``python.fplib``)."""
+    return any(
+        cls.__name__ == "FpState"
+        and isinstance(cls.__module__, str)
+        and cls.__module__.split(".")[-2:] == ["fplib", "state"]
+        for cls in type(state).__mro__
+    )
+
+
+def _state_to_scalars(state) -> Dict[str, float]:
+    """Extract a flat dict of numeric scalars from any module's state.
+
+    * A state with a ``scalars`` dict — a shallow copy of it.
+    * ``FpState`` — its ``scalars`` dict (the seven volume-integrated
+      globals) together with its numeric top-level attributes
+      (``nrmax``, ``nsamax``, ``npmax``, ``nthmax``, ``ntg2``,
+      ``timefp``). Those attributes were the whole of the FP pipeline
+      scalars before ``FpState`` had a ``scalars`` dict, so they stay in
+      pipeline results beside it.
+    * A state without a ``scalars`` dict — its numeric top-level
+      dataclass attributes (excluding bool, str, and non-numeric).
+
+    Per spec §5.3. The top-level route exists because FpState lacked the
+    uniform .scalars dict the spec originally assumed (R1/R2 finding).
+    """
+    if hasattr(state, "scalars") and isinstance(state.scalars, dict):
+        if _is_fp_state(state):
+            out = _top_level_numbers(state)
+            out.update(state.scalars)
+            return out
+        return dict(state.scalars)
+    return _top_level_numbers(state)
 
 
 _MODULE_REGISTRY: Dict[str, Tuple[str, str, str]] = {
@@ -542,8 +572,8 @@ class TotPipeline:
           The params dict carries every set_param call so the rule can pull
           cross-module context (e.g. fp's compute_rjt_volint needs tr's RR/RA).
         - If src_state_key is a string, look it up in
-          _state_to_scalars(prev_state) — handles both .scalars-bearing modules
-          and FpState's top-level attribute layout.
+          _state_to_scalars(prev_state) — a module's .scalars dict, and for
+          FpState its top-level attributes (timefp, the counts) beside it.
         Wraps lookup/computation errors as TotPipelineCouplingError.
         """
         if callable(rule.src_state_key):
@@ -644,7 +674,7 @@ class TotPipeline:
 
                 module.run(**kwargs)
                 cur_state = module.get_state()
-                # _state_to_scalars adapter handles fp (no .scalars) and tr (.scalars dict) uniformly.
+                # _state_to_scalars gives tr's .scalars dict, and fp's with timefp and the counts beside it.
                 result_steps.append(PipelineStep(
                     module=name,
                     scalars=_state_to_scalars(cur_state),
