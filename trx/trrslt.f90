@@ -872,15 +872,15 @@
          WRITE(6,601) T,WPT,WBULKT,WTAILT,WPDOT,TAUE1,TAUE2,TAUE89,TAUE98, &
      &                QF,BETAP0,BETAPA,BETA0,BETAA,Q0,RQ1,ZEFF0,BETAN
   601    FORMAT(' ','# TIME : ',F7.3,' SEC'/ &
-     &          ' ',3X,'WPT   =',1PD10.3,'  WBULKT=',1PD10.3, &
-     &               '  WTAILT=',1PD10.3,'  WPDOT =',1PD10.3/ &
-     &          ' ',3X,'TAUE1 =',1PD10.3,'  TAUE2 =',1PD10.3, &
-     &               '  TAUE89=',1PD10.3,'  TAUE98=',1PD10.3/ &
-     &          ' ',3X,'QF    =',1PD10.3/ &
-     &          ' ',3X,'BETAP0=',1PD10.3,'  BETAPA=',1PD10.3, &
-     &               '  BETA0 =',1PD10.3,'  BETAA =',1PD10.3/ &
-     &          ' ',3X,'Q0    =',1PD10.3,'  RQ1   =',1PD10.3, &
-     &               '  ZEFF0 =',1PD10.3,'  BETAN =',1PD10.3)
+     &          ' ',3X,'WPT   =',ES10.3,'  WBULKT=',ES10.3, &
+     &               '  WTAILT=',ES10.3,'  WPDOT =',ES10.3/ &
+     &          ' ',3X,'TAUE1 =',ES10.3,'  TAUE2 =',ES10.3, &
+     &               '  TAUE89=',ES10.3,'  TAUE98=',ES10.3/ &
+     &          ' ',3X,'QF    =',ES10.3/ &
+     &          ' ',3X,'BETAP0=',ES10.3,'  BETAPA=',ES10.3, &
+     &               '  BETA0 =',ES10.3,'  BETAA =',ES10.3/ &
+     &          ' ',3X,'Q0    =',ES10.3,'  RQ1   =',ES10.3, &
+     &               '  ZEFF0 =',ES10.3,'  BETAN =',ES10.3)
 
          WRITE(6,602) WST(1),TS0(1),TSAV(1),ANSAV(1), &
      &                WST(2),TS0(2),TSAV(2),ANSAV(2), &
@@ -895,34 +895,34 @@
             END DO
          END IF
             
-  602    FORMAT(' ',3X,'WE    =',1PD10.3,'  TE0   =',1PD10.3, &
-     &               '  TEAVE =',1PD10.3,'  NEAVE =',1PD10.3/ &
-     &          ' ',3X,'WD    =',1PD10.3,'  TD0   =',1PD10.3, &
-     &               '  TDAVE =',1PD10.3,'  NDAVE =',1PD10.3/ &
-     &          ' ',3X,'WT    =',1PD10.3,'  TT0   =',1PD10.3, &
-     &               '  TTAVE =',1PD10.3,'  NTAVE =',1PD10.3/ &
-     &          ' ',3X,'WA    =',1PD10.3,'  TA0   =',1PD10.3, &
-     &               '  TAAVE =',1PD10.3,'  NAAVE =',1PD10.3)
+  602    FORMAT(' ',3X,'WE    =',ES10.3,'  TE0   =',ES10.3, &
+     &               '  TEAVE =',ES10.3,'  NEAVE =',ES10.3/ &
+     &          ' ',3X,'WD    =',ES10.3,'  TD0   =',ES10.3, &
+     &               '  TDAVE =',ES10.3,'  NDAVE =',ES10.3/ &
+     &          ' ',3X,'WT    =',ES10.3,'  TT0   =',ES10.3, &
+     &               '  TTAVE =',ES10.3,'  NTAVE =',ES10.3/ &
+     &          ' ',3X,'WA    =',ES10.3,'  TA0   =',ES10.3, &
+     &               '  TAAVE =',ES10.3,'  NAAVE =',ES10.3)
   681    FORMAT(' ',I2,1X, &
-                       'WB    =',1PD10.3,'  TB0   =',1PD10.3, &
-     &               '  TBAVE =',1PD10.3,'  NBAVE =',1PD10.3)
+                       'WB    =',ES10.3,'  TB0   =',ES10.3, &
+     &               '  TBAVE =',ES10.3,'  NBAVE =',ES10.3)
   682    FORMAT(' ',I2,1X, &
-                       'WF    =',1PD10.3,'  TF0   =',1PD10.3, &
-     &               '  TFAVE =',1PD10.3,'  NFAVE =',1PD10.3)
+                       'WF    =',ES10.3,'  TF0   =',ES10.3, &
+     &               '  TFAVE =',ES10.3,'  NFAVE =',ES10.3)
 
          WRITE(6,603) AJT,VLOOP,ALI,VSEC, &
      &                AJOHT,AJNBT,AJRFT,AJBST
-  603    FORMAT(' ',3X,'AJT   =',1PD10.3,'  VLOOP =',1PD10.3, &
-     &               '  ALI   =',1PD10.3,'  VSEC  =',1PD10.3/ &
-     &          ' ',3X,'AJOHT =',1PD10.3,'  AJNBT =',1PD10.3, &
-     &               '  AJRFT =',1PD10.3,'  AJBST =',1PD10.3)
+  603    FORMAT(' ',3X,'AJT   =',ES10.3,'  VLOOP =',ES10.3, &
+     &               '  ALI   =',ES10.3,'  VSEC  =',ES10.3/ &
+     &          ' ',3X,'AJOHT =',ES10.3,'  AJNBT =',ES10.3, &
+     &               '  AJRFT =',ES10.3,'  AJBST =',ES10.3)
 
 !         WRITE(16,603) AJTTOR,VLOOP,ALI,VSEC, &
 !     &                AJT,AJOHT,AJNBT,AJBST
-!  603    FORMAT(' ',3X,'AJTTOR=',1PD10.3,'  VLOOP =',1PD10.3, &
-!     &               '  ALI   =',1PD10.3,'  VSEC  =',1PD10.3/ &
-!     &          ' ',3X,'AJT   =',1PD10.3,'  AJOHT =',1PD10.3, &
-!     &               '  AJNBT =',1PD10.3,'  AJBST =',1PD10.3)
+!  603    FORMAT(' ',3X,'AJTTOR=',ES10.3,'  VLOOP =',ES10.3, &
+!     &               '  ALI   =',ES10.3,'  VSEC  =',ES10.3/ &
+!     &          ' ',3X,'AJT   =',ES10.3,'  AJOHT =',ES10.3, &
+!     &               '  AJNBT =',ES10.3,'  AJBST =',ES10.3)
 
          WRITE(6,604) PINT,POHT,PNB_TOT,PNF_TOT, &
      &                PIC_TOT,PLH_TOT,PEC_TOT,PRF_TOT, &
@@ -932,32 +932,32 @@
      &                POUT,PRSUMT,PCXT,PIET, &
      &                PLT(1),PLT(2),PLT(3),PLT(4), &
                       PRBT,PRCT,PRLT
-  604    FORMAT(' ',3X,'PINT   =',1PD10.3,'  POHT   =',1PD10.3, &
-     &               '  PNB_TOT=',1PD10.3,'  PNF_TOT=',1PD10.3/ &
-     &          ' ',3X,'PIC_TOT=',1PD10.3,'  PLH_TOT=',1PD10.3, &
-     &               '  PEC_TOT=',1PD10.3,'  PRF_TOT=',1PD10.3/ &
-     &          ' ',3X,'PNBIN =',1PD10.3,'  PNFIN =',1PD10.3, &
-     &               '  AJ0   =',1PD10.3/ &
-     &          ' ',3X,'PBCLE =',1PD10.3,'  PBCLD =',1PD10.3, &
-     &               '  PBCLT =',1PD10.3,'  PBCLA =',1PD10.3/ &
-     &          ' ',3X,'PFCLE =',1PD10.3,'  PFCLD =',1PD10.3, &
-     &               '  PFCLT =',1PD10.3,'  PFCLA =',1PD10.3/ &
-     &          ' ',3X,'POUT  =',1PD10.3,'  PRSUMT=',1PD10.3, &
-     &               '  PCXT  =',1PD10.3,'  PIETE =',1PD10.3/ &
-     &          ' ',3X,'PLTE  =',1PD10.3,'  PLTD  =',1PD10.3, &
-     &               '  PLTTE =',1PD10.3,'  PLTA  =',1PD10.3/ &
-     &          ' ',3X,'PRBT  =',1PD10.3,'  PRCT  =',1PD10.3, &
-     &               '  PRLT  =',1PD10.3)
+  604    FORMAT(' ',3X,'PINT  =',ES10.3,'  POHT  =',ES10.3, &
+     &               '  PNB_TOT=',ES9.2,'  PNF_TOT=',ES9.2/ &
+     &          ' ',3X,'PIC_TOT=',ES9.2,'  PLH_TOT=',ES9.2, &
+     &               '  PEC_TOT=',ES9.2,'  PRF_TOT=',ES9.2/ &
+     &          ' ',3X,'PNBIN =',ES10.3,'  PNFIN =',ES10.3, &
+     &               '  AJ0   =',ES10.3/ &
+     &          ' ',3X,'PBCLE =',ES10.3,'  PBCLD =',ES10.3, &
+     &               '  PBCLT =',ES10.3,'  PBCLA =',ES10.3/ &
+     &          ' ',3X,'PFCLE =',ES10.3,'  PFCLD =',ES10.3, &
+     &               '  PFCLT =',ES10.3,'  PFCLA =',ES10.3/ &
+     &          ' ',3X,'POUT  =',ES10.3,'  PRSUMT=',ES10.3, &
+     &               '  PCXT  =',ES10.3,'  PIETE =',ES10.3/ &
+     &          ' ',3X,'PLTE  =',ES10.3,'  PLTD  =',ES10.3, &
+     &               '  PLTTE =',ES10.3,'  PLTA  =',ES10.3/ &
+     &          ' ',3X,'PRBT  =',ES10.3,'  PRCT  =',ES10.3, &
+     &               '  PRLT  =',ES10.3)
 
          WRITE(6,605) SINT,SIET,SNBT,SNFT, &
      &                SOUT,ZEFF(1),ANC(1),ANFE(1), &
      &                SLT(1),SLT(2),SLT(3),SLT(4)
-  605    FORMAT(' ',3X,'SINT  =',1PD10.3,'  SIET  =',1PD10.3, &
-     &               '  SNBT  =',1PD10.3,'  SNFT  =',1PD10.3/ &
-     &          ' ',3X,'SOUT  =',1PD10.3,'  ZEFF0 =',1PD10.3, &
-     &               '  ANC0  =',1PD10.3,'  ANFE0 =',1PD10.3/ &
-     &          ' ',3X,'SLTET =',1PD10.3,'  SLTD  =',1PD10.3, &
-     &               '  SLTTT =',1PD10.3,'  SLTA  =',1PD10.3)
+  605    FORMAT(' ',3X,'SINT  =',ES10.3,'  SIET  =',ES10.3, &
+     &               '  SNBT  =',ES10.3,'  SNFT  =',ES10.3/ &
+     &          ' ',3X,'SOUT  =',ES10.3,'  ZEFF0 =',ES10.3, &
+     &               '  ANC0  =',ES10.3,'  ANFE0 =',ES10.3/ &
+     &          ' ',3X,'SLTET =',ES10.3,'  SLTD  =',ES10.3, &
+     &               '  SLTTT =',ES10.3,'  SLTA  =',ES10.3)
       ENDIF
 
       IF(KID.EQ.'2') THEN
@@ -1082,40 +1082,40 @@
       IF(KID.EQ.'6') THEN
          WRITE(6,651)T,TAUE1,TAUE2,TAUE89,PINT,H98Y2,TAUE98
  651     FORMAT(' ','# TIME : ',F7.3,' SEC'/ &
-     &          ' ',3X,'TAUE1 =',1PD10.3,'  TAUE2 =',1PD10.3, &
-     &               '  TAUE89=',1PD10.3,'  PINT  =',1PD10.3/ &
-     &          ' ',3X,'H98Y2 =',1PD10.3,'  TAUE98=',1PD10.3)
+     &          ' ',3X,'TAUE1 =',ES10.3,'  TAUE2 =',ES10.3, &
+     &               '  TAUE89=',ES10.3,'  PINT  =',ES10.3/ &
+     &          ' ',3X,'H98Y2 =',ES10.3,'  TAUE98=',ES10.3)
       ENDIF
 
       IF(KID.EQ.'7'.OR.KID.EQ.'8') THEN
          WRITE(6,671) T,WPT,TAUE1,TAUE2,TAUE89,H98Y2,TAUE98, &
               BETAN,BETAPA,BETA0,BETAA
   671    FORMAT(' ','# TIME : ',F7.3,' SEC'/ &
-     &          ' ',3X,'WPT   =',1PD10.3,'  TAUE1 =',1PD10.3, &
-     &               '  TAUE2 =',1PD10.3,'  TAUE89=',1PD10.3/ &
-     &          ' ',3X,'H98Y2 =',1PD10.3,'  TAUE98=',1PD10.3/ &
-     &          ' ',3X,'BETAN =',1PD10.3,'  BETAPA=',1PD10.3, &
-     &               '  BETA0 =',1PD10.3,'  BETAA =',1PD10.3)
+     &          ' ',3X,'WPT   =',ES10.3,'  TAUE1 =',ES10.3, &
+     &               '  TAUE2 =',ES10.3,'  TAUE89=',ES10.3/ &
+     &          ' ',3X,'H98Y2 =',ES10.3,'  TAUE98=',ES10.3/ &
+     &          ' ',3X,'BETAN =',ES10.3,'  BETAPA=',ES10.3, &
+     &               '  BETA0 =',ES10.3,'  BETAA =',ES10.3)
 
          WRITE(6,672) WST(1),TS0(1),TSAV(1),ANSAV(1), &
      &                WST(2),TS0(2),TSAV(2),ANSAV(2)
-  672    FORMAT(' ',3X,'WE    =',1PD10.3,'  TE0   =',1PD10.3, &
-     &               '  TEAVE =',1PD10.3,'  NEAVE =',1PD10.3/ &
-     &          ' ',3X,'WD    =',1PD10.3,'  TD0   =',1PD10.3, &
-     &               '  TDAVE =',1PD10.3,'  NDAVE =',1PD10.3)
+  672    FORMAT(' ',3X,'WE    =',ES10.3,'  TE0   =',ES10.3, &
+     &               '  TEAVE =',ES10.3,'  NEAVE =',ES10.3/ &
+     &          ' ',3X,'WD    =',ES10.3,'  TD0   =',ES10.3, &
+     &               '  TDAVE =',ES10.3,'  NDAVE =',ES10.3)
 
          WRITE(6,673) AJTTOR,VLOOP,ALI,Q0,AJOHT,AJNBT,AJRFT,AJBST
-  673    FORMAT(' ',3X,'AJTTOR=',1PD10.3,'  VLOOP =',1PD10.3, &
-     &               '  ALI   =',1PD10.3,'  Q0    =',1PD10.3/ &
-     &          ' ',3X,'AJOHT =',1PD10.3,'  AJNBT =',1PD10.3, &
-     &               '  AJRFT =',1PD10.3,'  AJBST =',1PD10.3)
+  673    FORMAT(' ',3X,'AJTTOR=',ES10.3,'  VLOOP =',ES10.3, &
+     &               '  ALI   =',ES10.3,'  Q0    =',ES10.3/ &
+     &          ' ',3X,'AJOHT =',ES10.3,'  AJNBT =',ES10.3, &
+     &               '  AJRFT =',ES10.3,'  AJBST =',ES10.3)
 
          WRITE(6,674) PINT,POHT,PNB_TOT, &
      &                PRF_TOT,POUT,PRLT,PCXT,PIET
-  674    FORMAT(' ',3X,'PINT   =',1PD10.3,'  POHT   =',1PD10.3, &
-     &               '  PNB_TOT=',1PD10.3,'  PRF_TOT=',1PD10.3/ &
-     &          ' ',3X,'POUT  =',1PD10.3,'  PRLT  =',1PD10.3, &
-     &               '  PCXT  =',1PD10.3,'  PIETE =',1PD10.3)
+  674    FORMAT(' ',3X,'PINT  =',ES10.3,'  POHT  =',ES10.3, &
+     &               '  PNB_TOT=',ES9.2,'  PRF_TOT=',ES9.2/ &
+     &          ' ',3X,'POUT  =',ES10.3,'  PRLT  =',ES10.3, &
+     &               '  PCXT  =',ES10.3,'  PIETE =',ES10.3)
 
       IF(KID.EQ.'8') THEN
  1600    WRITE(6,*) '## INPUT COMMENT FOR trn.data (A40)'
@@ -1138,40 +1138,40 @@
  1670    FORMAT(' '/ &
      &          ' ','## DATE : ', &
      &              A2,'-',A2,'-',A2,'  ',A2,':',A2,':',A2,' : ',A40/ &
-     &          ' ',3X,'RIPS  =',1PD10.3,'  RIPE  =',1PD10.3, &
-     &               '  PNE   =',1PD10.3,'  PNI   =',1PD10.3/ &
-     &          ' ',3X,'BB    =',1PD10.3,'  PICTOT=',1PD10.3, &
-     &               '  PLHTOT=',1PD10.3,'  PECTOT=',1PD10.3)
+     &          ' ',3X,'RIPS  =',ES10.3,'  RIPE  =',ES10.3, &
+     &               '  PNE   =',ES10.3,'  PNI   =',ES10.3/ &
+     &          ' ',3X,'BB    =',ES10.3,'  PICTOT=',ES10.3, &
+     &               '  PLHTOT=',ES10.3,'  PECTOT=',ES10.3)
          WRITE(16,1671) T, &
      &                WPT,TAUE1,TAUE2,TAUE89, &
      &                BETAN,BETAPA,BETA0,BETAA
  1671    FORMAT(' ','# TIME : ',F7.3,' SEC'/ &
-     &          ' ',3X,'WPT   =',1PD10.3,'  TAUE  =',1PD10.3, &
-     &               '  TAUED =',1PD10.3,'  TAUE89=',1PD10.3/ &
-     &          ' ',3X,'BETAN =',1PD10.3,'  BETAPA=',1PD10.3, &
-     &               '  BETA0 =',1PD10.3,'  BETAA =',1PD10.3)
+     &          ' ',3X,'WPT   =',ES10.3,'  TAUE  =',ES10.3, &
+     &               '  TAUED =',ES10.3,'  TAUE89=',ES10.3/ &
+     &          ' ',3X,'BETAN =',ES10.3,'  BETAPA=',ES10.3, &
+     &               '  BETA0 =',ES10.3,'  BETAA =',ES10.3)
 
          WRITE(16,1672) WST(1),TS0(1),TSAV(1),ANSAV(1), &
      &                WST(2),TS0(2),TSAV(2),ANSAV(2)
- 1672    FORMAT(' ',3X,'WE    =',1PD10.3,'  TE0   =',1PD10.3, &
-     &               '  TEAVE =',1PD10.3,'  NEAVE =',1PD10.3/ &
-     &          ' ',3X,'WD    =',1PD10.3,'  TD0   =',1PD10.3, &
-     &               '  TDAVE =',1PD10.3,'  NDAVE =',1PD10.3)
+ 1672    FORMAT(' ',3X,'WE    =',ES10.3,'  TE0   =',ES10.3, &
+     &               '  TEAVE =',ES10.3,'  NEAVE =',ES10.3/ &
+     &          ' ',3X,'WD    =',ES10.3,'  TD0   =',ES10.3, &
+     &               '  TDAVE =',ES10.3,'  NDAVE =',ES10.3)
 
          WRITE(16,1673) AJTTOR,VLOOP,ALI,Q0, &
      &                AJOHT,AJNBT,AJRFT,AJBST
- 1673    FORMAT(' ',3X,'AJTTOR=',1PD10.3,'  VLOOP =',1PD10.3, &
-     &               '  ALI   =',1PD10.3,'  Q0    =',1PD10.3/ &
-     &          ' ',3X,'AJOHT =',1PD10.3,'  AJNBT =',1PD10.3, &
-     &               '  AJRFT =',1PD10.3,'  AJBST =',1PD10.3)
+ 1673    FORMAT(' ',3X,'AJTTOR=',ES10.3,'  VLOOP =',ES10.3, &
+     &               '  ALI   =',ES10.3,'  Q0    =',ES10.3/ &
+     &          ' ',3X,'AJOHT =',ES10.3,'  AJNBT =',ES10.3, &
+     &               '  AJRFT =',ES10.3,'  AJBST =',ES10.3)
 
          WRITE(16,1674) PINT,POHT,PNB_TOT, &
      &                PRF_TOT, &
      &                POUT,PRLT,PCXT,PIET
- 1674    FORMAT(' ',3X,'PINT   =',1PD10.3,'  POHT   =',1PD10.3, &
-     &               '  PNB_TOT=',1PD10.3,'  PRF_TOT=',1PD10.3/ &
-     &          ' ',3X,'POUT  =',1PD10.3,'  PRLT  =',1PD10.3, &
-     &               '  PCXT  =',1PD10.3,'  PIETE =',1PD10.3)
+ 1674    FORMAT(' ',3X,'PINT  =',ES10.3,'  POHT  =',ES10.3, &
+     &               '  PNB_TOT=',ES9.2,'  PRF_TOT=',ES9.2/ &
+     &          ' ',3X,'POUT  =',ES10.3,'  PRLT  =',ES10.3, &
+     &               '  PCXT  =',ES10.3,'  PIETE =',ES10.3)
          CLOSE(16)
       ENDIF
       ENDIF
@@ -1179,8 +1179,8 @@
       IF(KID.EQ.'11') THEN
          WRITE(6,1681)T,TAUE1,TAUE2,TAUE89,PINT
  1681     FORMAT(' ','# TIME : ',F7.3,' SEC'/ &
-     &          ' ',3X,'TAUE1 =',1PD10.3,'  TAUE2 =',1PD10.3, &
-     &               '  TAUE89=',1PD10.3,'  PINT  =',1PD10.3)
+     &          ' ',3X,'TAUE1 =',ES10.3,'  TAUE2 =',ES10.3, &
+     &               '  TAUE89=',ES10.3,'  PINT  =',ES10.3)
       ENDIF
 
       IF(KID.EQ.'9') THEN
@@ -1276,7 +1276,7 @@
       ENDDO
 
       WRITE(6,600) STR,GVT(1,N),GVMAX,GVMIN,GVT(NGT,N)
-  600 FORMAT(' ',A8,5X,1PD10.3,2X,1PD10.3,2X,1PD10.3,2X,1PD10.3)
+  600 FORMAT(' ',A8,5X,ES10.3,2X,ES10.3,2X,ES10.3,2X,ES10.3)
 
       RETURN
       END SUBROUTINE TRMXMN

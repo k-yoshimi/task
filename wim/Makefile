@@ -42,6 +42,10 @@ wim : $(LIBS) wimmain.o
 	$(FCFIXED) wimmain.o $(LIBS) -o $@ $(FFLAGS) $(FLIBS) \
            $(MODDIR) $(MODINCLUDE)
 
+wimgconv: $(LIBS) wimgconv.o
+	$(FCFIXED) wimgconv.o $(LIBS) -o $@ $(FFLAGS) $(FLIBS) \
+           $(MODDIR) $(MODINCLUDE)
+
 clean:
 	-rm -f core a.out *.o *.mod ./*~ ./#* *.a $(MOD)/*.mod
 

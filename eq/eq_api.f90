@@ -58,7 +58,7 @@ MODULE eq_api
   PRIVATE
   PUBLIC :: eq_api_init, eq_api_run, eq_api_get_state, &
             eq_api_set_param, eq_api_set_param_str, eq_api_finalize, &
-            eq_api_validate
+            eq_api_validate, eq_api_save
 
   ! Error codes. Must match eq_api.h.
   INTEGER(C_INT), PARAMETER :: EQ_OK              = 0
@@ -489,5 +489,47 @@ CONTAINS
     END SUBROUTINE push_diag
 
   END FUNCTION eq_api_validate
+
+  !=====================================================================
+  ! eq_save : C-ABI wrapper around eqfile::EQSAVE.
+  !
+  !   - Writes the current EQ state (PSIRZ, profiles, scalars) to the
+  !     TASK-internal binary file at the path stored in module-level
+  !     KNAMEQ. Caller MUST set KNAMEQ via eq_set_param_str before
+  !     calling this. EQSAVE itself does not propagate errors, so this
+  !     wrapper verifies the outcome: EQ_ERR_INVALID for a blank KNAMEQ,
+  !     EQ_ERR_CALC_FAILED when no non-empty file exists afterwards
+  !     (missing directory, permission denied, ...), EQ_OK otherwise.
+  !=====================================================================
+  FUNCTION eq_api_save() RESULT(ierr) BIND(C, NAME="eq_save")
+    INTEGER(C_INT) :: ierr
+    LOGICAL :: file_exists
+    INTEGER :: file_size, ierr_save
+    IF (.NOT. g_initialized) THEN
+       ierr = EQ_ERR_NOT_INIT
+       RETURN
+    END IF
+    ! #227 item 3: EQSAVE is a bare external subroutine with no IERR
+    ! out-argument -- on an FWOPEN failure (blank KNAMEQ, missing
+    ! directory, permission denied) it simply RETURNs, leaving no file.
+    ! Reporting EQ_OK there claims a success that did not happen, so
+    ! verify the artefact rather than trusting the call.
+    IF (LEN_TRIM(KNAMEQ) == 0) THEN
+       ierr = EQ_ERR_INVALID
+       RETURN
+    END IF
+    CALL EQSAVE(ierr_save)
+    IF (ierr_save /= 0) THEN
+       ierr = EQ_ERR_CALC_FAILED
+       RETURN
+    END IF
+!   Belt and braces: the open succeeded, so also confirm an artefact exists.
+    INQUIRE(FILE=TRIM(KNAMEQ), EXIST=file_exists, SIZE=file_size)
+    IF ((.NOT. file_exists) .OR. (file_size <= 0)) THEN
+       ierr = EQ_ERR_CALC_FAILED
+       RETURN
+    END IF
+    ierr = EQ_OK
+  END FUNCTION eq_api_save
 
 END MODULE eq_api

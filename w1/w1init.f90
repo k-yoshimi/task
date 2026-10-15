@@ -274,14 +274,14 @@ CONTAINS
 !     WGZ1   : Lower end position of WG [m]
 !     WGZ2   : Upper end position of WG [m]
 !     WGAMP  : Waveguide electric field amplitude [V/m]
-!     WGKZ   : Parallel wave number of WG
+!     WGNZ   : Parallel refractive index of WG
 
       MDLWG  = 0
       MDLWGS = 0
       WGZ1   = 0.05D0
       WGZ2   = 0.15D0
       WGAMP  = 1.D0
-      WGKZ   = 0.2D0
+      WGNZ   = 0.2D0
 
       !     job_id: identifier of job (used in data file nam)
 

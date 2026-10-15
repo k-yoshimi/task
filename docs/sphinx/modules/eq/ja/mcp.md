@@ -43,7 +43,7 @@
 
 1. **Python 3.10 以上**
 2. **`libeqapi.so` がビルド済み** (`make -C eq libeqapi.so`)
-3. **`mcp` パッケージ** (`pip install 'mcp>=0.9'`)
+3. **`mcp` パッケージ** (`pip install 'mcp>=0.9,<2'`)
 
 ## インストール
 
@@ -220,7 +220,7 @@ EQ も `tr` 同様 1 プロセス 1 インスタンスです ({doc}`faq` Q6). �
 |---|---|
 | `libeqapi.so not found` | `make -C eq libeqapi.so` 後, `EQLIB_PATH` を絶対パスで設定 |
 | `ModuleNotFoundError: eqlib` | `PYTHONPATH` にリポジトリ `python/` を追加 |
-| `ModuleNotFoundError: mcp` | `pip install 'mcp>=0.9'`. 仮想環境を確認 |
+| `ModuleNotFoundError: mcp` | `pip install 'mcp>=0.9,<2'`. 仮想環境を確認 |
 | `EQDSK file missing` | `KNAMEQ` のファイルがカレントディレクトリにあるか確認 |
 | `EqlibCalculationFailedError: ierr=3` | 入力パラメータの物理整合性, EPSEQ や NLPMAX を緩める |
 

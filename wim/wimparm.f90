@@ -53,7 +53,8 @@ CONTAINS
 
     NAMELIST /WIM/ NZMAX,NWMAX,ZMIN,ZMAX,PN0,DBDZ,ANX,BETA,NTMAX,TMAX, &
                    CER1,CEL1,CER2,CEL2,DZMAX,DZWID,PZCL,MODELW,MODELP, &
-                   IDEBUG_wim
+                   IDEBUG_wim,wave_dump,id_wave_dump,fid_wave_dump, &
+                   kid_wave_dump
 
     READ(NID,WIM,IOSTAT=IST,ERR=9800,END=9900)
 
@@ -73,7 +74,8 @@ CONTAINS
     IMPLICIT NONE
     WRITE(6,'(A/)') &
     '# &WIM : NZMAX,NWMAX,ZMIN,ZMAX,PN0,DBDZ,ANX,BETA,NTMAX,IDEBUG_WIM,',&
-    '         TMAX,CER1,CEL1,CER2,CEL2,DZMAX,DZWID,PZCL,MODELW,MODELP'
+    '         TMAX,CER1,CEL1,CER2,CEL2,DZMAX,DZWID,PZCL,MODELW,MODELP,', &
+    '         idebug_wim,wave_dump,id_wave_dump,fid_wave_dump,kid_wave_dump'
     RETURN
 
   END SUBROUTINE wim_plst
@@ -111,7 +113,11 @@ CONTAINS
                  'TMAX    ',TMAX    ,'DZMAX   ',DZMAX   , &
                  'DZWID   ',DZWID   ,'PZCL    ',PZCL
     WRITE(6,603) 'CER1    ',CER1    ,'CEL1    ',CEL1    ,&
-                 'CER2    ',CER2    ,'CEL2    ',CEL2   
+                 'CER2    ',CER2    ,'CEL2    ',CEL2
+    WRITE(6,'(A16,I6)') 'wave_dump=      ',wave_dump
+    WRITE(6,'(A16,I6)') 'id_wave_dump=   ',id_wave_dump
+    WRITE(6,'(A16,I6)') 'fid_wave_dump=  ',fid_wave_dump
+    WRITE(6,'(A16,A)')  'kid_wave_dump=  ',kid_wave_dump
     RETURN
 
 601 FORMAT(' ',A8,'=',I8:2X,A8,'=',I8: &

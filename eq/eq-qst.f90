@@ -207,7 +207,7 @@
       WRITE(6,'(A,1P3E12.4)') 'REDGE,ZAXIS,PSI_EDGE=', &
                                REDGE,ZAXIS,PSIG(REDGE,ZAXIS)
 
-      NMAX=400
+      NMAX=NTVM
       H=16.D0*(REDGE-RAXIS)/NMAX
       CALL calc_separtrix(REDGE,ZAXIS,RXPNT1,ZXPNT1,H,NMAX, &
                           XA,RSU,ZSU,NSUMAX,IERR)

@@ -83,15 +83,20 @@
 !        PN    : Density at center                     (1.0E20/m**3)
 !        PNS   : Density on plasma surface             (1.0E20/m**3)
 !        PNM   : Density on mid plasma                 (1.0E20/m**3)
-!        PTPR  : Parallel temperature at center                (keV)
-!        PTPP  : Perpendicular temperature at center           (keV)
+!        PT    : Temperature at center                         (keV)
 !        PTS   : Temperature on surface                        (keV)
 !        PTM   : Temperature on mid plamsma                    (keV)
+!        PTPR  : Parallel temperature at center                (keV)
+!        PTPP  : Perpendicular temperature at center           (keV)
+!                IF PT is given, PTPR=PTPP=PT      
+!                IF PT is not given, PT=(PTPR+2*PTPP)/3
 !        PU    : Toroidal rotation velocity at center          (m/s)
 !        PUS   : Toroidal rotation velocity on surface         (m/s)
 !        PUM   : Toroidal rotation velocity on mid plasma      (m/s)
 !        PUPR  : typical parallel velocity                     (m/s)
 !        PUPP  : typical perpendicular velocity                (m/s)
+!                IF PU is given, PUPR=PU, PUPP=0
+!                IF PU is not given, PU=PUPR
 !        RHOITB: rho at ITB (0 for no ITB)
 !        PNITB : Density increment at ITB              (1.0E20/Mm*3)
 !        PTITB : Temperature increment at ITB                  (keV)
@@ -111,6 +116,10 @@
 !
 !        RN(rho)= (PN-PNS)*(1-rho^PROFN1)^PROFN2 + PNS
 !               + PNM*rho^PROFN3*(1-rho^PROFN3)
+!        RT(rho)= (PT-PTS)*(1-rho^PROFT1)^PROFT2 + PTS
+!               + PTM*rho^PROFT3*(1-rho^PROFT3)
+!        RU(rho)= (PU-PUS)*(1-rho^PROFU1)^PROFU2 + PUS
+!               + PUM*rho^PROFU3*(1-rho^PROFU3)
 !
 
       NS_e=   1
@@ -136,10 +145,11 @@
       PN(NS)   = 1.0D0
       PNS(NS)  = 0.0D0
       PNM(NS)  = 0.0D0
-      PTPR(NS) = 5.0D0
-      PTPP(NS) = 5.0D0
+      PT(NS)   = 5.0D0
       PTS(NS)  = 0.05D0
       PTM(NS)  = 0.0D0
+      PTPR(NS) = 5.0D0
+      PTPP(NS) = 5.0D0
       PU(NS)   = 0.D0
       PUS(NS)  = 0.D0
       PUM(NS)  = 0.D0
@@ -334,6 +344,7 @@
 !             11: Straight helical geometry
 !             12: 2D plane profile (B read from file)
 !             13: 2D plane profile (simple parabolic cylinder)
+!             25: RZphi Read EQDSK output geometry
 
 !        model_prof: Control plasma profile
 !                   0: Calculated from PN,PNS,PTPR,PTPP,PTS,PU,PUS; PN=0 in SOL

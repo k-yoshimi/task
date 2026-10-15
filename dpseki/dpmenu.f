@@ -8,7 +8,7 @@ C
       USE pllocal
       USE plprof,ONLY: pl_mag_old,pl_prof_old
       USE plinit,ONLY: pl_init
-      USE plparm,ONLY: pl_view
+      USE plview,ONLY: pl_view  ! merge: bpsi moved pl_view plparm->plview
       USE libkio
       INCLUDE 'dpcomm.inc'
 C

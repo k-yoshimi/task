@@ -33,7 +33,7 @@
 !     *                                                             *
 !     ***************************************************************
 
-      USE TRCOMM, ONLY : GTCPU1, NGM, NTM
+      USE TRCOMM, ONLY : GTCPU1, NGM, NTM,pt,ptpr,ptpp,nsmax
       use bpsd
       use plinit,ONLY: pl_init
       use plparm,ONLY: pl_parm
@@ -45,7 +45,7 @@
 
       IMPLICIT NONE
       REAL   :: GTCPU2
-      INTEGER:: IERR
+      INTEGER:: IERR,ns
 
 !     ------ INITIALIZATION ------
 
@@ -64,7 +64,6 @@
       CALL eq_parm(1,'eqparm',IERR)
 !      CALL equ_parm(1,'equparm',IERR)
       CALL tr_parm(1,'trparm',IERR)
-
       CALL tr_setup_kv
 
       CALL tr_menu

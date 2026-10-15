@@ -31,9 +31,81 @@ This mirrors the ``tr_mcp`` / ``wrx_mcp`` reference implementations
 as closely as possible; the main eq-specific additions are the
 validate tool and the broader namelist surface (PSIB[0..5] + the
 PFC-coil arrays + ~60 scalar registry entries).
+
+fd-isolation (Fortran WRITE(6) vs MCP JSON-RPC)
+-----------------------------------------------
+Fortran WRITE(6,...) targets OS fd 1, which is also the JSON-RPC write
+pipe to the MCP client parent.  Any Fortran diagnostic line corrupts the
+pipe and causes "Connection closed" on the client side.
+
+Fix: installed by main() immediately before the stdio server starts
+(NOT at import time -- see #227 item 1):
+  1. dup fd 1 (JSON-RPC write pipe) to a fresh fd; redirect fd 1 → stderr
+     so Fortran WRITE(6,...) goes to the subprocess stderr (backend log).
+  2. Rebuild sys.stdout around the saved fd so the MCP framework's stdio
+     transport still writes to the correct pipe.
+
+After this:
+  - Fortran WRITE(6,...) → fd 1 → stderr (harmless backend log)
+  - MCP sys.stdout.write → saved fd → original JSON-RPC write pipe
+
+NOTE: We do NOT redirect fd 0 (stdin) to /dev/null because the Fortran
+library uses stdin internally; redirecting it increases crash rates.
+
+The _redirect_fortran_stdout_to_stderr context manager below is kept as
+belt-and-suspenders. Once main() has installed the isolation, dup2(2,1)
+when fd 1 is already fd 2 is harmless. For an in-process importer that never
+calls main(), it is NOT a no-op -- it is the only thing keeping Fortran
+WRITE(6) off the caller's stdout, which is why it stays.
 """
 from __future__ import annotations
 
+import os as _os
+import sys as _sys
+
+# ---------- fd-isolation (Fortran WRITE(6) vs MCP JSON-RPC) ----------
+# fd 1 originally points at the parent's JSON-RPC write pipe. Fortran
+# WRITE(6,...) also targets fd 1, corrupting the pipe. We dup the pipe
+# to a fresh fd and redirect fd 1 → stderr so Fortran writes go to the
+# subprocess stderr (visible in backend log; harmless to JSON-RPC).
+#
+# The MCP framework writes via sys.stdout, so we rebuild sys.stdout to
+# write to the saved (original-pipe) fd. Line buffering keeps JSON-RPC
+# records flushing per-message.
+#
+# NOTE: We do NOT redirect fd 0 (stdin) to /dev/null because the
+# Fortran library uses stdin internally; redirecting it increases crash
+# rates (~20% → ~50%).
+#
+# #227 item 1: this MUST NOT run at import time. Importing this module --
+# pytest collection, an embedding application, or a bare
+# `python -c "import eq_mcp.server"` -- previously mutated the *host*
+# process's fd 1 and replaced its sys.stdout. It is now installed
+# explicitly by main(), i.e. only when this module actually runs as the
+# stdio server.
+_FD_ISOLATION_INSTALLED = False
+_mcp_pipe_fd = None
+
+
+def _install_fd_isolation() -> None:
+    """Redirect fd 1 to stderr and rebuild sys.stdout on the saved pipe fd.
+
+    Idempotent. Called from main() immediately before the stdio server
+    starts; never at import time.
+    """
+    global _FD_ISOLATION_INSTALLED, _mcp_pipe_fd
+    if _FD_ISOLATION_INSTALLED:
+        return
+    _mcp_pipe_fd = _os.dup(1)
+    _os.dup2(2, 1)
+    _sys.stdout = _os.fdopen(_mcp_pipe_fd, "w", buffering=1, encoding="utf-8")
+    _FD_ISOLATION_INSTALLED = True
+# ----------------------------------------------------------------------
+
+import contextlib
+import ctypes
+import os
+import platform
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -409,6 +481,116 @@ def _wrap_eqlib_error(exc: Exception) -> "ToolError":  # noqa: F821
 # suite can exercise the same code without spinning up the MCP
 # transport.
 # =====================================================================
+
+# ---------------------------------------------------------------------
+# libc fflush() for the C-level stdout FILE* only.
+#
+# We flush the C-level stdout FILE* (not fflush(NULL)) so that any
+# pending Fortran output in libc's buffer drains into stderr while fd 1
+# still points there, BEFORE we restore fd 1 to the JSON-RPC pipe.
+# Using fflush(NULL) on macOS also flushes Python's asyncio write
+# buffer, which would send pending JSON-RPC responses to stderr.
+# Python writes via raw syscalls, not via C's stdout FILE*, so
+# fflush(_c_stdout) doesn't affect Python's asyncio writes.
+# ---------------------------------------------------------------------
+if platform.system() == "Darwin":
+    _libc = ctypes.CDLL("libSystem.dylib")
+    _c_stdout = ctypes.c_void_p.in_dll(_libc, "__stdoutp")
+else:  # Linux
+    _libc = ctypes.CDLL("libc.so.6")
+    _c_stdout = ctypes.c_void_p.in_dll(_libc, "stdout")
+
+_libc.fflush.argtypes = [ctypes.c_void_p]
+_libc.fflush.restype = ctypes.c_int
+
+# Make C-level stdout fully unbuffered so Fortran WRITE(6,...) emits
+# immediately. Combined with the redirect window, this eliminates the
+# race where buffered Fortran output flushes into the MCP pipe AFTER
+# the redirect has been torn down.
+#
+# setvbuf(FILE *stream, char *buf, int mode, size_t size)
+#   _IONBF = 2 on glibc and macOS libc.
+_libc.setvbuf.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_size_t]
+_libc.setvbuf.restype = ctypes.c_int
+_IONBF = 2
+_libc.setvbuf(_c_stdout, None, _IONBF, 0)
+
+# Flush Fortran's own I/O buffer for unit 6 (stdout).
+#
+# gfortran maintains its own Fortran-level I/O buffer (separate from libc's
+# C FILE* buffer). fflush(c_stdout) only drains the C buffer; Fortran output
+# can still be pending in gfortran's internal buffer after the Fortran call
+# returns. Calling _gfortran_flush_i4(&unit) flushes unit 6 at the Fortran
+# level — forcing the write to cross the fd boundary — before we restore
+# fd 1 to the JSON-RPC pipe.
+#
+# On Linux the symbol is in the process via libgfortran loaded by libtrapi.so;
+# we locate it through ctypes.CDLL(None) (RTLD_DEFAULT). On macOS the path is
+# explicit because RTLD_DEFAULT does not search already-loaded dylibs on all
+# macOS releases.
+_libgfortran_path = "/opt/local/lib/libgcc/libgfortran.5.dylib"  # macOS (MacPorts)
+_libgfortran_linux = "libgfortran.so.5"
+try:
+    if platform.system() == "Darwin":
+        _libgfortran = ctypes.CDLL(_libgfortran_path)
+    else:
+        _libgfortran = ctypes.CDLL(_libgfortran_linux)
+    _gfortran_flush = _libgfortran["_gfortran_flush_i4"]
+    _gfortran_flush.argtypes = [ctypes.POINTER(ctypes.c_int32)]
+    _gfortran_flush.restype = None
+    _FORTRAN_UNIT6 = ctypes.c_int32(6)
+    _HAS_GFORTRAN_FLUSH = True
+except Exception:  # pragma: no cover — libgfortran not found; fall back to C fflush
+    _HAS_GFORTRAN_FLUSH = False
+
+# With the permanent fd-isolation, fd 1 is already stderr for the lifetime of
+# the process.  Calling _gfortran_flush_i4 after eq.run() is unnecessary
+# (Fortran already wrote to fd 1 = stderr; there is nothing to drain into the
+# MCP pipe) and is actively harmful: _gfortran_flush_i4 on this build of
+# libgfortran/libeqapi.so triggers SIGABRT ~10-40% of the time due to an
+# internal heap-corruption bug in the gfortran I/O library triggered by the
+# flush sequence.  Disable it when the permanent redirect is active.
+# (Decided at call time via _FD_ISOLATION_INSTALLED -- see
+# _redirect_fortran_stdout_to_stderr below -- because the redirect is no
+# longer installed at import time.)
+
+
+@contextlib.contextmanager
+def _redirect_fortran_stdout_to_stderr():
+    """Belt-and-suspenders: ensure fd 1 points at stderr around Fortran calls.
+
+    When main() has installed the fd-isolation, fd 1 already points at
+    stderr for the lifetime of the process and this context manager is
+    effectively a no-op:
+    dup2(2, 1) when fd 1 is already fd 2 is harmless, and the flushes are
+    harmless too.
+
+    We keep it so that any call sites that were added before the permanent
+    fix continue to work correctly — and as extra insurance if the process
+    ever runs without the startup dance (e.g. direct import in tests).
+
+    NOTE: We target fd 1 directly (not sys.stdout.fileno()) because after
+    the permanent redirect sys.stdout wraps the *saved* pipe fd, not fd 1.
+    Calling sys.stdout.fileno() would redirect the MCP pipe to stderr,
+    which is the opposite of what we want.
+    """
+    # fd 1 is already stderr after module-load redirect; save it anyway
+    # (dup2(2,1) is idempotent — this is purely belt-and-suspenders).
+    saved_fd = os.dup(1)
+    try:
+        os.dup2(sys.stderr.fileno(), 1)
+        yield
+        # 1. Flush Fortran's internal I/O buffer for unit 6.
+        if _HAS_GFORTRAN_FLUSH and not _FD_ISOLATION_INSTALLED:
+            _gfortran_flush(ctypes.byref(_FORTRAN_UNIT6))
+        # 2. Flush C-level stdout FILE* (defense in depth).
+        _libc.fflush(_c_stdout)
+    finally:
+        # Restore fd 1 (no-op if it was already pointing at stderr).
+        os.dup2(saved_fd, 1)
+        os.close(saved_fd)
+
+
 def handle_init() -> str:
     try:
         STATE.ensure_open()
@@ -420,7 +602,8 @@ def handle_init() -> str:
 def handle_set_param(name: str, value: float) -> str:
     try:
         eq = STATE.ensure_open()
-        eq.set_param(name, float(value))
+        with _redirect_fortran_stdout_to_stderr():
+            eq.set_param(name, float(value))
         return f"set {name} = {value}"
     except Exception as exc:
         raise _wrap_eqlib_error(exc) from exc
@@ -429,8 +612,41 @@ def handle_set_param(name: str, value: float) -> str:
 def handle_set_param_str(name: str, value: str) -> str:
     try:
         eq = STATE.ensure_open()
-        eq.set_param_str(name, str(value))
+        with _redirect_fortran_stdout_to_stderr():
+            eq.set_param_str(name, str(value))
         return f"set {name} = {value!r}"
+    except Exception as exc:
+        raise _wrap_eqlib_error(exc) from exc
+
+
+def handle_save(path: str) -> str:
+    try:
+        eq = STATE.ensure_open()
+        with _redirect_fortran_stdout_to_stderr():
+            eq.save(path)
+        return f"saved equilibrium to {path}"
+    except Exception as exc:
+        raise _wrap_eqlib_error(exc) from exc
+
+
+def handle_get_psi_rz() -> Dict[str, Any]:
+    try:
+        eq = STATE.ensure_open()
+        psi = eq.get_psi_rz()  # numpy ndarray shape (nrg, nzg)
+        state = eq.get_state()
+        nrg = int(psi.shape[0])
+        nzg = int(psi.shape[1])
+        # state.rg / state.zg are already trimmed to nrgmax / nzgmax by
+        # EqState.from_c(); a plain list copy is sufficient.
+        rg = list(state.rg)
+        zg = list(state.zg)
+        return {
+            "nrg": nrg,
+            "nzg": nzg,
+            "rg": rg,
+            "zg": zg,
+            "psi_rz": psi.tolist(),
+        }
     except Exception as exc:
         raise _wrap_eqlib_error(exc) from exc
 
@@ -442,7 +658,8 @@ def handle_set_params(params: Dict[str, SupportedValue]) -> str:
         )
     try:
         eq = STATE.ensure_open()
-        applied = _apply_bulk_params(eq, params)
+        with _redirect_fortran_stdout_to_stderr():
+            applied = _apply_bulk_params(eq, params)
         return f"set {len(applied)} parameter(s): {applied}"
     except Exception as exc:
         raise _wrap_eqlib_error(exc) from exc
@@ -451,7 +668,8 @@ def handle_set_params(params: Dict[str, SupportedValue]) -> str:
 def handle_run(mode: int = 1) -> str:
     try:
         eq = STATE.ensure_open()
-        eq.run(int(mode))
+        with _redirect_fortran_stdout_to_stderr():
+            eq.run(int(mode))
         return f"eq_run completed (mode={mode})"
     except Exception as exc:
         raise _wrap_eqlib_error(exc) from exc
@@ -460,7 +678,9 @@ def handle_run(mode: int = 1) -> str:
 def handle_get_state() -> Dict[str, Any]:
     try:
         eq = STATE.ensure_open()
-        return eq.get_state().to_dict()
+        with _redirect_fortran_stdout_to_stderr():
+            state = eq.get_state()
+        return state.to_dict()
     except Exception as exc:
         raise _wrap_eqlib_error(exc) from exc
 
@@ -491,7 +711,8 @@ def handle_validate() -> List[Dict[str, Any]]:
 
 def handle_finalize() -> str:
     try:
-        STATE.close()
+        with _redirect_fortran_stdout_to_stderr():
+            STATE.close()
         return "eq library finalized"
     except Exception as exc:
         raise _wrap_eqlib_error(exc) from exc
@@ -538,7 +759,8 @@ def handle_run_and_get_state(
         eq = STATE.ensure_open()
         if params:
             _apply_bulk_params(eq, params)
-        eq.run(int(mode))
+        with _redirect_fortran_stdout_to_stderr():
+            eq.run(int(mode))
         return eq.get_state().to_dict()
     except Exception as exc:
         raise _wrap_eqlib_error(exc) from exc
@@ -551,11 +773,11 @@ def handle_run_and_get_state(
 # above are the unit-testable surface either way.
 # =====================================================================
 def build_server() -> Any:
-    """Build and return a FastMCP server instance with the 11 eq tools."""
+    """Build and return a FastMCP server instance with the 13 eq tools."""
     if not MCP_AVAILABLE:
         raise RuntimeError(
             "Python MCP SDK (`mcp`) is not installed. "
-            "Install it with: pip install 'mcp>=0.9'"
+            "Install it with: pip install 'mcp>=0.9,<2'"
         )
 
     mcp = FastMCP(  # type: ignore[misc]
@@ -605,6 +827,19 @@ def build_server() -> Any:
         return handle_set_param_str(name, value)
 
     @mcp.tool()
+    def save(path: str) -> str:
+        """Save the current equilibrium to a TASK-binary file at ``path``.
+
+        The path is set as KNAMEQ before calling eq_save. The file is
+        consumable by tr_mcp via ``set_param_str("KNAMEQ", path)`` plus
+        ``MODELG=3``. Note: the underlying Fortran ``EQSAVE`` silently
+        swallows FWOPEN failures (blank KNAMEQ, missing directory,
+        permission denied) — callers should verify file existence after
+        the call.
+        """
+        return handle_save(path)
+
+    @mcp.tool()
     def set_params(params: Dict[str, Any]) -> str:
         """Bulk-set eq parameters.
 
@@ -646,6 +881,20 @@ def build_server() -> Any:
         VPS, RST). Schema also available via `describe_state_schema`.
         """
         return handle_get_state()
+
+    @mcp.tool()
+    def get_psi_rz() -> Dict[str, Any]:
+        """Return the 2-D PSI(R,Z) field plus the RG/ZG grid coordinates.
+
+        Output shape:
+            ``{"nrg": int, "nzg": int, "rg": list[float], "zg": list[float],
+               "psi_rz": list[list[float]]}``  (psi_rz indexed [i_r][i_z],
+            runtime active grid only — default 33×33)
+
+        Note: PSI is populated by ``run()``; calling get_psi_rz before run
+        returns whatever is in the buffer (typically zeros on a fresh init).
+        """
+        return handle_get_psi_rz()
 
     @mcp.tool()
     def validate() -> List[Dict[str, Any]]:
@@ -730,9 +979,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                 "init",
                 "set_param",
                 "set_param_str",
+                "save",
                 "set_params",
                 "run",
                 "get_state",
+                "get_psi_rz",
                 "validate",
                 "finalize",
                 "describe_parameters",
@@ -746,14 +997,27 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not MCP_AVAILABLE:
         sys.stderr.write(
             "error: Python MCP SDK (`mcp`) is not installed.\n"
-            "       pip install 'mcp>=0.9'\n"
+            "       pip install 'mcp>=0.9,<2'\n"
         )
         return 2
+
+    # Install the fd isolation now -- NOT at import time (#227 item 1).
+    # Everything above this point (--help, --print-tools, the MCP-missing
+    # error path) returns before we touch the host process's fds.
+    _install_fd_isolation()
 
     server = build_server()
     # FastMCP >=0.9 exposes .run() for stdio transport by default.
     server.run()
-    return 0
+    # Skip Python teardown (Eq.__del__ → eq_finalize → potential SIGABRT) by
+    # using os._exit.  The MCP session is complete at this point; clean
+    # Fortran shutdown is not required.  Flush sys.stdout (the saved
+    # JSON-RPC pipe fd) before bypassing Python teardown.
+    try:
+        sys.stdout.flush()
+    except Exception:
+        pass
+    os._exit(0)
 
 
 if __name__ == "__main__":

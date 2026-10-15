@@ -2,7 +2,7 @@
 
 MODULE trcomm_parm
 
-  USE plcomm
+  USE plcomm,pt_pl=>PT  ! merge: plcomm_parm gained PT(NSM); trm owns a local PT
   USE commpi
   IMPLICIT NONE
 

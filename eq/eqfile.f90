@@ -21,7 +21,7 @@
 !
 !     ***** SAVE TASK/EQ DATA *****
 !
-      SUBROUTINE EQSAVE
+      SUBROUTINE EQSAVE(IERR_OUT)
 
       USE libfio
       USE plcomm
@@ -30,8 +30,15 @@
       USE eqcom2_mod
       IMPLICIT COMPLEX*16(C),REAL*8(A,B,D-F,H,O-Z)
 
+!     #227 item 3: report FWOPEN failures to the caller instead of returning
+!     silently. Verifying the file afterwards is not enough -- a repeat save to
+!     a path that already holds a previous, non-empty file looks identical.
+      IERR_OUT=0
       CALL FWOPEN(21,KNAMEQ,0,MODEFW,'EQ',IERR)
-      IF(IERR.NE.0) RETURN
+      IF(IERR.NE.0) THEN
+         IERR_OUT=IERR
+         RETURN
+      ENDIF
 
       REWIND(21)
       WRITE(21) RR,BB,RIP
@@ -107,7 +114,7 @@
 
       IF(MODELG.EQ.3.OR.MODELG.EQ.9) THEN
          CALL EQRTSK(IERR)
-      ELSEIF(MODELG.EQ.5) THEN
+      ELSEIF(MODELG.EQ.5.OR.MODELG.EQ.25) THEN
          CALL EQDSKR(IERR)
          CALL EQCALQ(IERR)
       ELSEIF(MODELG.EQ.8) THEN

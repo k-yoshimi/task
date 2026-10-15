@@ -1281,7 +1281,7 @@ def build_slide_15_mcp_setup(prs: Presentation) -> None:
 
     launch_code = (
         "# 1. 依存導入 (libtrapi.so は事前に make 済みであること)\n"
-        "$ pip install 'mcp>=0.9'\n"
+        "$ pip install 'mcp>=0.9,<2'\n"
         "$ pip install -e python/mcp-servers/tr_mcp\n"
         "\n"
         "# 2. 直接起動 (stdio モード) — 動作確認用\n"
@@ -1359,7 +1359,7 @@ def build_slide_15_mcp_setup(prs: Presentation) -> None:
         Inches(1.5),
         "トラブルシュート",
         "・ libtrapi.so 未ビルド → make -C tr libtrapi.so\n"
-        "・ ModuleNotFoundError: mcp → pip install 'mcp>=0.9'\n"
+        "・ ModuleNotFoundError: mcp → pip install 'mcp>=0.9,<2'\n"
         "・ ModuleNotFoundError: trlib → PYTHONPATH を再確認",
         fill=COLOR_TEST,
         title_size=14,

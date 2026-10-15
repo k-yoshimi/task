@@ -68,8 +68,12 @@ contains
     real(8) :: zdum1, zdum2
     real(8), dimension(:,:),   allocatable :: dx, dy, dxy
     real(8), dimension(:,:,:), allocatable :: ratedata
+!#ifndef DATADIR
+!#define DATADIR "data"
+!#endif
+    character(len=*), parameter :: datadir = DATADIR
 
-    fcrca = 'data/Carbon-A6S5F6_20220606.txt'
+    fcrca = trim(datadir)//'/Carbon-A6S5F6_20220606.txt'
 
     open(newunit=iocrca,file=fcrca,iostat=ist,form='formatted',action='read')
     if(ist /= 0) stop 'file open error.'

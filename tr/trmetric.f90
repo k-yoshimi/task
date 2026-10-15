@@ -15,14 +15,21 @@ CONTAINS
 
       SUBROUTINE tr_set_metric(ierr)
 
-      USE trcomm, ONLY : modelg, nrmax, knameq, knameq2
-      USE trbpsd, ONLY: tr_bpsd_init,tr_bpsd_put,tr_bpsd_get
+      USE, INTRINSIC :: ieee_arithmetic, ONLY: ieee_is_finite
+      USE trcomm, ONLY : modelg, nrmax, knameq, knameq2, qpinv, rips
+      USE trbpsd, ONLY: tr_bpsd_init,tr_bpsd_put,tr_bpsd_get, &
+                        tr_rip_eq, tr_eq_init
       USE equnit, ONLY: eq_parm,eq_prof,eq_calc,eq_load
       USE plvmec, ONLY: pl_vmec
       implicit none
       integer, intent(out):: ierr
       character(len=80):: line
+      integer:: iter
+      integer, parameter:: niter_qscale=30
+      real(8):: sfac
+      logical:: scaled
 
+      ierr=0
       CALL trstgf
       CALL trgfrg
 
@@ -51,9 +58,67 @@ CONTAINS
          call tr_bpsd_get(ierr)  ! 
 !         call trgout
       elseif(modelg.eq.9) then
+!        Every call builds a new initial state (tr_prep is the only caller),
+!        so the adoption of EQ's psi_p is switched on again: the flag is
+!        saved and a run before this one in the same process cleared it.
+         tr_eq_init=.true.
          call eq_prof ! initial calculation of eq
-         call eq_calc         ! recalculate eq
-         call tr_bpsd_get(ierr)  ! 
+!        --- Initial q-scaling. The cylindrical initial q (set in trprof) is
+!            not consistent with the commanded Ip on the real 2D equilibrium
+!            metric. Iterate the q-solver, scaling q (q ~ 1/Ip) until the
+!            equilibrium Ip matches RIPS, giving a consistent initial state.
+!            A step that fails (ierr of that step), a scale factor that is
+!            zero or not finite (ierr=-1), or no agreement after niter_qscale
+!            iterations (ierr=-2) ends the routine with ierr.ne.0 and
+!            tr_eq_init still set: the q reached so far is not an initial
+!            state to hand over. ---
+         scaled=.false.
+         do iter=1,niter_qscale
+            call eq_calc(ierr)    ! q-solver with current q
+            if(ierr.ne.0) then
+               write(6,'(A,I3,A,I6)') &
+                    ' XX tr_set_metric: eq_calc: iteration',iter, &
+                    ', ierr=',ierr
+               return
+            endif
+            call tr_bpsd_get(ierr)
+            if(ierr.ne.0) then
+               write(6,*) 'XX tr_set_metric: tr_bpsd_get: ierr=',ierr
+               return
+            endif
+            if(rips.le.0.d0) then               ! no current to scale to
+               scaled=.true.
+               exit
+            endif
+            sfac=tr_rip_eq/rips
+            if(.not.ieee_is_finite(sfac).or.sfac.eq.0.d0) then
+               write(6,'(A,1P2E12.4)') &
+                    ' XX tr_set_metric: q-scaling: Ip of EQ, RIPS=', &
+                    tr_rip_eq,rips
+               ierr=-1
+               return
+            endif
+            if(abs(sfac-1.d0).lt.1.d-3) then
+               scaled=.true.
+               exit
+            endif
+            qpinv(1:nrmax)=qpinv(1:nrmax)/sfac  ! q -> q*sfac (only q is scaled)
+            call tr_bpsd_put(ierr)              ! push scaled q to EQ
+            if(ierr.ne.0) then
+               write(6,*) 'XX tr_set_metric: tr_bpsd_put: ierr=',ierr
+               return
+            endif
+         enddo
+         if(.not.scaled) then
+            write(6,'(A,I3,A,1PE12.4)') &
+                 ' XX tr_set_metric: q-scaling: no agreement after', &
+                 niter_qscale,' iterations: Ip of EQ / RIPS=',sfac
+            ierr=-2
+            return
+         endif
+!        Init done: hand over the converged (Ip=RIPS) equilibrium. From here
+!        the transport owns psi_p (RDP) and the q-solver honors it.
+         tr_eq_init=.false.
 !         call trgout
       endif
 

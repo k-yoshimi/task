@@ -97,6 +97,14 @@ CONTAINS
   SUBROUTINE DEALLOCATE_TRCOMM
     use trcom1, ONLY : DEALLOCATE_TRCOM1
 
+    ! Idempotency guard: if ALLOCATE_TRCOMM never ran (e.g. interactive
+    ! quit 'Q' before a run 'R'; trmain and tr_api_finalize call this
+    ! unconditionally at shutdown),
+    ! the sub-module deallocators issue bare unguarded DEALLOCATE(...) on
+    ! unallocated arrays and abort. PNSS is the first array allocated
+    ! (allocate_trcomm_ctrl) -> reliable "did we allocate?" sentinel.
+    IF(.NOT.ALLOCATED(PNSS)) RETURN
+
     ! Deallocate in reverse dependency order
     CALL deallocate_trcomm_globals
     CALL deallocate_trcomm_profile

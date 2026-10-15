@@ -690,9 +690,10 @@ contains
 
     !   ***** Model parameters *****
 
-    !   Mode of LAPACK
-    !   0    : Use BANDRD
-    !   else : Use LAPACK_DGBSV or LA_GBSV
+    !   Mode of linear solver
+    !   0 : Use BANDRD
+    !   1 : Use LAPACK_DGBSV or LA_GBSV
+    !   2 : Use block-tridiagonal solver (fallback to GBSV if needed)
     MDLPCK = 1
 
     !   Mode of fixed temperature profile

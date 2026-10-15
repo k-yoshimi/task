@@ -46,6 +46,7 @@ MODULE tr_api
   USE trinit,            ONLY: trinit_fortran => tr_init
   USE trprep,            ONLY: tr_prep
   USE trloop,            ONLY: tr_loop
+  USE trbpsd,            ONLY: tr_eq_init
   IMPLICIT NONE
   PRIVATE
   PUBLIC :: tr_api_init, tr_api_run, tr_api_get_state, &
@@ -120,6 +121,9 @@ CONTAINS
        RETURN
     END IF
 
+    ! The MODELG=9 flag "adopt EQ's psi_p" is saved module state that a
+    ! run clears; a new lifecycle starts from its initial value (#228).
+    tr_eq_init    = .TRUE.
     g_initialized = .TRUE.
     g_prepared    = .FALSE.
     ierr = TR_OK
@@ -382,6 +386,7 @@ CONTAINS
     ! does not try to OPEN an already-open unit (SCRATCH would auto-
     ! delete on program exit but a same-process re-init would fail).
     CLOSE(7, IOSTAT=ierr)
+    tr_eq_init    = .TRUE.
     g_initialized = .FALSE.
     g_prepared    = .FALSE.
     ierr = TR_OK

@@ -16,7 +16,7 @@ MCP サーバページ (`docs/sphinx/modules/tr/ja/mcp.md`) を参照.
 
 1. **Python 3.10 以上**
 2. **`libwrapi.so` がビルド済み** (`make -C wr libwrapi.so`)
-3. **`mcp` パッケージ** (`pip install 'mcp>=0.9'`)
+3. **`mcp` パッケージ** (`pip install 'mcp>=0.9,<2'`)
 
 ## インストール
 

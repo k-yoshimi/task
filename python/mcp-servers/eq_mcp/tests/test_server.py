@@ -25,6 +25,7 @@ import unittest
 from pathlib import Path
 from typing import Any, Dict, List
 from unittest import mock
+import numpy as np
 
 HERE = Path(__file__).resolve()
 EQ_MCP_ROOT = HERE.parents[1]
@@ -214,6 +215,9 @@ class _MockEq:
 
     def get_state(self) -> Any:
         class _S:
+            rg = [0.0] * 33
+            zg = [0.0] * 33
+
             def to_dict(self_inner) -> Dict[str, Any]:
                 return {
                     "NRGMAX": 0, "NZGMAX": 0, "NPSMAX": 0,
@@ -225,6 +229,9 @@ class _MockEq:
                 }
 
         return _S()
+
+    def get_psi_rz(self) -> Any:
+        return np.zeros((33, 33), dtype=np.float64)
 
     def validate(self) -> List[Any]:
         self.validate_calls += 1
@@ -382,6 +389,19 @@ class TestHandlersWithMockedState(unittest.TestCase):
                 "before opening a fresh handle (Codex review P2).",
             )
 
+    def test_handle_get_psi_rz(self) -> None:
+        """handle_get_psi_rz returns the expected dict shape."""
+        result = srv.handle_get_psi_rz()
+        self.assertIn("nrg", result)
+        self.assertIn("nzg", result)
+        self.assertIn("rg", result)
+        self.assertIn("zg", result)
+        self.assertIn("psi_rz", result)
+        self.assertEqual(result["nrg"], 33)
+        self.assertEqual(result["nzg"], 33)
+        self.assertEqual(len(result["psi_rz"]), 33)
+        self.assertEqual(len(result["psi_rz"][0]), 33)
+
     def test_handle_validate_returns_list_of_dicts(self) -> None:
         # No diagnostics -> empty list.
         out = srv.handle_validate()
@@ -430,7 +450,7 @@ class TestMainCliFlags(unittest.TestCase):
         rc = self._run_quiet(["--print-tools"])
         self.assertEqual(rc, 0)
 
-    def test_print_tools_output_contains_all_eleven(self) -> None:
+    def test_print_tools_output_contains_all_thirteen(self) -> None:
         import io
         import contextlib
 
@@ -439,14 +459,16 @@ class TestMainCliFlags(unittest.TestCase):
             rc = srv.main(["--print-tools"])
         self.assertEqual(rc, 0)
         lines = [ln for ln in buf.getvalue().splitlines() if ln]
-        self.assertEqual(len(lines), 11)
+        self.assertEqual(len(lines), 13)
         for t in (
             "init",
             "set_param",
             "set_param_str",
+            "save",
             "set_params",
             "run",
             "get_state",
+            "get_psi_rz",
             "validate",
             "finalize",
             "describe_parameters",

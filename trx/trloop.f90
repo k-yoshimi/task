@@ -32,7 +32,7 @@ CONTAINS
 
       RIP=RIPS
       IF(NTMAX.NE.0) DIPDT=(RIPE-RIPS)/(DBLE(NTMAX)*DT)
-      write(6,'(A,1P4E12.4)') "**RIP,RIPS,RIPE,DIP=",RIP,RIPS,RIPE,DIPDT
+      write(6,'(A,1P4E12.4)') '**RIP,RIPS,RIPE,DIP=',RIP,RIPS,RIPE,DIPDT
 
       call tr_bpsd_get(ierr)
       if(ierr.ne.0) GOTO 9000

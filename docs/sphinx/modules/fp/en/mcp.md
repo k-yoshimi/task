@@ -17,7 +17,7 @@ general MCP-protocol material, see the `tr` MCP page
 
 1. **Python 3.10 or later**
 2. **`libfpapi.so` already built** (`make -C fp libfpapi.so`)
-3. **The `mcp` package** (`pip install 'mcp>=0.9'`)
+3. **The `mcp` package** (`pip install 'mcp>=0.9,<2'`)
 4. **Enough RAM** — the 5D grid takes hundreds of MB to several GB
 
 ## Installation

@@ -95,7 +95,7 @@
          ENDDO
 
       ELSEIF(KID.EQ.'S') THEN
-         CALL EQSAVE
+         CALL EQSAVE(IERR)
 
       ELSEIF(KID.EQ.'L') THEN
          IF(MODELG.EQ.2) MODELG=3

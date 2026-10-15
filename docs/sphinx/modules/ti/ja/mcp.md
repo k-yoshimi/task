@@ -16,7 +16,7 @@ MCP サーバページ (`docs/sphinx/modules/tr/ja/mcp.md`) も参照.
 
 1. **Python 3.10 以上**
 2. **`libtiapi.so` がビルド済み** (`make -C ti libtiapi.so`)
-3. **`mcp` パッケージ** (`pip install 'mcp>=0.9'`)
+3. **`mcp` パッケージ** (`pip install 'mcp>=0.9,<2'`)
 
 ## インストール
 

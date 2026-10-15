@@ -19,6 +19,7 @@ Usage::
 from __future__ import annotations
 
 import ctypes
+import os
 import weakref
 from dataclasses import dataclass
 from enum import IntEnum
@@ -294,6 +295,43 @@ class Eq:
         rc = self._lib.eq_run(int(mode))
         raise_for_rc(f"eq_run({mode})", rc)
 
+    def save(self, path: str) -> None:
+        """Save the current equilibrium state to a TASK-binary file.
+
+        Sets KNAMEQ to ``path`` then calls ``eq_save``. The file is
+        readable by TR via ``set_param_str("KNAMEQ", path)`` plus
+        ``MODELG=3``.
+
+        Raises :class:`EqlibError` if no non-empty file results.
+
+        The underlying Fortran ``EQSAVE`` has no error out-argument and
+        simply returns on an ``FWOPEN`` failure (blank KNAMEQ, missing
+        directory, permission denied). ``eq_api_save`` therefore verifies
+        the artefact and maps a missing/empty file to a non-zero code
+        (#227 item 3). The post-call check below repeats that at the
+        Python layer, so a stale ``libeqapi.so`` built before that fix
+        still cannot report a success that did not happen.
+        """
+        if self._closed:
+            raise EqlibError("save on closed Eq")
+        try:
+            fn = self._lib.eq_save
+        except AttributeError as exc:
+            raise EqlibError(
+                "libeqapi.so does not export eq_save; "
+                "rebuild the shared library after the Task 1.1 PR."
+            ) from exc
+        self.set_param_str("KNAMEQ", path)
+        rc = fn()
+        raise_for_rc("eq_save", rc)
+        # Defense in depth: eq_api_save verifies this too, but an older
+        # libeqapi.so returns EQ_OK unconditionally (#227 item 3).
+        if not os.path.isfile(path) or os.path.getsize(path) == 0:
+            raise EqlibError(
+                f"eq_save reported success but no non-empty file exists at "
+                f"{path!r} (check the directory exists and is writable)"
+            )
+
     def get_state(self) -> EqState:
         """Copy the current EQ state into an :class:`EqState`."""
         if self._closed:
@@ -302,6 +340,42 @@ class Eq:
         rc = self._lib.eq_get_state(ctypes.byref(c))
         raise_for_rc("eq_get_state", rc)
         return EqState.from_c(c)
+
+    def get_psi_rz(self) -> "np.ndarray":  # type: ignore[name-defined]
+        """Return the 2-D PSI(R,Z) field as a numpy array.
+
+        Returns a fresh ``np.ndarray`` of shape ``(nrgmax, nzgmax)``
+        (default 33×33) and dtype float64. Requires numpy.
+
+        The Fortran source is column-major (R varies fastest); we copy
+        into a numpy buffer that matches that layout, then transpose
+        to expose `psi[i_r, i_z]` indexing in Python.
+        """
+        if self._closed:
+            raise EqlibError("get_psi_rz on closed Eq")
+        try:
+            getter = self._lib.eq_common_get_psi_rz_
+        except AttributeError as exc:
+            raise EqlibError(
+                "libeqapi.so does not export eq_common_get_psi_rz_; "
+                "rebuild the shared library after the Task 1.4 PR."
+            ) from exc
+
+        import numpy as np
+        st = self.get_state()
+        # EqState exposes nrgmax/nzgmax as lowercase int attributes (see state.py).
+        nr = int(st.nrgmax)
+        nz = int(st.nzgmax)
+        # Allocate (nz, nr) C-contiguous; Fortran will fill it column-major.
+        buf = np.zeros((nz, nr), dtype=np.float64, order="C")
+        c_nr = ctypes.c_int(nr)
+        c_nz = ctypes.c_int(nz)
+        getter(
+            ctypes.byref(c_nr),
+            ctypes.byref(c_nz),
+            buf.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+        )
+        return buf.T.copy()  # contiguous (nr, nz) for caller convenience
 
     # --- validation (Issue #143) ---------------------------------------
     def validate(self) -> List[EqDiagEntryPy]:

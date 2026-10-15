@@ -1,3 +1,10 @@
+2026/04/20   imas/ids/ids_equilibrium.f90 wrond deallocate corrected
+                (reported by Dr. Yoshimi)
+             tools/check_dealloc.py and tools/check_deallocate.md added
+                (provided by Dr. Yoshimi)
+
+------
+
 2013/07/01   mtxp/libmtxpcg.f90 lib/libpcgpme.f90 added
 
 2013/06/09   V2.02

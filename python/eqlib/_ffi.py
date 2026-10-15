@@ -236,6 +236,24 @@ def _apply_prototypes(lib: ctypes.CDLL) -> ctypes.CDLL:
     except AttributeError:  # pragma: no cover - only on pre-#143 builds
         pass
 
+    # eq_save: () -> int
+    try:
+        lib.eq_save.argtypes = []
+        lib.eq_save.restype = ctypes.c_int
+    except AttributeError:  # pragma: no cover - only on pre-Task-1.1 builds
+        pass
+
+    # eq_common_get_psi_rz_(int* nr, int* nz, double* psi_out)
+    try:
+        lib.eq_common_get_psi_rz_.argtypes = [
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_double),
+        ]
+        lib.eq_common_get_psi_rz_.restype = None
+    except AttributeError:  # pragma: no cover - only on pre-Task-1.4 builds
+        pass
+
     lib.eq_finalize.restype = ctypes.c_int
     lib.eq_finalize.argtypes = []
     return lib

@@ -413,7 +413,7 @@ fixture 規約も共通で、SCALARS / ARRAYS / STRINGS の 3 辞書と apply(h)
 
 ```bash
 # 1. 依存導入 (libtrapi.so は事前に make 済み)
-$ pip install 'mcp>=0.9'
+$ pip install 'mcp>=0.9,<2'
 $ pip install -e python/mcp-servers/tr_mcp
 
 # 2. 直接起動 (stdio モード)
@@ -450,7 +450,7 @@ $ claude mcp add task-tr \
 ```
 
 - トラブル: `libtrapi.so` 未ビルド → `make -C tr libtrapi.so`。
-- `ModuleNotFoundError: mcp` → `pip install 'mcp>=0.9'`。
+- `ModuleNotFoundError: mcp` → `pip install 'mcp>=0.9,<2'`。
 - `ModuleNotFoundError: trlib` → `PYTHONPATH` に `<repo>/python` を追加。
 - **stdout 汚染注意:** MCP は stdio で JSON-RPC を流すので Fortran 側の
   `WRITE(6,*)` が混入すると parse error。tr_mcp は scratch unit にログを
