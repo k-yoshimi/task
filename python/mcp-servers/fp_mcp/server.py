@@ -30,8 +30,77 @@ The server is intentionally small — the real heavy lifting is in
 :mod:`fplib`. This file mirrors ``tr_mcp/server.py``; adding the
 remaining modules (ti / wr / wrx / tot) should be a matter of copying
 this file and swapping the backing library.
+
+fd-isolation (Fortran WRITE(6) vs MCP JSON-RPC)
+-----------------------------------------------
+Fortran WRITE(6,...) targets OS fd 1, which is also the JSON-RPC write
+pipe to the MCP client parent.  Any Fortran diagnostic line corrupts the
+pipe: the client logs "Failed to parse JSONRPC message from server" for
+each junk line, and in the worst case the session drops with
+"Connection closed".
+
+FP is a heavy offender: ``FPWRTPRF`` prints the whole radial profile
+table to unit 6 on every time step, so the damage grows linearly with
+NTMAX (measured client-side on the fp_iter01 fixture: 150 parse errors
+at NTMAX=1, 211 at NTMAX=2, i.e. ~61 junk lines per extra step).
+
+Fix: installed by main() immediately before the stdio server starts
+(NOT at import time -- see #227 item 1):
+  1. dup fd 1 (JSON-RPC write pipe) to a fresh fd; redirect fd 1 → stderr
+     so Fortran WRITE(6,...) goes to the subprocess stderr (backend log).
+  2. Rebuild sys.stdout around the saved fd so the MCP framework's stdio
+     transport still writes to the correct pipe.
+
+After this:
+  - Fortran WRITE(6,...) → fd 1 → stderr (harmless backend log)
+  - MCP sys.stdout.write → saved fd → original JSON-RPC write pipe
+
+NOTE: We do NOT redirect fd 0 (stdin) to /dev/null because the Fortran
+library uses stdin internally; redirecting it increases crash rates.
 """
 from __future__ import annotations
+
+import os as _os
+import sys as _sys
+
+# ---------- fd-isolation (Fortran WRITE(6) vs MCP JSON-RPC) ----------
+# fd 1 originally points at the parent's JSON-RPC write pipe. Fortran
+# WRITE(6,...) also targets fd 1, corrupting the pipe. We dup the pipe
+# to a fresh fd and redirect fd 1 → stderr so Fortran writes go to the
+# subprocess stderr (visible in backend log; harmless to JSON-RPC).
+#
+# The MCP framework writes via sys.stdout, so we rebuild sys.stdout to
+# write to the saved (original-pipe) fd. Line buffering keeps JSON-RPC
+# records flushing per-message.
+#
+# NOTE: We do NOT redirect fd 0 (stdin) to /dev/null because the
+# Fortran library uses stdin internally; redirecting it increases crash
+# rates (~20% → ~50%).
+#
+# #227 item 1: this MUST NOT run at import time. Importing this module --
+# pytest collection, an embedding application, or a bare
+# `python -c "import fp_mcp.server"` -- would mutate the *host* process's
+# fd 1 and replace its sys.stdout. It is installed explicitly by main(),
+# i.e. only when this module actually runs as the stdio server, and after
+# the --help / --print-tools paths, which print to the terminal.
+_FD_ISOLATION_INSTALLED = False
+_mcp_pipe_fd = None
+
+
+def _install_fd_isolation() -> None:
+    """Redirect fd 1 to stderr and rebuild sys.stdout on the saved pipe fd.
+
+    Idempotent. Called from main() immediately before the stdio server
+    starts; never at import time.
+    """
+    global _FD_ISOLATION_INSTALLED, _mcp_pipe_fd
+    if _FD_ISOLATION_INSTALLED:
+        return
+    _mcp_pipe_fd = _os.dup(1)
+    _os.dup2(2, 1)
+    _sys.stdout = _os.fdopen(_mcp_pipe_fd, "w", buffering=1, encoding="utf-8")
+    _FD_ISOLATION_INSTALLED = True
+# ----------------------------------------------------------------------
 
 import os
 import sys
@@ -643,6 +712,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             "       pip install 'mcp>=0.9'\n"
         )
         return 2
+
+    # Install the fd isolation now -- NOT at import time (#227 item 1).
+    # Everything above this point (--help, --print-tools, the MCP-missing
+    # error path) returns before we touch the host process's fds.
+    _install_fd_isolation()
 
     server = build_server()
     # FastMCP >=0.9 exposes .run() for stdio transport by default.
