@@ -94,6 +94,26 @@ class TestRegistryShape(unittest.TestCase):
         for name in ("MODEL_NBI", "MODEL_WAVE", "MODEL_BS", "MODEL_FOW"):
             self.assertIn(name, srv.PARAMETER_REGISTRY)
 
+    def test_knameq_declared_as_string(self) -> None:
+        """KNAMEQ must advertise type 'str' so the LLM uses set_param_str.
+
+        It is the only name accepted by
+        fp/fp_param_registry.f90::fp_param_set_str, and it is what the
+        MODELG=3 eq_load path reads.
+        """
+        meta = srv.PARAMETER_REGISTRY.get("KNAMEQ")
+        self.assertIsNotNone(meta, "KNAMEQ missing from PARAMETER_REGISTRY")
+        self.assertEqual(meta["type"], "str")
+
+    def test_only_knameq_is_string_typed(self) -> None:
+        # fp_param_set_str has a single CASE; anything else advertised as
+        # 'str' would produce an ierr=1 "unknown name" at runtime.
+        str_keys = {
+            name for name, meta in srv.PARAMETER_REGISTRY.items()
+            if meta["type"] == "str"
+        }
+        self.assertEqual(str_keys, {"KNAMEQ"})
+
 
 class TestStateSchema(unittest.TestCase):
     def test_schema_top_level(self) -> None:
@@ -183,11 +203,15 @@ class _MockFplib:
 
     def __init__(self) -> None:
         self.scalar_calls: List[tuple] = []
+        self.str_calls: List[tuple] = []
         self.run_calls: List[int] = []
         self.closed = False
 
     def set_param(self, name: str, value: float) -> None:
         self.scalar_calls.append((name, value))
+
+    def set_param_str(self, name: str, value: str) -> None:
+        self.str_calls.append((name, value))
 
     def run(self, ntmax: int) -> None:
         self.run_calls.append(int(ntmax))
@@ -236,11 +260,18 @@ class TestBulkParamDispatch(unittest.TestCase):
         with self.assertRaises(FplibError):
             srv._apply_bulk_params(fp, {"RR": object()})
 
-    def test_rejects_string_value(self) -> None:
-        """fplib has no set_param_str: strings are unsupported."""
+    def test_routes_string_value_to_set_param_str(self) -> None:
+        """Strings go to fp_set_param_str, not fp_set_param.
+
+        KNAMEQ is the equilibrium-data file name read by the MODELG=3
+        eq_load path (fp/fp_param_registry.f90::fp_param_set_str), so
+        it must never be coerced through float().
+        """
         fp = _MockFplib()
-        with self.assertRaises(FplibError):
-            srv._apply_bulk_params(fp, {"KNAMFP": "path.in"})
+        applied = srv._apply_bulk_params(fp, {"KNAMEQ": "eq.bin"})
+        self.assertEqual(applied, ["KNAMEQ"])
+        self.assertEqual(fp.str_calls, [("KNAMEQ", "eq.bin")])
+        self.assertEqual(fp.scalar_calls, [])
 
     def test_rejects_bool(self) -> None:
         # bool is a subclass of int; we want it rejected as ambiguous.
@@ -317,6 +348,26 @@ class TestHandlersWithMockedState(unittest.TestCase):
         self.assertIn("RR", msg)
         self.assertEqual(self.mock_fp.scalar_calls[-1], ("RR", 6.5))
 
+    def test_handle_set_param_str(self) -> None:
+        msg = srv.handle_set_param_str("KNAMEQ", "eq.bin")
+        self.assertIn("KNAMEQ", msg)
+        self.assertEqual(self.mock_fp.str_calls[-1], ("KNAMEQ", "eq.bin"))
+        # Must not leak into the numeric setter.
+        self.assertEqual(self.mock_fp.scalar_calls, [])
+
+    def test_handle_set_param_str_wraps_missing_symbol(self) -> None:
+        """An old libfpapi.so without fp_set_param_str must map cleanly."""
+        with mock.patch.object(
+            self.mock_fp,
+            "set_param_str",
+            side_effect=FplibError(
+                "fp_set_param_str not available in libfpapi.so"
+            ),
+        ):
+            with self.assertRaises(Exception) as ctx:
+                srv.handle_set_param_str("KNAMEQ", "eq.bin")
+        self.assertIn("fp_set_param_str", str(ctx.exception))
+
     def test_handle_set_params(self) -> None:
         msg = srv.handle_set_params({"BB": 5.3})
         self.assertIn("1 parameter", msg)
@@ -383,7 +434,7 @@ class TestMainCliFlags(unittest.TestCase):
         rc = self._run_quiet(["--help"])
         self.assertEqual(rc, 0)
 
-    def test_print_tools_lists_nine(self) -> None:
+    def test_print_tools_lists_ten(self) -> None:
         import io
         import contextlib
 
@@ -392,9 +443,11 @@ class TestMainCliFlags(unittest.TestCase):
             rc = srv.main(["--print-tools"])
         self.assertEqual(rc, 0)
         lines = [ln for ln in buf.getvalue().splitlines() if ln.strip()]
-        self.assertEqual(len(lines), 9)
+        self.assertEqual(len(lines), 10)
         # A handful of expected entries
-        for name in ("init", "run", "get_state", "run_and_get_state"):
+        for name in (
+            "init", "run", "get_state", "run_and_get_state", "set_param_str",
+        ):
             self.assertIn(name, lines)
 
 
