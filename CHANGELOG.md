@@ -146,6 +146,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
   overflows and a step never ends); `NSAMAX` above `NSBMAX`; an evolved
   species number outside 1 to `MIN(NSMAX, NSBMAX)`; a background species
   number outside 1 to `NSMAX`.
+- **trx: the per-channel power integrals of `TRGLOB` are in MW** (#270;
+  issue #238). Ten of them (`PIC_NSNIC`, `PLH_NSNLH`, `PEC_NSNEC`,
+  `PNB_NSNNB`, `PNBIN_NSNNB`, `PNBCL_NSNNB`, `PNF_NSNNF`, `PNFIN_NSNNF`,
+  `PNFCL_NSNNF`, `PNFNN_NNF`) stayed in W where `PINT`, `QF` and the
+  confinement times take MW, so `PNF_TOT` entered `PINT` 1e6 too large and
+  corrupted `PINT`, `QF`, `TAUE1`, `TAUE2` and, through fractional powers,
+  `TAUE89`, `TAUE98` and `H98Y2` of runs with fusion. In NBI runs the
+  printed beam collisional powers (`PBCLE` to `PBCLA`) are now in MW;
+  `PNB_TOT` and `PRF_TOT` are not fixed by this, since the arrays they
+  integrate are never filled in trx (#238).
 - **MCP servers `eq_mcp`, `tr_mcp`, `tot_mcp`: Fortran output no longer
   reaches the JSON-RPC pipe.** A stdio server's fd 1 is the pipe to its
   client, and the library's `WRITE(6,...)` went into it: in one stdio
