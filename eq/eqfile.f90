@@ -171,7 +171,7 @@
       IERR=0
       IF(MODELG.EQ.3.OR.MODELG.EQ.9) THEN
          CALL EQRTSK(IERR)
-      ELSEIF(MODELG.EQ.5) THEN
+      ELSEIF(MODELG.EQ.5.OR.MODELG.EQ.25) THEN
          CALL EQDSKR(IERR)
 !        Keep EQDSKR's error: EQCALQ would reset IERR and report a
 !        failed load (e.g. a missing file) as success.

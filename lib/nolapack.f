@@ -11220,3 +11220,18 @@ C     ILAENV = 0
 *     End of XERBLA
 *
       END
+C
+      SUBROUTINE LAPACK_DGETRF(M,N,A,LDA,IPIV,INFO)
+C
+      DIMENSION A(LDA,*),IPIV(*)
+      INFO=-1
+      RETURN
+      END
+C
+      SUBROUTINE LAPACK_DGETRS(KCH,N,NRHS,A,LDA,IPIV,B,LDB,INFO)
+C
+      CHARACTER KCH*(*)
+      DIMENSION A(LDA,*),IPIV(*),B(LDB,*)
+      INFO=-1
+      RETURN
+      END

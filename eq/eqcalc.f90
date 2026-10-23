@@ -327,7 +327,14 @@
       INTEGER, INTENT(OUT) :: IERR
 
       IERR=0
-
+!
+!     ----- Adaptive under-relaxation of the GS Picard iteration -----
+!     A full Picard step (PSI <- solution) oscillates for stiff (high-q,
+!     low-current) equilibria. Damp the update when the residual grows and
+!     relax back towards a full step while it decreases.
+      OMEGA=1.D0
+      SULMP=1.D30
+!
       DO NLOOP=1,NLPMAX
          CALL EQBAND
          CALL EQRHSV(IERR)
@@ -343,7 +350,22 @@
             ENDDO
          ENDDO
          SUML=SQRT(SUM1/SUM0)
-
+!
+!        --- adapt the relaxation factor and damp the just-applied step ---
+         IF(SUML.GT.SULMP) THEN
+            OMEGA=MAX(0.1D0,0.5D0*OMEGA)
+         ELSE
+            OMEGA=MIN(1.D0,1.2D0*OMEGA)
+         ENDIF
+         SULMP=SUML
+         IF(OMEGA.LT.1.D0) THEN
+            DO NSG=1,NSGMAX
+               DO NTG=1,NTGMAX
+                  PSI(NTG,NSG)=PSI(NTG,NSG)-(1.D0-OMEGA)*DELPSI(NTG,NSG)
+               ENDDO
+            ENDDO
+         ENDIF
+!
          IF(SUML.LT.EPSEQ) THEN
             IF(NPRINT.GE.1) THEN
                WRITE(6,'(A,1P4E14.6,I5)') &

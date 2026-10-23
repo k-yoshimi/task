@@ -40,7 +40,7 @@ Differences from `tr_mcp`:
 - A **`validate`** tool is exposed independently — pre-run validation
   (PR #164) is published on a dedicated endpoint. The LLM can detect
   missing EQDSK files before `run`.
-- **12** tools in total (`tr` has 9).
+- **13** tools in total (`tr` has 10).
 
 ## Prerequisites
 
@@ -72,7 +72,7 @@ python -m eq_mcp.server --help
 python -m eq_mcp.server --print-tools
 ```
 
-You should see 12 tools (see "Tool catalog" below).
+You should see 13 tools (see "Tool catalog" below).
 
 ### Environment health check
 
@@ -146,7 +146,7 @@ eq-mcp install --client cursor --scope user
 
 ## Tool catalog
 
-`eq_mcp` exposes **12** tools.
+`eq_mcp` exposes **13** tools.
 
 | Tool | Purpose | Main args |
 |---|---|---|
@@ -156,6 +156,7 @@ eq-mcp install --client cursor --scope user
 | `set_params` | set many at once (dict) | `params` |
 | `run` | run the equilibrium calculation (`eq_run`) | `mode` (default=1) |
 | `get_state` | fetch the current state (`eq_get_state`) | none |
+| `get_psi_rz` | fetch the 2-D PSI(R,Z) field and the RG/ZG grid (EQ-specific; needs numpy) | none |
 | `validate` | **pre-run validation (an EQ strength)** | none |
 | `save` | write the equilibrium of the last `run` to a TASK/EQ binary file (`eq_save`); an existing file is replaced only with `overwrite=true`; fails when the file was not opened or is shorter than what was written | `path`, `overwrite` (default `false`) |
 | `finalize` | release resources (`eq_finalize`) | none |

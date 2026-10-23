@@ -2,10 +2,10 @@ name: Provision TASK build environment (per-system files)
 description: >-
   Writes the two gitignored per-system files every TASK Makefile needs on a
   Linux gfortran runner: make.header (no graphics, no MPI, no LAPACK) and
-  mtxp/make.mtxp (from the nompi template). Used by the pytest, mono-build
-  and clean-tree-build jobs so that all three build with byte-identical
-  compiler flags; before this action each job carried its own copy of the
-  heredoc with a KEEP-IN-SYNC comment.
+  mtxp/make.mtxp (from the nompi template). Used by the pytest, mono-build,
+  clean-tree-build and uncovered-modules-build jobs so that all of them build
+  with byte-identical compiler flags; before this action each job carried its
+  own copy of the heredoc with a KEEP-IN-SYNC comment.
 
 runs:
   using: composite

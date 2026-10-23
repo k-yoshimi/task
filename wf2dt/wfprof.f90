@@ -84,12 +84,13 @@ END SUBROUTINE WFBPSI
 
 SUBROUTINE WFSMAG(R,Z,BABS,AL)
 
-  USE wfcomm,ONLY: MODELG,rkind,modelb_wf,idebug_wf
+  USE wfcomm,ONLY: MODELG,rkind,modelb_wf
+  USE wffile
   USE plload
   implicit none
   real(rkind),intent(in) :: R,Z
   real(rkind),intent(out):: BABS,AL(3)
-  REAL(rkind):: BR,BZ,BT
+  REAL(rkind):: BR,BZ,BT,rhon
   integer:: IERR
 
   IF(MODELB_wf.EQ.3) THEN
@@ -101,7 +102,7 @@ SUBROUTINE WFSMAG(R,Z,BABS,AL)
      CASE(1,2)
         CALL WFSMAG2(R,Z,BABS,AL)
      CASE(12)
-        CALL pl_read_p2Dmag(R,Z,BR,BZ,BT,IERR)
+        CALL pl_read_p2Dmag(R,Z,BR,BZ,BT,rhon,IERR)
         BABS=SQRT(BR**2+BZ**2+BT**2)
         AL(1)=BR/BABS
         AL(2)=BT/BABS
@@ -191,7 +192,7 @@ SUBROUTINE WFSMAG3(x,y,BABS,AL)
   integer :: I
   real(rkind),intent(in) :: x,y
   real(rkind),intent(out):: BABS,AL(3)
-  real(rkind) :: BLO(3),LR,LZ
+  real(rkind) :: BLO(3)
   real(rkind) :: R,PH,Q
 
 ! L : distance from the center of plasma

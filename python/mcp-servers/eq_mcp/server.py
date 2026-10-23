@@ -22,6 +22,8 @@ wrx_mcp):
 
 * ``set_param_str`` — string parameters such as ``KNAMEQ`` (the EQDSK
   file path) routed through :py:meth:`eqlib.Eq.set_param_str`.
+* ``get_psi_rz`` — the 2-D PSI(R,Z) field with the RG/ZG grid, through
+  :py:meth:`eqlib.Eq.get_psi_rz` (needs numpy).
 * ``validate`` — pre-run cross-parameter validation (Issue #143)
   exposing :py:meth:`eqlib.Eq.validate`. Returns a list of
   ``{param, code, message}`` dicts; an empty list means the current
@@ -510,6 +512,28 @@ def handle_get_state() -> Dict[str, Any]:
         raise _wrap_eqlib_error(exc) from exc
 
 
+def handle_get_psi_rz() -> Dict[str, Any]:
+    try:
+        eq = STATE.ensure_open()
+        psi = eq.get_psi_rz()  # numpy ndarray shape (nrg, nzg)
+        state = eq.get_state()
+        nrg = int(psi.shape[0])
+        nzg = int(psi.shape[1])
+        # state.rg / state.zg are already trimmed to nrgmax / nzgmax by
+        # EqState.from_c(); a plain list copy is sufficient.
+        rg = list(state.rg)
+        zg = list(state.zg)
+        return {
+            "nrg": nrg,
+            "nzg": nzg,
+            "rg": rg,
+            "zg": zg,
+            "psi_rz": psi.tolist(),
+        }
+    except Exception as exc:
+        raise _wrap_eqlib_error(exc) from exc
+
+
 def handle_validate() -> List[Dict[str, Any]]:
     """Return pre-run validation diagnostics as a list of dicts.
 
@@ -596,7 +620,7 @@ def handle_run_and_get_state(
 # above are the unit-testable surface either way.
 # =====================================================================
 def build_server() -> Any:
-    """Build and return a FastMCP server instance with the 12 eq tools."""
+    """Build and return a FastMCP server instance with the 13 eq tools."""
     if not MCP_AVAILABLE:
         raise RuntimeError(
             "Python MCP SDK (`mcp`) is not installed. "
@@ -724,6 +748,20 @@ def build_server() -> Any:
         return handle_get_state()
 
     @mcp.tool()
+    def get_psi_rz() -> Dict[str, Any]:
+        """Return the 2-D PSI(R,Z) field plus the RG/ZG grid coordinates.
+
+        Output shape:
+            ``{"nrg": int, "nzg": int, "rg": list[float], "zg": list[float],
+               "psi_rz": list[list[float]]}``  (psi_rz indexed [i_r][i_z],
+            runtime active grid only — default 33×33)
+
+        Note: PSI is populated by ``run()``; calling get_psi_rz before run
+        returns whatever is in the buffer (typically zeros on a fresh init).
+        """
+        return handle_get_psi_rz()
+
+    @mcp.tool()
     def validate() -> List[Dict[str, Any]]:
         """Run pre-run cross-parameter validation (Issue #143).
 
@@ -810,6 +848,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 "set_params",
                 "run",
                 "get_state",
+                "get_psi_rz",
                 "validate",
                 "finalize",
                 "describe_parameters",

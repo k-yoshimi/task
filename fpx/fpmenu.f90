@@ -21,6 +21,7 @@ CONTAINS
     USE fpfout
     USE plinit
     USE plparm
+    USE plview,ONLY: pl_view  ! merge: bpsi moved pl_view plparm->plview; CALL pl_view needs the module route
     USE fpfile
     USE fpcaltp
     USE fpcalte

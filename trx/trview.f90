@@ -33,24 +33,65 @@ CONTAINS
       WRITE(6,601) 'RIPS  ',RIPS,  'RIPE  ',RIPE,   &
                    'BB    ',BB
 
-      WRITE(6,611)
-611   FORMAT(' ','NS  NPA',1X, &
-             'PM          PZ          PN(E20)     PNS(E20)    PT(KEV)     PTS(KEV)')
+      WRITE(6,'(A)') &
+           '  NS         NPA          PA          PZ          ID         KID'
       DO NS=1,NSMAX
-         WRITE(6,612) NS,NPA(NS),PA(NS),PZ(NS),PN(NS),PNS(NS),PT(NS),PTS(NS)
-      ENDDO
+         WRITE(6,612) NS,NPA(NS),PA(NS),PZ(NS),ID_NS(NS),KID_NS(NS)
+      END DO
+      WRITE(6,'(A)') &
+           '  NS          PN         PNS         PNM        PZCL        PNUC'
+      DO NS=1,NSMAX
+         WRITE(6,613) NS,PN(NS),PNS(NS),PNM(NS),PZCL(NS),PNUC(NS)
+      END DO
+      WRITE(6,'(A)') &
+           '  NS          PT         PTS         PTM        PTPR        PTPP'
+      DO NS=1,NSMAX
+         WRITE(6,613) NS,PT(NS),PTS(NS),PTM(NS),PTPR(NS),PTPP(NS)
+      END DO
+      WRITE(6,'(A)') &
+           '  NS          PU         PUS         PUM        PUPR        PUPP'
+      DO NS=1,NSMAX
+         WRITE(6,613) NS,PU(NS),PUS(NS),PUM(NS),PUPR(NS),PUPP(NS)
+      END DO
+      WRITE(6,'(A)') &
+           '  NS      PROFN1      PROFN2      PROFN3'
+      DO NS=1,NSMAX
+         WRITE(6,613) NS,PROFN1(NS),PROFN2(NS),PROFN3(NS)
+      END DO
+      WRITE(6,'(A)') &
+           '  NS      PROFT1      PROFT2      PROFT3'
+      DO NS=1,NSMAX
+         WRITE(6,613) NS,PROFT1(NS),PROFT2(NS),PROFT3(NS)
+      END DO
+      WRITE(6,'(A)') &
+           '  NS      PROFU1      PROFU2      PROFU3'
+      DO NS=1,NSMAX
+         WRITE(6,613) NS,PROFU1(NS),PROFU2(NS),PROFU3(NS)
+      END DO
+      WRITE(6,'(A)') &
+           '  NS      RHOITB       PNITB       PTITB       PUITB'
+      DO NS=1,NSMAX
+         WRITE(6,613) NS,RHOITB(NS),PNITB(NS),PTITB(NS),PUITB(NS)
+      END DO
 
-      WRITE(6,601) 'PROFN1',PROFN1,'PROFT1',PROFT1,'PROFU1',PROFU1,'PROFJ1',PROFJ1
-      WRITE(6,601) 'PROFN2',PROFN2,'PROFT2',PROFT2,'PROFU2',PROFU2,'PROFJ2',PROFJ2
-      WRITE(6,601) 'ALP(1)',ALP(1),'ALP(2)',ALP(2),'ALP(3)',ALP(3),'PBSCD ',PBSCD
-      WRITE(6,602) 'MDLKAI',MDLKAI,'MDLETA',MDLETA,'MDLAD ',MDLAD, 'MDLAVK',MDLAVK
-      WRITE(6,602) 'MDLJBS',MDLJBS,'MDLKNC',MDLKNC,'MDLTPF',MDLTPF,'MDLNCL',MDLNCL
-      WRITE(6,605) 'MDLJQ ',MDLJQ, 'MDLFLX',MDLFLX,'MDLTC ',MDLTC, 'RHOA  ',RHOA
-      WRITE(6,602) 'MDLWLD',MDLWLD,'MDLER ',MDLER, 'MODELG',MODELG,'NTEQIT',NTEQIT
-      WRITE(6,603) 'MDLCD05',MDLCD05,'CK0   ',CK0,   'CK1   ',CK1
-      WRITE(6,603) 'MDLEDGE',MDLEDGE,'CSPRS ',CSPRS, 'CNN   ',CNN
-      WRITE(6,601) 'CNP   ',CNP,   'CNH   ',CNH,   'CDP   ',CDP,   'CDH   ',CDH
-      WRITE(6,601) 'AD0   ',AD0,   'CHP   ',CHP,   'CWEB  ',CWEB,  'CALF  ',CALF
+      WRITE(6,601) &
+           'ALP(1)',ALP(1),'ALP(2)',ALP(2),'ALP(3)',ALP(3),'PBSCD ',PBSCD
+      WRITE(6,602) &
+           'MDLKAI',MDLKAI,'MDLETA',MDLETA,'MDLAD ',MDLAD, 'MDLAVK',MDLAVK
+      WRITE(6,602) &
+           'MDLJBS',MDLJBS,'MDLKNC',MDLKNC,'MDLTPF',MDLTPF,'MDLNCL',MDLNCL
+      WRITE(6,605) &
+           'MDLJQ ',MDLJQ, 'MDLFLX',MDLFLX,'MDLTC ',MDLTC, 'RHOA  ',RHOA
+      WRITE(6,602) &
+           'MDLWLD',MDLWLD,'MDLER ',MDLER, 'MODELG',MODELG,'NTEQIT',NTEQIT
+      WRITE(6,603) &
+           'MDLCD05',MDLCD05,'CK0   ',CK0,   'CK1   ',CK1
+      WRITE(6,603) &
+           'MDLEDGE',MDLEDGE,'CSPRS ',CSPRS, 'CNN   ',CNN
+      WRITE(6,601) &
+           'CNP   ',CNP,   'CNH   ',CNH,   'CDP   ',CDP,   'CDH   ',CDH
+      WRITE(6,601) &
+           'AD0   ',AD0,   'CHP   ',CHP,   'CWEB  ',CWEB,  'CALF  ',CALF
       WRITE(6,630)     'model_prof  ',model_prof
       WRITE(6,'(A,A)') 'knam_prof   ',knam_prof
       WRITE(6,'(A,I4)')'model_profn_time',model_profn_time
@@ -61,17 +102,22 @@ CONTAINS
          WRITE(6,601) 'CKALFA',CKALFA,'CKBETA',CKBETA,'CKGUMA',CKGUMA
 
       IF((MDLKAI.GE.10.AND.MDLKAI.LT.20).OR.ID.EQ.1)  &
-         WRITE(6,613) CDW(1),CDW(2),CDW(3),CDW(4),CDW(5),CDW(6),CDW(7),CDW(8)
-  613 FORMAT(' ','    AKDW(E) =  ',0PF6.3,' DEDW + ',F6.3,' DIDW'/ &
+         WRITE(6,618) CDW(1),CDW(2),CDW(3),CDW(4),CDW(5),CDW(6),CDW(7),CDW(8)
+  618 FORMAT(' ','    AKDW(E) =  ',0PF6.3,' DEDW + ',F6.3,' DIDW'/ &
              ' ','    AKDW(D) =  ',0PF6.3,' DEDW + ',F6.3,' DIDW'/ &
              ' ','    AKDW(T) =  ',0PF6.3,' DEDW + ',F6.3,' DIDW'/ &
              ' ','    AKDW(A) =  ',0PF6.3,' DEDW + ',F6.3,' DIDW')
 
-      WRITE(6,601) 'DT    ',DT,    'EPSLTR',EPSLTR,'TSST  ',TSST,  'TPRST ',TPRST
-      WRITE(6,602) 'LMAXTR',LMAXTR,'NRMAX ',NRMAX, 'NTMAX ',NTMAX, 'NTSTEP',NTSTEP
-      WRITE(6,602) 'NGRSTP',NGRSTP,'NGTSTP',NGTSTP,'NGPST ',NGPST, 'IZERO ',IZERO
-      WRITE(6,602) 'MDLST ',MDLST, 'MDLCD ',MDLCD
-      WRITE(6,630) 'model_pnf   ',model_pnf
+      WRITE(6,601) &
+           'DT    ',DT,    'EPSLTR',EPSLTR,'TSST  ',TSST,  'TPRST ',TPRST
+      WRITE(6,602) &
+           'LMAXTR',LMAXTR,'NRMAX ',NRMAX, 'NTMAX ',NTMAX, 'NTSTEP',NTSTEP
+      WRITE(6,602) &
+           'NGRSTP',NGRSTP,'NGTSTP',NGTSTP,'NGPST ',NGPST, 'IZERO ',IZERO
+      WRITE(6,602) &
+           'MDLST ',MDLST, 'MDLCD ',MDLCD
+      WRITE(6,630) &
+           'model_pnf   ',model_pnf
 
       IF(MDLIMP.GT.0) THEN
          WRITE(6,602) 'MDLIMP',MDLIMP
@@ -253,7 +299,8 @@ CONTAINS
               2X,A6,'=',1X,A6,4X:2X,A6,'=',I7)
 605   FORMAT(' ',A6,'=',I7,4X   :2X,A6,'=',I7,4X  : &
               2X,A6,'=',I7,4X   :2X,A6,'=',1PE11.3)
-612   FORMAT(' ',I2,I4,6F12.3)
+612   FORMAT(I4,I12,F12.4,F12.4,I12,8X,A4)
+613   FORMAT(I4,5F12.4)
 622   FORMAT(' ',A8,'=',I5,4X   :2X,A8,'=',I5,4X  : &
               2X,A8,'=',I5,4X   :2X,A8,'=',I5)
 623   FORMAT(' ',A8,'=',I7,4X   :2X,A8,'=',1PE11.3: &

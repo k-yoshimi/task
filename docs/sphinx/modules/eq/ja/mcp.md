@@ -37,7 +37,7 @@
   文字列パラメータ用. `tr` も最近対応しましたが eq では設計初期から必須.
 - **`validate`** ツールが独立 — 事前検証 (PR #164) を専用エンドポイントで
   公開. LLM が EQDSK ファイル不在などを `run` 前に検出できる.
-- ツール総数 **12 個** (tr は 9 個).
+- ツール総数 **13 個** (tr は 10 個).
 
 ## 前提条件
 
@@ -68,7 +68,7 @@ python -m eq_mcp.server --help
 python -m eq_mcp.server --print-tools
 ```
 
-12 ツールが並びます (詳細は下記の「提供ツール一覧」参照).
+13 ツールが並びます (詳細は下記の「提供ツール一覧」参照).
 
 ### 環境ヘルスチェック
 
@@ -141,7 +141,7 @@ eq-mcp install --client cursor --scope user
 
 ## 提供ツール一覧
 
-`eq_mcp` は **12 個** のツールを公開します.
+`eq_mcp` は **13 個** のツールを公開します.
 
 | ツール | 目的 | 主な引数 |
 |---|---|---|
@@ -151,6 +151,7 @@ eq-mcp install --client cursor --scope user
 | `set_params` | まとめて設定 (dict) | `params` |
 | `run` | 平衡計算実行 (`eq_run`) | `mode` (default=1) |
 | `get_state` | 現在の状態取得 (`eq_get_state`) | なし |
+| `get_psi_rz` | 2 次元 PSI(R,Z) 分布と RG/ZG 格子を取得 (EQ 独自, numpy が必要) | なし |
 | `validate` | **事前検証 (EQ 強み)** | なし |
 | `save` | 直前の `run` の平衡を TASK/EQ 形式のバイナリファイルに保存 (`eq_save`). 既存ファイルは `overwrite=true` のときだけ置き換える. ファイルを開けない, または書いた長さより短い場合はエラー | `path`, `overwrite` (既定 `false`) |
 | `finalize` | リソース解放 (`eq_finalize`) | なし |

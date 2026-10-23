@@ -20,7 +20,7 @@ MODULE trcomm_param
   REAL(rkind), DIMENSION(8) :: &
        CDW
   REAL(rkind), DIMENSION(NSMM) :: &
-       PA,PZ,PN,PNS,PT,PTS,PU,PUS
+       PA,PZ,PN,PNS,PNM,PT,PTS,PTM,PTPR,PTPP,PU,PUS,PUM,PUPR,PUPP
   INTEGER, DIMENSION(NSMM) :: &
        NPA
   INTEGER:: &

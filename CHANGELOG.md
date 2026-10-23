@@ -136,6 +136,30 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
   `MCP_AVAILABLE` right after the install, so that skip is a failure
   there. Porting the servers to the 2.x API is separate work. Fix by
   Li Hengyu, cherry-picked from #226.
+- **PL: `plcheck` accepts `MODELG=25`**, the EQDSK geometry that `plinit`
+  documents and `EQ_READ` loads. A `plparm` namelist carrying it printed
+  `XX plcheck: INVALID MODELG` (`pl_parm` returned 101) and the PL menu
+  asked again. The other values outside 0 to 11 are refused as before.
+- **TR library, `MODELG=9`: every preparation adopts the equilibrium
+  again.** The saved flag `tr_eq_init` was cleared by the first run and
+  never set again, so a second `tr_init` .. `tr_finalize` lifecycle in one
+  process returned 0 from `tr_run` with q = NaN, and a second `tr_prep`
+  inside one lifecycle (after a parameter change, or a second `R` in the
+  menu) started from the previous run's psi_p. `tr_set_metric` now sets the
+  flag at the start of each `MODELG=9` preparation, and `tr_init` and
+  `tr_finalize` restore it.
+- **TR library, `MODELG=9`: a failure of the initial q-scaling fails the
+  run** (`TR_ERR_CALC_FAILED` from `tr_run`, the cause on unit 6) instead of
+  being printed at most: a non-zero status from a step of `eq_calc` (which
+  has an optional `ierr` for this), from `tr_bpsd_get` or from
+  `tr_bpsd_put`, a scale factor that is zero or not finite, or no
+  agreement after 30 iterations. `tr_eq_init` stays set after a failure.
+  When the equilibrium solve fails, the scaling used to go on with what
+  was left: depending on the input the process ended at a run-time check
+  (in a build with them) or `tr_run` returned 0. `EQLOOP` running out of
+  `NLPMAX` is still accepted inside the scaling, as `EQCALC` goes on after
+  it, and a failure that `EQCALC` or `EQCALQ` do not return is still not
+  seen.
 - **FP library: `fp_run` refuses the counts the solver cannot run with**,
   before any work, with `FP_ERR_INVALID` and one `XX fp_run: ...` line per
   violation on unit 6 (`fp_param_check` in `fp/fp_param_registry.f90`).

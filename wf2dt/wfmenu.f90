@@ -5,6 +5,8 @@ subroutine wfmenu
   USE wfparm
   USE plload, ONLY: pl_load
   USE wfload, ONLY: wf_load_wg
+  USE wffile
+  USE wfgoutn
   USE libkio
   implicit none
   
@@ -15,12 +17,13 @@ subroutine wfmenu
   INTEGER:: input_error_count
 
   input_error_count=0
+  WRITE(6,'(A)') '*** task/wf2dt 20260205 ***'
 
 1 continue
 
   IF(nrank.EQ.0) THEN
-     WRITE(6,*) '## INPUT: P,V:PARM  D:DIV  A:ANT', &
-                         ' W,C:WAVE G:GRAPH  S,L:FILE  Q:QUIT'
+     WRITE(6,*) '## INPUT: P,V:parm D:div A:ant', &
+                         ' W,C:wave G,K:graph F:prof S,L:file  Q:quit'
      CALL TASK_KLIN(LINE,KID,MODE,WF_PARM)
   END IF
   call mtx_barrier
@@ -55,9 +58,13 @@ subroutine wfmenu
      call WFWAVE
   elseif (KID.eq.'G') then
      if (nrank.eq.0) call WFGOUT
+  elseif (KID.eq.'K') then
+     if (nrank.eq.0) call wf_goutn
   elseif (KID.eq.'S') then
      if (nrank.eq.0) call wfsave
   elseif (KID.eq.'L') then
+     if (nrank.eq.0) call wfload
+  elseif (KID.eq.'F') then
      IDEBUG_SAVE=IDEBUG
      IDEBUG=1
      CALL pl_load(ierr)

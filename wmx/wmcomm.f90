@@ -8,7 +8,7 @@ MODULE wmcomm_parm
 !  USE bpsd_kinds
 !  USE bpsd_constants
 
-  USE plcomm_parm
+  USE plcomm_parm,pt_pl=>PT  ! merge: plcomm_parm gained PT; wm owns local PT
 
 !,ONLY: NSM,NSMAX,MODELG,MODELB,MODELN,MODELQ, &
 !       IDEBUG,MODEFR,MODEFW,MODEL_PROF,MODEL_NPROF, &
@@ -21,7 +21,7 @@ MODULE wmcomm_parm
 
 ! --- dpcomm_parm
 
-  USE dpcomm_parm
+  USE dpcomm_parm,pt_dp=>PT  ! merge: dpcomm_parm re-exports plcomm_parm's PT; block the leak (wm owns local PT)
 
 !  MODELP(NSM),MODELV(NSM),NCMIN(NSM),NCMAX(NSM)
 !  RF0,RFI0,RKX0,RKY0,RKZ0,RX0,RY0,RZ0,RK0,RKANG0

@@ -373,6 +373,42 @@ class Eq:
         raise_for_rc("eq_get_state", rc)
         return EqState.from_c(c)
 
+    def get_psi_rz(self) -> "np.ndarray":  # type: ignore[name-defined]
+        """Return the 2-D PSI(R,Z) field as a numpy array.
+
+        Returns a fresh ``np.ndarray`` of shape ``(nrgmax, nzgmax)``
+        (default 33×33) and dtype float64. Requires numpy.
+
+        The Fortran source is column-major (R varies fastest); we copy
+        into a numpy buffer that matches that layout, then transpose
+        to expose `psi[i_r, i_z]` indexing in Python.
+        """
+        if self._closed:
+            raise EqlibError("get_psi_rz on closed Eq")
+        try:
+            getter = self._lib.eq_common_get_psi_rz_
+        except AttributeError as exc:
+            raise EqlibError(
+                "libeqapi.so does not export eq_common_get_psi_rz_; "
+                "rebuild the shared library after the Task 1.4 PR."
+            ) from exc
+
+        import numpy as np
+        st = self.get_state()
+        # EqState exposes nrgmax/nzgmax as lowercase int attributes (see state.py).
+        nr = int(st.nrgmax)
+        nz = int(st.nzgmax)
+        # Allocate (nz, nr) C-contiguous; Fortran will fill it column-major.
+        buf = np.zeros((nz, nr), dtype=np.float64, order="C")
+        c_nr = ctypes.c_int(nr)
+        c_nz = ctypes.c_int(nz)
+        getter(
+            ctypes.byref(c_nr),
+            ctypes.byref(c_nz),
+            buf.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+        )
+        return buf.T.copy()  # contiguous (nr, nz) for caller convenience
+
     # --- validation (Issue #143) ---------------------------------------
     def validate(self) -> List[EqDiagEntryPy]:
         """Run pre-run cross-parameter validation.
