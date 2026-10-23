@@ -664,7 +664,8 @@ def build_server() -> Any:
         An existing file is not replaced unless ``overwrite`` is true, and
         the refusal changes nothing. Otherwise the tool sets ``MODEFW``
         itself before it saves (3, or 0 with ``overwrite``), whatever
-        ``set_param`` put there, and once the path is accepted (not
+        ``set_param`` put there, and leaves it at that value afterwards;
+        and once the path is accepted (not
         over-long, no blank at its end, ASCII) KNAMEQ is ``path``, also
         when ``eq_save`` fails.
 

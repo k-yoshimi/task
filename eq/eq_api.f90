@@ -49,7 +49,7 @@ MODULE eq_api
                       eq_diag_entry_c, &
                       EQ_DIAG_PARAM_LEN, EQ_DIAG_MSG_LEN, &
                       EQ_DIAG_OUT_OF_RANGE, EQ_DIAG_FILE_MISSING
-  USE eq_param_registry, ONLY: eq_param_set, eq_param_set_str
+  USE eq_param_registry, ONLY: eq_param_set, eq_param_set_str, eq_param_generation
   ! Rename equnit::eq_init / eq_load away from the C-visible eq_init /
   ! eq_run symbols.
   USE equnit, ONLY: equnit_eq_init => eq_init, &
@@ -74,12 +74,17 @@ MODULE eq_api
   ! Lifecycle flag. Module-scope, single-instance (same pattern as tr / ti).
   LOGICAL, SAVE :: g_initialized = .FALSE.
   ! .TRUE. while the fields hold the equilibrium that the last eq_run
-  ! computed or loaded for the present parameters: what eq_save writes.
-  ! Cleared by eq_init and eq_finalize, when an eq_run starts (one that
-  ! fails leaves the fields part-way), and by a successful eq_set_param
-  ! of anything but the two file modes (EQSAVE writes the parameters and
-  ! counts as they stand, over fields computed for the old ones).
+  ! computed or loaded: what eq_save writes. Cleared by eq_init and
+  ! eq_finalize and when an eq_run starts (one that fails leaves the
+  ! fields part-way).
   LOGICAL, SAVE :: g_has_equilibrium = .FALSE.
+  ! The registry's count of parameter sets (eq_param_generation) when
+  ! that eq_run succeeded. A set since, from eq_set_param or from tot's
+  ! "eq:" dispatcher, moves the count, and eq_save refuses: EQSAVE writes
+  ! the parameters and counts as they stand, over fields computed for
+  ! the old ones. The registry does not count MODEFR, MODEFW and the
+  ! string parameters.
+  INTEGER, SAVE :: g_equilibrium_generation = -1
 
   ! #246: layout query, callable before eq_init.
   PUBLIC :: eq_api_state_abi_version, eq_api_state_size
@@ -162,6 +167,7 @@ CONTAINS
           RETURN
        END IF
        g_has_equilibrium = .TRUE.
+       g_equilibrium_generation = eq_param_generation()
        ierr = EQ_OK
     CASE (1)
        ! EQDSK-based load via equnit::eq_load(MODELG, KNAMEQ, ierr).
@@ -175,6 +181,7 @@ CONTAINS
           RETURN
        END IF
        g_has_equilibrium = .TRUE.
+       g_equilibrium_generation = eq_param_generation()
        ierr = EQ_OK
     CASE DEFAULT
        ierr = EQ_ERR_NOT_IMPL
@@ -206,10 +213,9 @@ CONTAINS
 
     CALL eq_param_set(TRIM(fname), value, reg_ierr)
     IF (reg_ierr == 0) THEN
-       ! MODEFR and MODEFW say how a file is opened, not what the
-       ! equilibrium is: they leave eq_save's precondition as it was.
-       IF (TRIM(fname) /= 'MODEFW' .AND. TRIM(fname) /= 'MODEFR') &
-          g_has_equilibrium = .FALSE.
+       ! A successful set advances the registry's count (except for
+       ! MODEFR and MODEFW), which eq_save compares with the count of the
+       ! last eq_run; tot's "eq:" dispatcher reaches the same registry.
        ierr = EQ_OK
     ELSE
        ierr = EQ_ERR_INVALID
@@ -247,11 +253,11 @@ CONTAINS
     END DO
 
     reg_ierr = eq_param_set_str(TRIM(fname), TRIM(fvalue))
-    ! g_has_equilibrium is left as it is, unlike in eq_api_set_param: the
+    ! The registry does not count string sets, unlike numeric ones: the
     ! strings are file names (KNAMEQ and the other KNAM*). The analytic
-    ! solve reads none of them; a load (eq_run(1)) reads its file and sets
-    ! the flag itself; and KNAMEQ is where eq_save writes, so setting it
-    ! must not invalidate what is to be saved.
+    ! solve reads none of them; a load (eq_run(1)) reads its file and
+    ! records the count itself; and KNAMEQ is where eq_save writes, so
+    ! setting it must not invalidate what is to be saved.
     IF (reg_ierr == 0) THEN
        ierr = EQ_OK
     ELSE
@@ -528,10 +534,10 @@ CONTAINS
   !     calling this.
   !   - EQ_ERR_INVALID, before any file is touched: the fields do not
   !     hold the equilibrium of the present parameters (no successful
-  !     eq_run since eq_init, a later solve or load that failed, or
-  !     eq_set_param of anything but MODEFR and MODEFW since; what EQSAVE
-  !     would write then can end the process that loads it); a blank
-  !     KNAMEQ; MODEFW
+  !     eq_run since eq_init, a later solve or load that failed, or a
+  !     set of anything but MODEFR, MODEFW and the strings since, through
+  !     eq_set_param or tot's "eq:" parameters; what EQSAVE would write
+  !     then can end the process that loads it); a blank KNAMEQ; MODEFW
   !     other than 0 (overwrite an existing file) or 3 (refuse one):
   !     with 1, 2 and 4 to 7 FWOPEN can read unit 5, for a Y/N or for
   !     the file name.
@@ -550,7 +556,8 @@ CONTAINS
        ierr = EQ_ERR_NOT_INIT
        RETURN
     END IF
-    IF (.NOT. g_has_equilibrium) THEN
+    IF (.NOT. g_has_equilibrium .OR. &
+        g_equilibrium_generation /= eq_param_generation()) THEN
        WRITE(6,*) 'XX eq_save: no equilibrium of the present parameters:', &
                   ' call eq_run first'
        ierr = EQ_ERR_INVALID

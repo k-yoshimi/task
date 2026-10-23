@@ -45,10 +45,11 @@ _MAX_C_STRING_VALUE_BYTES = 80        # value buffer is CHARACTER(LEN=80);
 def _encode_name(s: str, max_bytes: int = _MAX_C_STRING_BYTES) -> bytes:
     """Encode a C string argument accepted by the EQ registry.
 
-    ``max_bytes`` is the Fortran buffer size minus 1 (for NUL). Names
-    use the default (``_MAX_C_STRING_BYTES``); values passed to
-    ``set_param_str`` use ``_MAX_C_STRING_VALUE_BYTES`` (e.g. KNAMEQ
-    file paths can be up to 79 bytes).
+    ``max_bytes`` is the longest string the Fortran side takes: names use
+    the default, ``_MAX_C_STRING_BYTES`` (63 of the CHARACTER(LEN=64)
+    buffer, one byte kept spare); values passed to ``set_param_str`` use
+    ``_MAX_C_STRING_VALUE_BYTES`` (all 80 characters of KNAMEQ; the NUL is
+    not stored).
     """
     if not isinstance(s, str):
         raise EqlibInvalidParamError(

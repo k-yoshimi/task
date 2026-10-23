@@ -205,6 +205,27 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
   immediately before the stdio server is built, as the other six servers
   do; its `tests/test_fd_isolation.py` runs the shared checks, and
   `python/tests/test_fd_isolation.py` checks all seven servers.
+- **EQ library: `eq_save` also refuses after a set of tot's `eq:` parameters**
+  (as #253 did for tr, fp and ti). tot's `eq:` dispatcher calls
+  `eq_param_registry` directly, so the flag that `eq_set_param` cleared stayed
+  set and `eq_save` wrote the parameters as they stood over fields computed
+  for the old ones. The registry now counts every successful numeric set
+  (`eq_param_generation()`) except `MODEFR` and `MODEFW`; `eq_run` records
+  the count when it computes or loads the equilibrium, and `eq_save` refuses
+  when it moved. String sets (`KNAMEQ` and the other `KNAM*`) are not counted,
+  as before. What no registry sees in the mono image (another module's
+  `eq_init`, `eq_load`, `eq_calc`, a `plcomm` variable set through another
+  module's registry) is #260; `eq_api.h` and the eqlib README say so. Smaller
+  points from the review of #256: the eq_mcp `save` tool says that the
+  `MODEFW` it sets stays; a sentence in `eq/eqfile.f90` (comment only) that
+  the length comparison depends on the run-time reporting the unit's
+  length; `test_save.py` accepts a short file of at most the limit;
+  `_encode_name` says 80 bytes for a value.
+- **MCP stdio servers: two edge cases of the fd isolation** (from the review
+  of #257). `python/_fd_isolation.py` repairs fd 2 only when `fstat` says
+  `EBADF`; another error means fd 2 is there, so it is left alone and the
+  installation fails before changing anything. A host's `sys.stdout` whose
+  `flush` raises an `Exception` no longer stops the installation.
 
 ## TR Phase L — library-ization (2026-04-18)
 

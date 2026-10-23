@@ -146,6 +146,26 @@ def test_save_is_still_allowed_after_the_file_modes_are_set():
     assert os.path.getsize("eq.bin") > 0
 
 
+def test_a_refused_set_leaves_the_save_allowed():
+    """A set the registry refuses changes nothing, so the equilibrium of the
+    last run is still the one of the present parameters."""
+    with _solved() as e:
+        with pytest.raises(eqlib.EqlibInvalidParamError):
+            e.set_param("NO_SUCH_PARAMETER", 1.0)
+        e.save("eq.bin")
+    assert os.path.getsize("eq.bin") > 0
+
+
+def test_a_string_set_leaves_the_save_allowed():
+    """The string parameters are file names, which the solve does not read
+    (the registry does not count them; KNAMEQ, which save sets itself, is
+    one of them)."""
+    with _solved() as e:
+        e.set_param_str("KNAMEQ2", "other.bin")
+        e.save("eq.bin")
+    assert os.path.getsize("eq.bin") > 0
+
+
 def test_save_raises_when_directory_missing():
     """FWOPEN cannot create the file: the save is an error, not EQ_OK."""
     with _solved() as e:
@@ -313,7 +333,9 @@ def test_a_write_the_system_refuses_is_an_error(limit):
     out = _save_in_a_child("eq.bin", _LIMIT.format(limit=limit))
     assert "CHILD: save raised EqlibCalculationFailedError" in out
     assert "XX EQSAVE" in out
-    assert os.path.getsize("eq.bin") == limit
+    # at most the limit: the run-time's buffer decides how much of it is
+    # flushed before a write is refused (GFORTRAN_UNFORMATTED_BUFFER_SIZE)
+    assert os.path.getsize("eq.bin") <= limit
 
 
 @pytest.mark.skipif(not os.path.exists("/dev/full"), reason="no /dev/full on this system")

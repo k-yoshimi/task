@@ -198,6 +198,53 @@ def test_the_null_device_opened_for_a_merged_stream_is_closed_again():
     assert out.stdout.endswith("JSONRPC-MARKER more_in_use=1")
 
 
+def test_an_fd2_that_cannot_be_looked_at_is_not_replaced():
+    # fstat(2) failing for another reason than EBADF: fd 2 is there, so the
+    # null device must not be put on it. The installation fails before it
+    # changes anything.
+    out = run("""
+        import errno, os, sys
+        import _fd_isolation as iso
+        real = iso.os.fstat
+        before = real(2)
+        def failing(fd):
+            if fd == 2:
+                raise OSError(errno.EIO, "no fstat today")
+            return real(fd)
+        iso.os.fstat = failing
+        try:
+            iso.install()
+            outcome = "installed"
+        except OSError as exc:
+            outcome = "raised " + errno.errorcode[exc.errno]
+        iso.os.fstat = real
+        after = real(2)
+        sys.stdout.write("%s same_fd2=%s installed=%s" % (
+            outcome, (before.st_dev, before.st_ino) == (after.st_dev, after.st_ino),
+            iso.installed()))
+        sys.stdout.flush()
+    """)
+    assert out.stdout == "raised EIO same_fd2=True installed=False"
+
+
+def test_a_stdout_whose_flush_fails_does_not_stop_the_installation():
+    # A host's stream of its own: what it held is lost either way, and the
+    # server still needs fd 1 off the pipe.
+    out = run("""
+        import io, os, sys
+        import _fd_isolation
+        class Broken(io.TextIOBase):
+            def flush(self):
+                raise RuntimeError("no flush today")
+        sys.stdout = Broken()
+        _fd_isolation.install()
+        sys.stdout.write("JSONRPC-MARKER"); sys.stdout.flush()
+        os.write(1, b"FORTRAN-MARKER")
+    """)
+    assert out.stdout == "JSONRPC-MARKER"
+    assert "FORTRAN-MARKER" in out.stderr
+
+
 # ----- fd 2 closed -----
 
 @pytest.mark.skipif(sys.platform == "win32", reason="preexec_fn is POSIX only")
