@@ -164,15 +164,15 @@
       DO NS=1,NSMAX
          DO NIC=1,NICMAX
             PIC_NSNIC(NS,NIC) &
-                 =SUM(PIC_NSNICNR(NS,NIC,1:NRMAX)*DVRHO(1:NRMAX))*DR
+                 =SUM(PIC_NSNICNR(NS,NIC,1:NRMAX)*DVRHO(1:NRMAX))*DR/1.D6
          END DO
          DO NLH=1,NLHMAX
             PLH_NSNLH(NS,NLH) &
-                 =SUM(PLH_NSNLHNR(NS,NLH,1:NRMAX)*DVRHO(1:NRMAX))*DR
+                 =SUM(PLH_NSNLHNR(NS,NLH,1:NRMAX)*DVRHO(1:NRMAX))*DR/1.D6
          END DO
          DO NEC=1,NECMAX
             PEC_NSNEC(NS,NEC) &
-                 =SUM(PEC_NSNECNR(NS,NEC,1:NRMAX)*DVRHO(1:NRMAX))*DR
+                 =SUM(PEC_NSNECNR(NS,NEC,1:NRMAX)*DVRHO(1:NRMAX))*DR/1.D6
          END DO
       END DO
       DO NIC=1,NICMAX
@@ -231,11 +231,11 @@
             SNB_NSNNB(NS,NNB) &
                  =SUM(SNB_NSNNBNR(NS,NNB,1:NRMAX)*DVRHO(1:NRMAX))*DR
             PNB_NSNNB(NS,NNB) &
-                 =SUM(PNB_NSNNBNR(NS,NNB,1:NRMAX)*DVRHO(1:NRMAX))*DR
+                 =SUM(PNB_NSNNBNR(NS,NNB,1:NRMAX)*DVRHO(1:NRMAX))*DR/1.D6
             PNBIN_NSNNB(NS,NNB) &
-                 =SUM(PNBIN_NSNNBNR(NS,NNB,1:NRMAX)*DVRHO(1:NRMAX))*DR
+                 =SUM(PNBIN_NSNNBNR(NS,NNB,1:NRMAX)*DVRHO(1:NRMAX))*DR/1.D6
             PNBCL_NSNNB(NS,NNB) &
-                 =SUM(PNBCL_NSNNBNR(NS,NNB,1:NRMAX)*DVRHO(1:NRMAX))*DR
+                 =SUM(PNBCL_NSNNBNR(NS,NNB,1:NRMAX)*DVRHO(1:NRMAX))*DR/1.D6
          END DO
       END DO
       DO NNB=1,NNBMAX
@@ -280,11 +280,11 @@
             SNF_NSNNF(NS,NNF) &
                  =SUM(SNF_NSNNFNR(NS,NNF,1:NRMAX)*DVRHO(1:NRMAX))*DR
             PNF_NSNNF(NS,NNF) &
-                 =SUM(PNF_NSNNFNR(NS,NNF,1:NRMAX)*DVRHO(1:NRMAX))*DR
+                 =SUM(PNF_NSNNFNR(NS,NNF,1:NRMAX)*DVRHO(1:NRMAX))*DR/1.D6
             PNFIN_NSNNF(NS,NNF) &
-                 =SUM(PNFIN_NSNNFNR(NS,NNF,1:NRMAX)*DVRHO(1:NRMAX))*DR
+                 =SUM(PNFIN_NSNNFNR(NS,NNF,1:NRMAX)*DVRHO(1:NRMAX))*DR/1.D6
             PNFCL_NSNNF(NS,NNF) &
-                 =SUM(PNFCL_NSNNFNR(NS,NNF,1:NRMAX)*DVRHO(1:NRMAX))*DR
+                 =SUM(PNFCL_NSNNFNR(NS,NNF,1:NRMAX)*DVRHO(1:NRMAX))*DR/1.D6
          END DO
       END DO
 
@@ -325,7 +325,7 @@
          SNFNN_NNF(NNF) &
               =SUM(SNFNN_NNFNR(NNF,1:NRMAX)*DVRHO(1:NRMAX))*DR
          PNFNN_NNF(NNF) &
-              =SUM(PNFNN_NNFNR(NNF,1:NRMAX)*DVRHO(1:NRMAX))*DR
+              =SUM(PNFNN_NNFNR(NNF,1:NRMAX)*DVRHO(1:NRMAX))*DR/1.D6
       END DO
 
       SNFNN_TOT=SUM(SNFNN_NNF(1:NNFMAX))
