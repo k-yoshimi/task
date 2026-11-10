@@ -495,6 +495,7 @@ CONTAINS
   !                 T + He3 -> He4 + p + n                          THe31 THe32
   !                 T + He3 -> He4 + D                              THe33 THe34
   !                 T + He3 -> He5 + p ! He4 + p                    THe35 THe36
+  !                 not available: no He5 species can be defined
       
       model_pnf=0
       

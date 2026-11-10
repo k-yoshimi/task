@@ -2,13 +2,15 @@
 
 MODULE libnf_local
   USE bpsd_kinds
-  INTEGER:: id_nf_local,pm_local
-  REAL(rkind):: temperature_local
+  IMPLICIT NONE
+  INTEGER:: id_nf_local
+  REAL(rkind):: pm_local,temperature_local
 END MODULE libnf_local
 
 MODULE libnf
   USE bpsd_kinds
   USE bpsd_constants
+  IMPLICIT NONE
 
   ! Fusion model
   !   model_pnf=0 : no fusion reaction
@@ -40,6 +42,7 @@ MODULE libnf
   !                 T + He3 -> He4 + p + n                          THe31 THe32
   !                 T + He3 -> He4 + D                              THe33 THe34
   !                 T + He3 -> He5 + p ! He4 + p                    THe35 THe36
+  !                 not available: no He5 species can be defined
   ! Fusion reaction id
   
   INTEGER,PARAMETER,PUBLIC:: id_nf_DT=    1 ! D + T   -> <He4> +  n
@@ -112,7 +115,7 @@ MODULE libnf
 
   PUBLIC set_usigmav_nf    ! set_usigmav_nf
   PUBLIC sigma_nf          ! sigma_nf(id_nf,energy)
-  PUBLIC sigmav_nf         ! sigmav_nf(id_nf,temperature)
+  PUBLIC sigmav_nf         ! sigmav_nf(id_nf,temperature) [m^3/s]
 
 CONTAINS
   
@@ -180,7 +183,7 @@ CONTAINS
     END SELECT
 
     SELECT CASE(model_pnf)
-    CASE(1,12,13)
+    CASE(1,12)
        IF(NS_D*NS_T*NS_He4.EQ.0) THEN
           IF(NS_D.EQ.0) WRITE(6,*)   'XX Error: libnf: NS_D=0'
           IF(NS_T.EQ.0) WRITE(6,*)   'XX Error: libnf: NS_T=0'
@@ -206,8 +209,16 @@ CONTAINS
           IF(NS_He5.EQ.0) WRITE(6,*) 'XX Error: libnf: NS_He5=0'
           STOP
        END IF
+    CASE(14)
+       ! NS_He5 is not a species found in the run: pl_init sets it to 7 and
+       ! tr_prep_ns never matches a He5 species, so the THe35 product would
+       ! go to species slot 7 (past tr_pnf's (NSMAX,NNFMAX,NRMAX) arrays when
+       ! NSMAX < 7). Refused until a He5 species can be defined.
+       WRITE(6,*) 'XX Error: libnf: model_pnf=14 is not available: ', &
+                  'no He5 species can be defined'
+       STOP
     CASE DEFAULT
-       WRITE(6,*) 'XX Error libnb: undefined model_pnf: model_pnf=',model_pnf
+       WRITE(6,*) 'XX Error libnf: undefined model_pnf: model_pnf=',model_pnf
        STOP
     END SELECT
 
@@ -236,15 +247,15 @@ CONTAINS
        nsp_idnf(id_nf_dd2)=NS_H
     END IF
     eng_idnf(id_nf_dd2)=3.02D3*RKEV
-    enn_idnf(id_nf_dd3)=0.D0
+    enn_idnf(id_nf_dd2)=0.D0
 
     ns1_idnf(id_nf_dd3)=NS_D
     ns2_idnf(id_nf_dd3)=NS_D
     wgt_idnf(id_nf_dd3)=0.5D0
-    IF(model_pnf.EQ.12) THEN
-       nsp_idnf(id_nf_dd3)=NS_He3
-    ELSE
+    IF(model_pnf.EQ.12.OR.model_pnf.EQ.14) THEN
        nsp_idnf(id_nf_dd3)=NS_He4
+    ELSE
+       nsp_idnf(id_nf_dd3)=NS_He3
     END IF
     eng_idnf(id_nf_dd3)=0.82D3*RKEV
     enn_idnf(id_nf_dd3)=2.45D3*RKEV
@@ -377,7 +388,7 @@ CONTAINS
     RETURN
   END FUNCTION sigma_nf
   
-  ! --- reaction rate of nuclear fusion: sigmav  ---
+  ! --- reaction rate of nuclear fusion: sigmav [m^3/s] ---
   ! ---     as a function of temperature in keV
 
   FUNCTION sigmav_nf(id_nf,temperature)
@@ -425,6 +436,12 @@ CONTAINS
        WRITE(6,'(A,ES12.4)') '       temperature=',temperature
        STOP
     END IF
+    ! The svnf_* tables are in cm^3/s (D-T peaks at 8.7e-16 cm^3/s, as in
+    ! Bosch-Hale); tr_pnf needs m^3/s (its SNF has RN in 1e20 m^-3), and
+    ! the menu's B command prints the value. One conversion at the
+    ! computed exit covers all five tables; the low-temperature branch
+    ! returns 0 before it.
+    sigmav_nf=sigmav_nf*1.D-6
   END FUNCTION sigmav_nf
 
   ! --- sigmav_nf by integeral over energy ---
