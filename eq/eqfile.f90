@@ -110,6 +110,9 @@
 !     FWOPEN opens the name it read, not KNAMEQ. A file that is not a
 !     regular file (a device) has length 0 and is reported short as well.
 !     When either length cannot be had (-1) the comparison is left out.
+!     What the comparison can see depends on the run-time: gfortran gives
+!     the length written to the unit; one that gives the length on disk
+!     instead makes it a no-op, not a false failure.
       NSIZEW=-1
       INQUIRE(UNIT=21,NAME=KFNAME,SIZE=NSIZEW)
       CLOSE(21,ERR=900)

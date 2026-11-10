@@ -30,6 +30,14 @@ it. No product path calls ``fp_run`` / ``ti_run`` through
 running fp / ti alongside tot in one process is what the mono image
 exists for.
 
+eq has no prep to redo; what a set after a run invalidates there is
+``eq_save``, which writes the parameters as they stand over fields computed
+for the old ones. eq's registry counts sets as well (not ``MODEFR``,
+``MODEFW`` or the string parameters), ``eq_run`` records the count when it
+computes or loads the equilibrium, and ``eq_save`` refuses when it moved:
+checked on the mono image, where ``tot_set_param("eq:...")`` and ``eq_save``
+reach one copy of eq.
+
 Process isolation: ``pytestmark`` requests per-test forking (effective when
 pytest-forked is installed, which CI and local dev have), because every
 module keeps SAVE'd state in the shared library.
@@ -39,6 +47,7 @@ from __future__ import annotations
 import ctypes
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -332,6 +341,71 @@ class TestFpScalarsAfterTotSetOnMonoImage(_FpScalarsCase, unittest.TestCase):
 
 
 class TestTiReprepOnMonoImage(_TiReprepCase, unittest.TestCase):
+    def setUp(self):
+        _skip_unless_mono(self)
+        self.image = _mono_so()
+        super().setUp()
+
+
+EQ_ERR_INVALID = 1   # eq/eq_api.h
+
+
+class _EqSaveCase:
+    """tot_init; MODEFW=0; eq_run(0); tot_set_param_str("eq:KNAMEQ");
+    optionally tot_set_param("eq:<param>"); eq_save. The file is written in
+    a temporary directory under a relative name (KNAMEQ holds 80
+    characters). MODEFW is set here rather than taken from the init order,
+    and KNAMEQ goes through tot's string dispatcher, which the registry
+    does not count."""
+
+    image: str = ""
+
+    def _save_after(self, param=None, value=0.0):
+        lib = _load_image(self.image)
+        lib.eq_run.restype = ctypes.c_int
+        lib.eq_run.argtypes = [ctypes.c_int]
+        lib.eq_set_param.restype = ctypes.c_int
+        lib.eq_set_param.argtypes = [ctypes.c_char_p, ctypes.c_double]
+        lib.tot_set_param_str.restype = ctypes.c_int
+        lib.tot_set_param_str.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+        lib.eq_save.restype = ctypes.c_int
+        lib.eq_save.argtypes = []
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            os.chdir(tmp)
+            try:
+                rc = lib.tot_init()
+                if rc != 0:
+                    raise AssertionError(f"tot_init returned {rc}")
+                try:
+                    if lib.eq_set_param(b"MODEFW", 0.0) != 0:
+                        raise AssertionError("eq_set_param(MODEFW) failed")
+                    if lib.eq_run(0) != 0:
+                        raise AssertionError("eq_run(0) failed")
+                    if lib.tot_set_param_str(b"eq:KNAMEQ", b"eq.bin") != 0:
+                        raise AssertionError("tot_set_param_str(eq:KNAMEQ) failed")
+                    if param is not None:
+                        rc = lib.tot_set_param(f"eq:{param}".encode(), float(value))
+                        if rc != 0:
+                            raise AssertionError(f"tot_set_param(eq:{param}) returned {rc}")
+                    return lib.eq_save(), os.path.exists("eq.bin")
+                finally:
+                    lib.tot_finalize()
+            finally:
+                os.chdir(cwd)
+
+    def test_eq_save_without_a_set_writes(self):
+        self.assertEqual(self._save_after(), (0, True))
+
+    def test_eq_save_refuses_after_a_tot_set(self):
+        self.assertEqual(self._save_after("RR", 3.5), (EQ_ERR_INVALID, False),
+                         "eq_save after tot_set_param('eq:RR') must refuse, as after eq_set_param")
+
+    def test_eq_save_still_writes_after_a_tot_set_of_a_file_mode(self):
+        self.assertEqual(self._save_after("MODEFW", 0), (0, True))
+
+
+class TestEqSaveAfterTotSetOnMonoImage(_EqSaveCase, unittest.TestCase):
     def setUp(self):
         _skip_unless_mono(self)
         self.image = _mono_so()

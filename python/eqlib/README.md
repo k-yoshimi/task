@@ -190,12 +190,14 @@ an error:
   the file is shorter than what was written (a write the system refused,
   as under a file size limit; a device such as `/dev/null`).
 
-"A `run` since" is what this handle's own calls saw. In the mono image
-(`MONO_LIB_PATH`, `libtotapi_mono.so`) the other modules change the
-equilibrium without passing through `eq_api` (for example tot's `eq:`
-parameters, the `eq_init` or `EQINIT` of the other modules' init,
-`eq_load` and `eq_calc` in the tr, fp and wrx run paths), and `save` then
-writes what the fields hold.
+"A `run` since" and "a `set_param` since" are what `eq_api` and eq's
+parameter registry saw; a set of tot's `eq:` parameters goes through the
+registry and counts as a `set_param`. In the mono image (`MONO_LIB_PATH`,
+`libtotapi_mono.so`) the other modules can change the equilibrium past
+both (the `eq_init` or `EQINIT` of the other modules' init, `eq_load` and
+`eq_calc` in the tr, fp and wrx run paths, a `plcomm` variable set through
+another module's registry, such as `ti:RR`), and `save` then writes what
+the fields hold (#260).
 
 ### `Eq.close() -> None`
 

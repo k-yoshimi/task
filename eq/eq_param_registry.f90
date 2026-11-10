@@ -66,10 +66,46 @@ MODULE eq_param_registry
   IMPLICIT NONE
   PRIVATE
   PUBLIC :: eq_param_set
+  PUBLIC :: eq_param_generation
   PUBLIC :: eq_param_set_str
   PUBLIC :: parse_array_subscript_pub   ! exported for unit-test only
 
+  INTEGER, SAVE :: g_generation = 0
+
 CONTAINS
+
+  !-------------------------------------------------------------------
+  ! Mutation counter (as tr / fp / ti have since #253).
+  !
+  ! Every successful numeric set through this registry, whoever calls
+  ! it (eq_api_set_param, tot's "eq:" dispatcher), advances
+  ! g_generation; eq_api records the count when an eq_run computes or
+  ! loads the equilibrium, and eq_save refuses when it moved since.
+  ! Two kinds of set are not counted, because they do not change what
+  ! eq_save writes: MODEFR and MODEFW, which say how a file is opened,
+  ! and the string parameters (eq_param_set_str: KNAMEQ and the other
+  ! KNAM*), which the solve does not read; a load reads its file and
+  ! records the count itself, and KNAMEQ is where eq_save writes. A set
+  ! that fails leaves the counter alone.
+  !-------------------------------------------------------------------
+  FUNCTION eq_param_generation() RESULT(gen)
+    INTEGER :: gen
+    gen = g_generation
+  END FUNCTION eq_param_generation
+
+  SUBROUTINE eq_param_set(name, value, ierr)
+    CHARACTER(LEN=*), INTENT(IN)  :: name
+    REAL(rkind),      INTENT(IN)  :: value
+    INTEGER,          INTENT(OUT) :: ierr
+    INTEGER :: idx
+    CHARACTER(LEN=32) :: b
+
+    CALL eq_param_set_impl(name, value, ierr)
+    IF (ierr /= 0) RETURN
+    CALL parse_array_subscript(name, b, idx)    ! the name as the setter read it
+    IF (TRIM(b) /= 'MODEFR' .AND. TRIM(b) /= 'MODEFW') &
+       g_generation = g_generation + 1
+  END SUBROUTINE eq_param_set
 
   !-------------------------------------------------------------------
   ! eq_param_set : numeric (scalar or subscripted array) setter.
@@ -83,7 +119,7 @@ CONTAINS
   ! ierr. Both shapes are valid; we keep the L-2 shape here so
   ! eq_api.f90 does not need a simultaneous edit.
   !-------------------------------------------------------------------
-  SUBROUTINE eq_param_set(name, value, ierr)
+  SUBROUTINE eq_param_set_impl(name, value, ierr)
     CHARACTER(LEN=*), INTENT(IN)  :: name
     REAL(rkind),      INTENT(IN)  :: value
     INTEGER,          INTENT(OUT) :: ierr
@@ -229,7 +265,7 @@ CONTAINS
     CASE DEFAULT
        ierr = 1   ! unknown parameter name
     END SELECT
-  END SUBROUTINE eq_param_set
+  END SUBROUTINE eq_param_set_impl
 
   !-------------------------------------------------------------------
   ! eq_param_set_str : string-valued parameter setter.

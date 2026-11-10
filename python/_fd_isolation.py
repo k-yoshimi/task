@@ -59,6 +59,7 @@ repaired when a later step fails; a repair that fails itself is undone.)
 """
 from __future__ import annotations
 
+import errno
 import os
 import sys
 
@@ -115,7 +116,10 @@ def _repair_fd2() -> None:
     try:
         os.fstat(2)
         opened = False
-    except OSError:
+    except OSError as exc:
+        if exc.errno != errno.EBADF:
+            # fd 2 is there but cannot be looked at: not ours to replace
+            raise
         null = os.open(os.devnull, os.O_WRONLY)
         if null != 2:
             try:
@@ -148,7 +152,7 @@ def install() -> None:
     if previous is not None:
         try:
             previous.flush()        # what Python buffered still belongs to the pipe
-        except (OSError, ValueError):
+        except Exception:           # a host's stream of its own: best effort
             pass
     _repair_fd2()
     pipe_fd = _dup_above_stderr(1)
