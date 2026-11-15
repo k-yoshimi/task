@@ -154,7 +154,7 @@ CONTAINS
 7777   CONTINUE
        WRITE(6,*) '## INPUT id,T(kev)T'
        READ(5,*,END=7779) id,temp
-       WRITE(6,*) '   sigma=',sigmav_nf(id,temp)
+       WRITE(6,*) '   sigmav [m^3/s]=',sigmav_nf(id,temp)
        GOTO 7777
 7779   CONTINUE
 

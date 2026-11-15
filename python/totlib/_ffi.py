@@ -159,10 +159,9 @@ def _apply_prototypes(lib: ctypes.CDLL) -> ctypes.CDLL:
     """Attach argtypes / restype to the 6 exported C ABI symbols.
 
     TOT exports the same surface as eq: 6 entry points including a
-    string setter (``tot_set_param_str``). Older builds without the
-    string setter will lack the symbol; we attach it best-effort so
-    package import does not fail. Callers will get a clean
-    ``AttributeError`` on first use instead.
+    string setter (``tot_set_param_str``). Builds before L-3 lacked the
+    string setter; such a build is refused at load now (no layout query,
+    #246), so the best-effort attach below is only a leftover.
     """
     lib.tot_init.restype = ctypes.c_int
     lib.tot_init.argtypes = []

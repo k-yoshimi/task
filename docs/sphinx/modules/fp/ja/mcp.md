@@ -66,15 +66,16 @@ claude mcp add task-fp \
 
 ## 提供ツール一覧
 
-`fp_mcp` は **9 個** のツールを公開します. C ABI レベルでは
-`fp_set_param_str` がありますが MCP には現時点で公開されていません
-(`KNAMEQ` を変更したい場合は MCP 経由ではなく事前に環境を整えて
-ください).
+`fp_mcp` は **10 個** のツールを公開します. `set_param_str` は文字列
+パラメータ (`MODELG=3` で読み込む平衡ファイル `KNAMEQ`) を設定し,
+`set_params` に `str` 値を渡すとこれに回されます.
+`python/mcp-servers/fp_mcp/README.md` の 8.4 節を参照してください.
 
 | ツール | 目的 | 主な引数 |
 |---|---|---|
 | `init` | ライブラリ初期化 | なし |
 | `set_param` | パラメータ設定 | `name`, `value` |
+| `set_param_str` | 文字列パラメータ設定 (`KNAMEQ`) | `name`, `value` |
 | `set_params` | まとめて設定 | `params` |
 | `run` | 時間ステップ進行 | `ntmax` |
 | `get_state` | 現在の状態取得 | なし |

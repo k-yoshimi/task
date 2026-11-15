@@ -109,7 +109,7 @@ Return codes (`enum tot_error`):
 | 1 | invalid name (incl. missing/unknown namespace prefix) | `TotlibInvalidParamError` |
 | 2 | not initialized | `TotlibNotInitializedError` |
 | 3 | calculation failed (`tot_run` / `tot_get_state`) | `TotlibCalculationFailedError` |
-| 4 | not implemented (L-3/L-4 stubs: `init`/`run`/`get_state`/`finalize`) | `TotlibNotImplementedError` |
+| 4 | not implemented (the L-3/L-4 stubs of `init`/`run`/`get_state`/`finalize`; none returns it since L-6) | `TotlibNotImplementedError` |
 
 `tot_state_t` carries: 4 per-module presence flags (`tr_present`,
 `ti_present`, `fp_present`, `wr_present`); 3 grid counters (`nt`,
@@ -148,9 +148,9 @@ Fortran side.
 - `totlib._ffi.load_library` resolves the shared library via
   `TOTLIB_PATH` → `tot/libtotapi.so` → `lib/libtotapi.so` and uses
   `RTLD_LAZY` so dangling graphics references in any of the six
-  backing libraries never block loading. `tot_set_param_str` is
-  attached best-effort so import succeeds on pre-L-3 builds; first
-  call raises `TotlibError` on such a build.
+  backing libraries never block loading. It refuses a library whose
+  `tot_state_t` layout it cannot confirm (#246), which includes every
+  build before L-3, so a library that loads has `tot_set_param_str`.
 - `totlib.Tot` is a context manager: `__init__` calls `tot_init`,
   `__exit__` / `close()` calls `tot_finalize`. `Tot._validate_namespaced_name`
   rejects bare / unknown / empty-prefix names up-front.
@@ -171,10 +171,10 @@ Three behaviours differ from the sibling tr/ti/wr/fp/eq wrappers:
    wrx's. The dispatcher routes `wr:` to `dispatch_wrx` accordingly.
    To use the real `wr/wr_param_registry`, drive `wr/libwrapi.so`
    directly through `python/wrlib`.
-3. **String setter is restricted at L-3.** Only `tr:` and `eq:` back
-   `tot_set_param_str`. Other namespaces return `rc=1` until their
-   per-module registries grow a symmetric `*_param_set_str` entry
-   point.
+3. **tot passes string values on for `tr:` and `eq:` only.**
+   `tot_set_param_str` returns `rc=1` for the other namespaces. fp has
+   a string setter of its own (`fp_param_set_str`, for `KNAMEQ`),
+   reached through `totlib.TotPipeline.set_param`, not through tot.
 
 ## Phase L completion matrix
 
@@ -186,12 +186,12 @@ Three behaviours differ from the sibling tr/ti/wr/fp/eq wrappers:
 | L-3 | Namespaced parameter registry (`tot_param_registry.f90`, dispatch to 6 backing `*_param_set` + `*_param_set_str`) | `2026-04-18-tot-library-L3-param-registry.md` | #82 | merged |
 | L-4 | `libtotapi.so` composite shared-library build (links 6 per-module PIC archives + deps) | `2026-04-18-tot-library-L4-shared-lib-build.md` | #85 | merged |
 | L-5 | `python/totlib/` ctypes wrapper (`Tot`, `TotState`, errors, namespace guard) | `2026-04-18-tot-library-L5-python-wrapper.md` | #91 | merged |
-| L-6 | 4-layer test suite wired into `run_tests.sh` (`totlib_*` cases) | `2026-04-18-tot-library-L6-test-4layers.md` | — | pending |
-| L-7 | Library documentation (this doc, README, examples, CHANGELOG) | `2026-04-18-tot-library-L7-optimization.md` (this PR delivers the docs subset) | this PR | open |
+| L-6 | 4-layer test suite wired into `run_tests.sh` (`totlib_*` cases); the fan-out of `tot_init` / `tot_run` / `tot_get_state` / `tot_finalize` | `2026-04-18-tot-library-L6-test-4layers.md` | #96, #124 | merged |
+| L-7 | Library documentation (this doc, README, examples, CHANGELOG) | `2026-04-18-tot-library-L7-optimization.md` (#94 delivered the docs subset) | #94 | merged (docs subset) |
 
 > **Note on L-7 plan scope.** The plan filename is "L7-optimization"
 > because the original L-7 plan was the parameter-optimization
-> workflow (scipy/optuna/grid backends). This PR delivers the
+> workflow (scipy/optuna/grid backends). #94 delivered the
 > **documentation** subset (README, examples, architecture diagram,
 > changelog) needed before / alongside the optimization workflow.
 > The optimization driver (`python/totlib/optimize.py`,
@@ -208,39 +208,37 @@ Mirrors the tr spec's §12.2 for the TOT module:
 | `import totlib` works | L-5 | `python3 -c "from totlib import Tot"` |
 | `tot_set_param_str` exported | L-3 / L-4 | `nm -D tot/libtotapi.so \| grep tot_set_param_str` |
 | Namespace dispatch works | L-3 | `python3 -c "from totlib import Tot; Tot().set_param('eq:RR', 6.5)"` |
-| Layer 1 equivalence PASS | L-6 (pending) | `test_run/run_tests.sh totlib_equivalence` |
-| Layer 2 C ABI PASS | L-6 (pending) | `test_run/run_tests.sh totlib_c_abi` |
-| Layer 3 Python wrapper PASS | L-6 (pending) | `test_run/run_tests.sh totlib_ffi totlib_wrapper` |
-| Layer 4 sweep smoke PASS | L-6 (pending) | `test_run/run_tests.sh totlib_sweep` |
+| Layer 1 equivalence PASS | L-6 | `test_run/run_tests.sh totlib_equivalence` |
+| Layer 2 C ABI PASS | L-6 | `test_run/run_tests.sh totlib_c_abi` |
+| Layer 3 Python wrapper PASS | L-6 | `test_run/run_tests.sh totlib_ffi totlib_wrapper` |
+| Layer 4 sweep smoke PASS | L-6 | `test_run/run_tests.sh totlib_sweep` |
 | `tot` numerics match Phase L-0 | L-0..L-5 | `test_run/run_tests.sh tot_iter01 tot_demo2014` |
 | `python/totlib/README.md` with examples | L-7 | visual review + `python3 -m py_compile examples/*.py` |
-| `run_tests.sh` totlib_* wired | L-6 (pending) | `grep totlib_ test_run/test_definitions.conf` |
+| `run_tests.sh` totlib_* wired | L-6 | `grep totlib_ test_run/test_definitions.conf` |
 
 ## Known limitations
 
-- **L-6 not yet merged.** The 4-layer test integration (`totlib_*`
-  cases in `test_definitions.conf`) is in flight on its own branch.
-  Until L-6 lands, run wrapper tests directly with
-  `python3 -m unittest discover python/totlib/tests`.
-- **`tot.run()` / `tot.get_state()` are stubs at L-3/L-4.** They
-  return `rc=4` (`TotlibNotImplementedError`) until L-6 wires up the
-  per-module fan-out (`tr_run` + `ti_run` + `fp_run` + `wr_run` +
-  `eq_run` chained, with `tot_state` aggregated from the 4 sub-state
-  snapshots). `tot.set_param` / `tot.set_param_str` work fully.
+- **`tot.run()` advances tr only.** Since L-6 (#124) `tot_init` brings
+  up eq (since #209), tr, ti, fp and wr, with rollback on a failed
+  module init, and `tot_finalize` tears them down; `tot_run` advances the
+  TR-authoritative loop and `tot_get_state` fills TR's slots only (the
+  ti/fp/wr presence flags are 0). Coupling between modules is
+  Python-side, in `totlib.TotPipeline` (L-7a).
 - **Single instance per process.** TOT pulls in COMMON blocks from
-  six backing modules. Two concurrent `Tot()` handles share state;
-  the second `tot_init` resets globals. Use `multiprocessing` for
+  six backing modules, so `totlib` refuses a second live `Tot()` in the
+  same process (`TotlibNotInitializedError`). Use `multiprocessing` for
   parallel sweeps.
 - **`wr:` is aliased to `wrx:`.** The `wr/wr_param_registry` is not
   reachable through `libtotapi.so` — use `python/wrlib` for that.
-- **String parameters are wired only for `tr:` and `eq:`** at L-3.
-  Other namespaces (`fp:`, `ti:`, `wr:`/`wrx:`) reject string calls
-  with `rc=1` until their registries gain a `*_param_set_str` entry
-  point.
+- **tot passes string parameters on for `tr:` and `eq:` only**
+  (`tot_param_set_str`); string calls for `fp:`, `ti:` and `wr:`/`wrx:`
+  return `rc=1`. fp has a string setter of its own (`fp_param_set_str`,
+  for `KNAMEQ`), reached through `totlib.TotPipeline.set_param`, which
+  calls fplib, not through tot.
 - **Optimization driver (L-7 follow-up).** The `optimize.py` /
   `objectives.py` / `results.py` modules and the three optimization
   notebooks (Q0 maximize, Pareto front) described in the original
-  L-7 plan are deferred; this PR ships only the documentation /
+  L-7 plan are deferred; #94 shipped only the documentation /
   examples subset.
 
 ## State struct layout rule (#246)

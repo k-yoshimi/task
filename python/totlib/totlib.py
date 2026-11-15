@@ -21,13 +21,13 @@ Examples::
         tot.run(ntmax=10)
         state = tot.get_state()
 
-L-6 fan-out is wired: ``tot_init`` brings up tr + ti + fp + wr (with
-rollback on per-module init failure); ``tot_run`` advances the
-TR-authoritative loop only — cross-module coupling lives in
+L-6 fan-out is wired: ``tot_init`` brings up eq + tr + ti + fp + wr
+(eq since #209; with rollback on per-module init failure); ``tot_run``
+advances the TR-authoritative loop only — cross-module coupling lives in
 :class:`~totlib.pipeline.TotPipeline` (L-7a, Python-side) instead of
 inside ``libtotapi.so``. The wrapper still accepts ``TOT_ERR_NOT_IMPL``
-returns alongside ``TOT_OK`` for forward compatibility, but the live
-path is OK end-to-end on a built ``libtotapi.so``.
+from ``tot_init`` and ``tot_finalize``, a leftover of the pre-L-6 stubs;
+the live path is OK end-to-end on a built ``libtotapi.so``.
 """
 from __future__ import annotations
 
@@ -93,10 +93,10 @@ class Tot:
     """In-process handle to libtotapi.so. One instance per process.
 
     libtotapi.so holds singleton Fortran state (COMMON blocks plus
-    per-module module variables). Creating more than one live
-    :class:`Tot` is not meaningful; the second ``__init__`` will call
-    ``tot_init`` again and reset the shared state. This matches the
-    contract used by trlib / eqlib / tilib.
+    per-module module variables), so a second live :class:`Tot` is
+    refused: its ``__init__`` raises
+    :class:`~totlib.errors.TotlibNotInitializedError`. trlib / eqlib /
+    tilib refuse a second live instance the same way.
     """
 
     _live_instance = None
@@ -134,10 +134,9 @@ class Tot:
         if not self._closed:
             return
         rc = self._lib.tot_init()
-        # L-6 fan-out: tot_init returns TOT_OK on success. We still
-        # accept TOT_ERR_NOT_IMPL for forward compat with older .so
-        # builds (pre-L-6) where the stubs were live; harmless on
-        # current builds where the live path returns TOT_OK.
+        # L-6 fan-out: tot_init returns TOT_OK on success. TOT_ERR_NOT_IMPL
+        # came from the pre-L-6 stubs; such a build is refused at load
+        # now (#246), so accepting it here is only a leftover.
         if rc not in (_ffi.TOT_OK, _ffi.TOT_ERR_NOT_IMPL):
             raise_for_rc("tot_init", rc)
         self._closed = False

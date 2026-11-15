@@ -7,8 +7,9 @@ Mirrors the ``enum tot_error`` codes declared in ``tot/tot_api.h``:
                               missing/unknown namespace prefix)
     TOT_ERR_NOT_INIT    = 2  (tot_init has not been called yet)
     TOT_ERR_CALC_FAILED = 3  (per-module init / calculation failed)
-    TOT_ERR_NOT_IMPL    = 4  (entry point is a stub: tot_init / tot_run /
-                              tot_get_state / tot_finalize at L-3 scope)
+    TOT_ERR_NOT_IMPL    = 4  (not implemented: the L-3 stubs of tot_init /
+                              tot_run / tot_get_state / tot_finalize;
+                              none returns it since L-6)
 
 The same hierarchy follows the trlib / eqlib / tilib pattern so test
 patterns can be shared. ``raise_for_rc`` (and the alias
@@ -46,13 +47,12 @@ class TotlibCalculationFailedError(TotlibError):
 
 
 class TotlibNotImplementedError(TotlibError):
-    """Entry point is a stub and not yet implemented (rc == 4).
+    """Entry point not implemented (rc == 4).
 
     At Phase L-3 / L-4 scope, ``tot_init``, ``tot_run``,
-    ``tot_get_state`` and ``tot_finalize`` all return this code; only
-    ``tot_set_param`` and ``tot_set_param_str`` are real. L-6+ will
-    wire up the per-module fan-out and these stubs will start returning
-    ``TOT_OK``.
+    ``tot_get_state`` and ``tot_finalize`` all returned this code; only
+    ``tot_set_param`` and ``tot_set_param_str`` were real. Since L-6 none of
+    them returns it; the class is kept for compatibility.
     """
 
 

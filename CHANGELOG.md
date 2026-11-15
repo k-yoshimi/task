@@ -10,6 +10,15 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **MCP server `fp_mcp`: a `set_param_str` tool** (#231) sets `KNAMEQ`,
+  the equilibrium file that `MODELG=3` loads, so an EQ to FP handoff (an
+  equilibrium written by `eq_mcp`'s `save` tool) can be driven through
+  MCP; `set_params` passes a `str` value to it. It calls
+  `fplib.Fplib.set_param_str`, which needs a `libfpapi.so` that exports
+  `fp_set_param_str`. A successful call zeroes the state's `scalars` until
+  the next run, as a numeric set does. `tot_mcp`'s `describe_parameters`
+  marks `fp:KNAMEQ` as settable through `run_pipeline` only, since tot's
+  `set_param` passes string values on for `eq:` and `tr:` only.
 - **FP library: `fp_get_state` returns seven global scalars** after the
   profile arrays: `TOTAL_IP` [MA], `STORED_ENERGY` [MJ], `COLLISION_POWER`,
   `ABSORPTION_POWER`, `ABSORPTION_WR`, `ABSORPTION_WM` [MW] (species sums at
@@ -112,6 +121,20 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **trx: the fusion reaction path** (#269; issues #229, #234, #235, #236,
+  #268). `sigmav_nf` returned its tables in cm^3/s where `tr_pnf` takes
+  m^3/s, so every `model_pnf` rate was 1e6 too large (#238's 10 keV D-T
+  deck stopped with negative temperatures). `tr_pnf` took the slowing-down
+  species from a stale loop index, applied `RKEV` twice to the product's
+  speed (so `TAUF` was round-off) and added `PNF_NSNNFNR` up over its
+  calls; `PNF_NSNNFNR` and `PNFIN_NSNNFNR` are now zeroed on each call
+  (nothing else writes `PNFIN_NSNNFNR`, so its totals stay 0). Also in
+  `libnf`: `pm_local` is a `REAL`, both modules are `IMPLICIT NONE`, the
+  D-D branch to He3 gives He3 for `model_pnf` 2, 3 and 4 and He4 for the
+  reduced 12 (which ran past an array bound before), the dd2 block sets
+  its own `enn_idnf`, and the species check refuses `model_pnf=14` with
+  its own message, since no He5 species can be defined. Results of every
+  `model_pnf>0` run change.
 - **MCP servers: the `mcp` dependency is pinned to `>=1.2,<2`** in the
   seven server `pyproject.toml` files, the CI workflow, the servers' own
   "not installed" message, the READMEs, the Sphinx MCP pages, the
@@ -161,6 +184,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
   overflows and a step never ends); `NSAMAX` above `NSBMAX`; an evolved
   species number outside 1 to `MIN(NSMAX, NSBMAX)`; a background species
   number outside 1 to `NSMAX`.
+- **trx: the per-channel power integrals of `TRGLOB` are in MW** (#270;
+  issue #238). Ten of them (`PIC_NSNIC`, `PLH_NSNLH`, `PEC_NSNEC`,
+  `PNB_NSNNB`, `PNBIN_NSNNB`, `PNBCL_NSNNB`, `PNF_NSNNF`, `PNFIN_NSNNF`,
+  `PNFCL_NSNNF`, `PNFNN_NNF`) stayed in W where `PINT`, `QF` and the
+  confinement times take MW, so `PNF_TOT` entered `PINT` 1e6 too large and
+  corrupted `PINT`, `QF`, `TAUE1`, `TAUE2` and, through fractional powers,
+  `TAUE89`, `TAUE98` and `H98Y2` of runs with fusion. In NBI runs the
+  printed beam collisional powers (`PBCLE` to `PBCLA`) are now in MW;
+  `PNB_TOT` and `PRF_TOT` are not fixed by this, since the arrays they
+  integrate are never filled in trx (#238).
 - **MCP servers `eq_mcp`, `tr_mcp`, `tot_mcp`: Fortran output no longer
   reaches the JSON-RPC pipe.** A stdio server's fd 1 is the pipe to its
   client, and the library's `WRITE(6,...)` went into it: in one stdio
@@ -181,6 +214,26 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
   terminal shows that line and no longer the library's output. Where
   `fstat` gives a descriptor no identity (Windows for a pipe or a console)
   the merged layout is not recognised and fd 1 goes to stderr as usual.
+- **tot docs and `tot_mcp`: string parameters and the tool count** (#274).
+  The tot Sphinx pages showed `tot.set_param_str("fp:KNAMEQ", ...)` and
+  `("wr:KNAMEQ", ...)`, which tot refuses: it passes string values on for
+  `eq:` and `tr:` only. They now use `eq:` and `tr:`, and say that
+  `fp:KNAMEQ` goes through `totlib.TotPipeline.set_param` (`tot_mcp`'s
+  `run_pipeline` `params`), that `ti`, `wr` and `wrx` take no strings, and
+  that `eq:KNAMEQ` is `pl`'s, which fp reads too (one variable in the mono
+  image). `tot_mcp` registers 10 tools, not 9 (`__init__.py`, the Sphinx MCP
+  pages, now with a `run_pipeline` row); its README says where `fp:KNAMEQ`
+  goes. `tot_mcp`'s hints: a refused string set no longer gets the hint to
+  namespace its name but one that names the string parameters (the seven
+  `eq:` file names, `tr:KNAMEQ`) and says to send numbers as numbers; a
+  refused numeric set of a namespaced name points at `describe_parameters`;
+  a string totlib rejects itself (too long, not ASCII) and a refused
+  `tot_run` argument get no hint. The `tot_mcp` server instructions,
+  docstrings and README, `totlib`'s errors, README and examples, and
+  `docs/tot-library/architecture.md` no longer say that `run` and
+  `get_state` are stubs until L-6 (#96, #124), nor that `tot_mcp` has a
+  `set_param_str`; `architecture.md`'s quirks and limitations follow the
+  code (eq in the fan-out, one live `Tot()` per process).
 - **MCP servers `ti_mcp`, `wr_mcp`, `wrx_mcp`: the same fd isolation** (#262).
   The three servers had the layout of the other three and the same exposure:
   `main()` now calls `_fd_isolation.install()` immediately before the stdio
@@ -200,6 +253,27 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
   immediately before the stdio server is built, as the other six servers
   do; its `tests/test_fd_isolation.py` runs the shared checks, and
   `python/tests/test_fd_isolation.py` checks all seven servers.
+- **EQ library: `eq_save` also refuses after a set of tot's `eq:` parameters**
+  (as #253 did for tr, fp and ti). tot's `eq:` dispatcher calls
+  `eq_param_registry` directly, so the flag that `eq_set_param` cleared stayed
+  set and `eq_save` wrote the parameters as they stood over fields computed
+  for the old ones. The registry now counts every successful numeric set
+  (`eq_param_generation()`) except `MODEFR` and `MODEFW`; `eq_run` records
+  the count when it computes or loads the equilibrium, and `eq_save` refuses
+  when it moved. String sets (`KNAMEQ` and the other `KNAM*`) are not counted,
+  as before. What no registry sees in the mono image (another module's
+  `eq_init`, `eq_load`, `eq_calc`, a `plcomm` variable set through another
+  module's registry) is #260; `eq_api.h` and the eqlib README say so. Smaller
+  points from the review of #256: the eq_mcp `save` tool says that the
+  `MODEFW` it sets stays; a sentence in `eq/eqfile.f90` (comment only) that
+  the length comparison depends on the run-time reporting the unit's
+  length; `test_save.py` accepts a short file of at most the limit;
+  `_encode_name` says 80 bytes for a value.
+- **MCP stdio servers: two edge cases of the fd isolation** (from the review
+  of #257). `python/_fd_isolation.py` repairs fd 2 only when `fstat` says
+  `EBADF`; another error means fd 2 is there, so it is left alone and the
+  installation fails before changing anything. A host's `sys.stdout` whose
+  `flush` raises an `Exception` no longer stops the installation.
 
 ## TR Phase L — library-ization (2026-04-18)
 

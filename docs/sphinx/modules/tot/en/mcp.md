@@ -69,7 +69,7 @@ Or use `tot-mcp install --client claude-code --scope project`.
 
 ## Tools provided
 
-`tot_mcp` exposes **9 tools**. The use of prefixed parameter names is
+`tot_mcp` exposes **10 tools**. The use of prefixed parameter names is
 what differentiates it from the other modules' servers.
 
 | Tool | Purpose | Main arguments |
@@ -83,6 +83,7 @@ what differentiates it from the other modules' servers.
 | `describe_parameters` | List prefixes + parameters | none |
 | `describe_state_schema` | Schema of the TotState return value | none |
 | `run_and_get_state` | One-shot run | `params`, `ntmax` |
+| `run_pipeline` | Run modules in sequence, coupled through scalars (`totlib.TotPipeline`); a string value in `params` goes to the module's own string setter, so `fp:KNAMEQ` works here | `steps`, `params` |
 
 ## Usage examples
 

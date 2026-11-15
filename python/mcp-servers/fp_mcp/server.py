@@ -21,6 +21,12 @@ Design notes
 * **FastMCP decorator API** (`mcp.server.fastmcp.FastMCP`). Each tool
   is a plain Python function with type hints; the SDK generates the
   JSON Schema advertised to the client automatically.
+* ``set_param_str`` — string parameters such as ``KNAMEQ`` (the
+  equilibrium-data file name) routed through
+  :py:meth:`fplib.Fplib.set_param_str`. This is what unlocks the
+  ``MODELG=3`` + ``KNAMEQ=<file>`` path, i.e. loading a TASK/EQ-format
+  equilibrium file (e.g. one written by ``EQSAVE`` / the ``eq``
+  program, or by ``eq_mcp``'s ``save`` tool).
 * **Error mapping.** :class:`fplib.FplibError` subclasses are re-raised
   as :class:`ToolError` with a human-readable message. The LLM sees
   the error string and can often recover (e.g. by calling ``init``
@@ -121,9 +127,10 @@ import _fd_isolation  # noqa: E402
 #
 # Source of truth: fp/fp_param_registry.f90 (~40 unique base names).
 # =====================================================================
-# fplib has no ``set_param_str`` so strings are not part of the union —
-# every fp parameter is numeric.
-SupportedValue = Union[float, int, List[float], Dict[int, float]]
+# Includes `str` for string-valued parameters like KNAMEQ (set via
+# fplib.Fplib.set_param_str -> fp_set_param_str on libfpapi.so), which
+# this server exposes as the `set_param_str` tool.
+SupportedValue = Union[float, int, str, List[float], Dict[int, float]]
 
 
 PARAMETER_REGISTRY: Dict[str, Dict[str, Any]] = {
@@ -176,7 +183,7 @@ PARAMETER_REGISTRY: Dict[str, Dict[str, Any]] = {
     "PABS_WM": {"type": "float", "group": "wave", "description": "WM full-wave absorbed power [MW]"},
     "RF_WM":   {"type": "float", "group": "wave", "description": "WM wave frequency [Hz]"},
     # --- model switches (scalar int) -------------------------------
-    "MODELG": {"type": "int", "group": "models", "description": "geometry / equilibrium model (3 = typical for iter01 fixture)"},
+    "MODELG": {"type": "int", "group": "models", "description": "geometry / equilibrium model (pl_init default 2; 3 = load the TASK/EQ file named by KNAMEQ)"},
     "MODELE": {"type": "int", "group": "models", "description": "equilibrium coupling model"},
     "MODELR": {"type": "int", "group": "models", "description": "relativistic model switch"},
     "MODELS": {"type": "int", "group": "models", "description": "source-term model switch"},
@@ -191,6 +198,16 @@ PARAMETER_REGISTRY: Dict[str, Dict[str, Any]] = {
     # --- model switches (per-species int arrays) -------------------
     "MODELC": {"type": "int[NSM]", "group": "models", "description": "collision-model selector per species"},
     "MODELW": {"type": "int[NSM]", "group": "models", "description": "wave-model selector per species"},
+    # --- string parameter (set via set_param_str under the hood) ----
+    "KNAMEQ": {
+        "type": "str",
+        "group": "io",
+        "description": (
+            "equilibrium data file name; read by the MODELG=3 eq_load "
+            "path. Set it with set_param_str (or a str value in "
+            "set_params) before run when MODELG=3."
+        ),
+    },
 }
 
 
@@ -225,7 +242,7 @@ STATE_SCHEMA: Dict[str, Any] = {
                 "equilibrium through the volume element, so they are what "
                 "makes an EQ->FP handoff (MODELG=3 + KNAMEQ) observable. "
                 "All zero before the first run, and again after a set_param "
-                "until the next run that is made."
+                "or set_param_str until the next run that is made."
             ),
             "properties": {
                 "TOTAL_IP":         {"type": "number", "description": "total plasma current [MA]"},
@@ -300,6 +317,8 @@ def _apply_bulk_params(fp: Fplib, params: Dict[str, SupportedValue]) -> List[str
       is applied as ``NAME[i]``.
     * ``dict[int, float]``          — sparse {index: value}, applied as
       ``NAME[index]``; indices must be 1-origin.
+    * ``str``                       — forwarded to
+      :py:meth:`Fplib.set_param_str` (e.g. ``KNAMEQ``).
 
     .. warning::
 
@@ -365,6 +384,12 @@ def _apply_bulk_params(fp: Fplib, params: Dict[str, SupportedValue]) -> List[str
                     ) from exc
                 fp.set_param(key, coerced)
                 applied.append(key)
+        elif isinstance(value, str):
+            # String-valued (e.g. KNAMEQ). Requires a libfpapi.so that
+            # exports fp_set_param_str; otherwise fplib raises
+            # FplibError with a rebuild hint, which _wrap translates.
+            fp.set_param_str(name, value)
+            applied.append(name)
         elif isinstance(value, (int, float)):
             try:
                 coerced = float(value)
@@ -430,6 +455,39 @@ def handle_set_param(name: str, value: float) -> str:
         fp = STATE.ensure_open()
         fp.set_param(name, float(value))
         return f"set {name} = {value}"
+    except Exception as exc:
+        raise _wrap_fplib_error(exc) from exc
+
+
+def handle_set_param_str(name: str, value: str) -> str:
+    """Set a string-valued fp parameter (currently only ``KNAMEQ``).
+
+    Routed through :py:meth:`Fplib.set_param_str`, which requires a
+    ``libfpapi.so`` that exports ``fp_set_param_str``
+    (``fp/fp_api.f90``); older builds raise :class:`FplibError` with a
+    rebuild hint, which :func:`_wrap_fplib_error` turns into a
+    human-readable ToolError.
+
+    This is the entry point for the ``MODELG=3`` equilibrium-load path.
+    The file is read by the next ``run``, not by this call. With
+    ``MODELG=3`` and a ``KNAMEQ`` that names a file that does not exist
+    or cannot be opened (the ``pl_init`` default is ``'eqdata'`` in
+    cwd), ``eq_load`` fails, ``fp_mesh`` returns its error
+    (``fp/fpprep.f90``) and ``fp_run`` returns ``FP_ERR_CALC_FAILED``
+    (``fp/fp_api.f90``): fplib raises :class:`FplibCalcFailedError`,
+    which ``run`` turns into a "calculation failed" ToolError. The
+    ``BESEKNX`` / ``NCALC=-2`` failure that the comment block in
+    ``fp/fp_param_registry.f90`` describes predates that propagation.
+
+    A file that opens but is not a TASK/EQ file is another matter:
+    ``eq/eqfile.f90`` reads its leading records without ``IOSTAT``, and
+    a Fortran runtime error there ends the server process (measured
+    with an empty file and with a text file).
+    """
+    try:
+        fp = STATE.ensure_open()
+        fp.set_param_str(name, str(value))
+        return f"set {name} = {value!r}"
     except Exception as exc:
         raise _wrap_fplib_error(exc) from exc
 
@@ -525,7 +583,7 @@ def handle_run_and_get_state(
 # above are the unit-testable surface either way.
 # =====================================================================
 def build_server() -> Any:
-    """Build and return a FastMCP server instance with the 9 fp tools."""
+    """Build and return a FastMCP server instance with the 10 fp tools."""
     if not MCP_AVAILABLE:
         raise RuntimeError(
             "Python MCP SDK (`mcp`) is not installed. "
@@ -537,7 +595,8 @@ def build_server() -> Any:
         instructions=(
             "TASK/FP Fokker-Planck-code MCP server. "
             "Call `init` first, configure parameters with `set_param` "
-            "or `set_params`, advance with `run`, and read state with "
+            "/ `set_param_str` / `set_params`, advance with `run`, and "
+            "read state with "
             "`get_state`. Use `describe_parameters` to discover valid "
             "parameter names. `run_and_get_state` is a convenience "
             "one-shot wrapper. Note: `set_params` is *non-transactional* "
@@ -563,13 +622,40 @@ def build_server() -> Any:
 
     @mcp.tool()
     def set_param(name: str, value: float) -> str:
-        """Set an fp parameter by name.
+        """Set a numeric fp parameter by name.
 
         Use ``NAME[i]`` (1-origin) for array elements, e.g. ``PN[1]``.
-        See `describe_parameters` for the full registry. All fp
-        parameters are numeric (float / int).
+        For string parameters (``KNAMEQ``) use ``set_param_str``
+        instead. See `describe_parameters` for the full registry.
         """
         return handle_set_param(name, value)
+
+    @mcp.tool()
+    def set_param_str(name: str, value: str) -> str:
+        """Set an fp string-valued parameter (``KNAMEQ``).
+
+        Requires a ``libfpapi.so`` that exports ``fp_set_param_str``
+        (``make -C fp libfpapi.so``); older builds raise a clear
+        "rebuild the shared library" error.
+
+        Typical use — load a TASK/EQ-format equilibrium file (e.g.
+        one written by ``EQSAVE`` / the ``eq`` program, or by
+        ``eq_mcp``'s ``save`` tool)::
+
+            set_param("MODELG", 3)
+            set_param_str("KNAMEQ", "eq.bin")
+            run(...)
+
+        Paths are resolved relative to the server process's cwd, and
+        ``KNAMEQ`` holds 80 characters: keep the path within 80 bytes
+        (one of 81 to 128 bytes is cut to its first 80 without an
+        error; a longer one is refused). A file that does not exist
+        or cannot be opened makes the next ``run`` fail with
+        "calculation failed". A file that opens but is not a TASK/EQ
+        file can end the server process with a Fortran runtime error
+        (an empty file and a text file do): name TASK/EQ files only.
+        """
+        return handle_set_param_str(name, value)
 
     @mcp.tool()
     def set_params(params: Dict[str, Any]) -> str:
@@ -579,6 +665,7 @@ def build_server() -> Any:
         * a number (scalar)
         * a list/tuple (1-origin array, all elements applied)
         * a dict ``{index: value}`` (1-origin sparse array)
+        * a string (for KNAMEQ and similar string-valued parameters)
 
         **Non-transactional**: keys are applied in iteration order and
         a failure on key ``N`` leaves keys ``0..N-1`` already written
@@ -602,8 +689,10 @@ def build_server() -> Any:
         """Return the current simulation state.
 
         Returns a dict with ``NRMAX``, ``NSAMAX``, ``NPMAX``, ``NTHMAX``,
-        ``NTG2``, ``TIMEFP``, and ``profile`` (per-species list of 6
-        radial arrays: RNT, RWT, RTT, RJT, RPCT, RPWT). Schema also
+        ``NTG2``, ``TIMEFP``, ``profile`` (per-species list of 6
+        radial arrays: RNT, RWT, RTT, RJT, RPCT, RPWT) and ``scalars``
+        (7 global plasma scalars: zero before the first run, and again
+        after a successful set until the next run). Schema also
         available via `describe_state_schema`.
         """
         return handle_get_state()
@@ -627,6 +716,8 @@ def build_server() -> Any:
         Each entry exposes ``type``, ``group``, and ``description``.
         Also reports the FP_MAX_NSAMAX / FP_MAX_NRMAX mesh caps.
         Use this to discover valid parameter names before set_param.
+        Entries with ``"type": "str"`` (``KNAMEQ``) must be set via
+        ``set_param_str``, not ``set_param``.
         """
         return handle_describe_parameters()
 
@@ -682,6 +773,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             [
                 "init",
                 "set_param",
+                "set_param_str",
                 "set_params",
                 "run",
                 "get_state",

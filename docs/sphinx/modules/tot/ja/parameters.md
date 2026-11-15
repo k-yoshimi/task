@@ -46,16 +46,22 @@ tot.set_param_str("eq:KNAMEQ", "eqdata.ITER01")
 
 ## 文字列パラメータ
 
-`set_param_str` も同じプレフィックス規則です.
+`set_param_str` も同じプレフィックス規則です. ただし tot が文字列を
+渡すのは `eq:` と `tr:` の名前空間だけです (`tot/tot_param_registry.f90`).
+`fp:`, `ti:`, `wr:`, `wrx:` では `TotlibInvalidParamError` になります.
 
 ```python
 tot.set_param_str("eq:KNAMEQ", "eqdata.ITER01")
-tot.set_param_str("fp:KNAMEQ", "eqdata.ITER01")
-tot.set_param_str("wr:KNAMEQ", "eqdata.ITER01")
+tot.set_param_str("tr:KNAMEQ", "eqdata.ITER01")
 ```
 
-eq, fp, wr が **同じ KNAMEQ ファイル** を読むのが普通です. ただし
-プレフィックスを通して個別に異なるファイルを指定することも可能です.
+`fp:KNAMEQ` は `totlib.TotPipeline.set_param("fp:KNAMEQ", ...)` で設定します.
+これは fplib 自身の `set_param_str` に渡されます (`tot_mcp` では
+`run_pipeline` の `params` に文字列値として渡します). `ti`, `wr`, `wrx` には
+文字列パラメータがありません. tr は自身の `KNAMEQ` を持ちます. eq の
+`KNAMEQ` は `pl` (`plcomm`) のもので, fp もこれを読みます. eq と fp が
+`pl` を 1 つ共有する場合 (mono イメージ `libtotapi_mono.so` など) は,
+`eq:KNAMEQ` が fp の読むファイルも決めます.
 
 ## 推奨ワークフロー
 

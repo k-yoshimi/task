@@ -127,10 +127,11 @@ calls `tot_finalize`. Only one live instance per process is meaningful
 (TOT backend holds global COMMON-block plus per-module module-variable
 state).
 
-> **L-6 fan-out wired:** `tot_init` brings up tr + ti + fp + wr (with
-> rollback on per-module init failure); `tot_finalize` tears them down
-> in reverse order. The wrapper accepts both `OK` and `NOT_IMPL` returns
-> for forward compatibility, but the live path is `OK` end-to-end.
+> **L-6 fan-out wired:** `tot_init` brings up eq + tr + ti + fp + wr
+> (eq since #209; with rollback on per-module init failure);
+> `tot_finalize` tears them down in reverse order. The wrapper still
+> accepts `NOT_IMPL` from `tot_init` and `tot_finalize`, a leftover of
+> the pre-L-6 stubs; the live path is `OK` end-to-end.
 
 ### `Tot.set_param(name, value) -> None`
 
@@ -272,7 +273,7 @@ Every `tot_*` return code maps to a concrete subclass of `TotlibError`:
 | 1 | `TotlibInvalidParamError` | invalid name (missing prefix / unknown namespace / unknown bare name) |
 | 2 | `TotlibNotInitializedError` | API call before `tot_init` |
 | 3 | `TotlibCalculationFailedError` | `tot_run` / `tot_get_state` failed |
-| 4 | `TotlibNotImplementedError` | stub return (L-3/L-4 `init` / `run` / `get_state` / `finalize`) |
+| 4 | `TotlibNotImplementedError` | stub return (L-3/L-4 `init` / `run` / `get_state` / `finalize`; none returns it since L-6) |
 
 Spec-style aliases (`TotLibError`, `TotLibInvalidParam`,
 `TotLibNotInitialized`, `TotLibCalculationFailed`,
@@ -394,9 +395,10 @@ debugging without losing earlier scalars.
 ## Known limitations
 
 - **Single instance per process.** TOT backend uses COMMON blocks plus
-  per-module module variables. Two concurrent `Tot()` handles share
-  state; the second `tot_init` resets globals. Use `multiprocessing`
-  for parallel sweeps — each worker loads its own `libtotapi.so`.
+  per-module module variables, so a second live `Tot()` in the same
+  process is refused (`TotlibNotInitializedError`). Use
+  `multiprocessing` for parallel sweeps — each worker loads its own
+  `libtotapi.so`.
 - **Cross-module coupling lives outside the orchestrator.**
   `tot_run(ntmax)` advances `tr_api_run` only — `fp/wr/ti` are init'd
   but their `*_run` is not invoked from the Fortran orchestrator.
@@ -429,8 +431,8 @@ library is absent. Pure-Python tests (ctypes layout, error wiring,
 namespace guard, `TotState.from_c` / `to_dict` shape) always run.
 
 The Phase L-6 4-layer regression suite (`totlib_equivalence`,
-`totlib_c_abi`, `totlib_ffi`, `totlib_wrapper`, `totlib_sweep`) is
-staged on the L-6 feature branch and will land via its own PR.
+`totlib_c_abi`, `totlib_ffi`, `totlib_wrapper`, `totlib_sweep`) is in
+`test_run/test_definitions.conf` (#96).
 
 ## License / contributions
 

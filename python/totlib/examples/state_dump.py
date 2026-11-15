@@ -12,9 +12,9 @@ Run from the repository root::
         --out /tmp/totlib_state.json
 
 Stub status note:
-  Until Phase L-6 fan-out lands, ``tot_get_state`` returns ``rc=4``
-  and the wrapper raises ``TotlibNotImplementedError``. The script
-  reports the stub status and exits cleanly.
+  Since Phase L-6, ``tot_get_state`` works. The script still catches
+  ``TotlibNotImplementedError`` (rc=4, which only the L-3/L-4 stubs
+  returned) and exits cleanly.
 """
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ def main(argv: "list[str] | None" = None) -> int:
             tot.run(ntmax=args.ntmax)
             state = tot.get_state()
         except TotlibNotImplementedError as e:
-            print(f"[stub] state dump unavailable until L-6 fan-out: {e}",
+            print(f"[rc=4] state dump not implemented in this library: {e}",
                   file=sys.stderr)
             return 0
 

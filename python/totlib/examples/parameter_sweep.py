@@ -10,9 +10,10 @@ Run from the repository root::
     PYTHONPATH=python python3 python/totlib/examples/parameter_sweep.py
 
 Stub status note:
-  Until Phase L-6 lands fan-out, ``tot.run`` / ``tot.get_state`` raise
-  ``TotlibNotImplementedError``. The script reports ``nan`` for each
-  cell in that case so the grid layout still prints.
+  Since Phase L-6, ``tot.run`` / ``tot.get_state`` work. The script still
+  reports ``nan`` (printed as NOT_IMPL) for a cell where they raise
+  ``TotlibNotImplementedError`` (rc=4, which only the L-3/L-4 stubs
+  returned).
 """
 from __future__ import annotations
 

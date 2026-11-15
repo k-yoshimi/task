@@ -61,7 +61,7 @@ MCP (Model Context Protocol) は、Anthropic が策定した **「LLM と外部�
    make -C fp libfpapi.so
    ```
 
-   成功すると `fp/libfpapi.so` が生成されます (Phase L-4 で整備済みです)。エクスポートされる C ABI シンボルは 5 つ (`fp_init`, `fp_run`, `fp_set_param`, `fp_get_state`, `fp_finalize`) です。
+   成功すると `fp/libfpapi.so` が生成されます (Phase L-4 で整備済みです)。エクスポートされる C ABI シンボルは 8 つ: エントリポイント 6 つ (`fp_init`, `fp_run`, `fp_set_param`, `fp_set_param_str`, `fp_get_state`, `fp_finalize`) と、`fplib` が読み込み時に `fp_state_t` のレイアウトを照合するための 2 つ (`fp_state_abi_version`, `fp_state_size`) です。
 
 3. **`mcp` パッケージ (Python MCP SDK)**
 
@@ -117,7 +117,7 @@ python -m fp_mcp.server --help
 python -m fp_mcp.server --print-tools
 ```
 
-以下の 9 ツールが並びます。
+以下の 10 ツールが並びます。
 
 ```
 describe_parameters
@@ -128,6 +128,7 @@ init
 run
 run_and_get_state
 set_param
+set_param_str
 set_params
 ```
 
@@ -211,7 +212,7 @@ LLM は `init → run(1) → get_state` の順にツールを呼び、`TIMEFP` �
 ### 6.2. iter01 相当のパラメータ設定
 
 ```
-FP を MODELG=3、NSMAX=3、NRMAX=40、NPMAX=50、NTHMAX=50、DELT=1.0e-3
+FP を NSMAX=3、NRMAX=40、NPMAX=50、NTHMAX=50、DELT=1.0e-3
 で初期化して 2 ステップ走らせて、NSA=1 の RTT プロファイルを教えて。
 ```
 
@@ -220,7 +221,7 @@ LLM は内部で
 ```python
 run_and_get_state(
     params={
-        "MODELG": 3, "NSMAX": 3,
+        "NSMAX": 3,
         "NRMAX": 40, "NPMAX": 50, "NTHMAX": 50,
         "DELT": 1.0e-3,
     },
@@ -228,7 +229,7 @@ run_and_get_state(
 )
 ```
 
-のような呼び出しに変換し、`profile[0]["RTT"]` を読み取って返してくれます。
+のような呼び出しに変換し、`profile[0]["RTT"]` を読み取って返してくれます。`MODELG` は指定しません: `fp_iter01.in` も設定しておらず、`pl_init` 既定の `MODELG=2` (解析的平衡) で動きます (8.3 参照)。
 
 ### 6.3. 種族ごとのパラメータ設定 (配列)
 
@@ -252,8 +253,9 @@ LLM は `describe_parameters` を呼び、`group == "wave"` を抽出して返�
 | ツール | 目的 | 主な引数 |
 |---|---|---|
 | `init` | ライブラリ初期化 | なし |
-| `set_param` | 単一パラメータ設定 | `name`, `value` (配列要素は `NAME[i]`) |
-| `set_params` | まとめて設定 (scalar / list / dict) | `params` |
+| `set_param` | 単一パラメータ設定 (数値) | `name`, `value` (配列要素は `NAME[i]`) |
+| `set_param_str` | 文字列パラメータ設定 (`KNAMEQ`) | `name`, `value` |
+| `set_params` | まとめて設定 (scalar / list / dict / str) | `params` |
 | `run` | 時間ステップ進行 | `ntmax` (default=1) |
 | `get_state` | 現在の状態取得 | なし |
 | `finalize` | リソース解放 | なし |
@@ -287,13 +289,28 @@ FP バックエンドには `fp_allocate` / `fp_deallocate` 非対称があり�
 
 これは `python/fplib/README.md` にも「Known limitations」として記載されている制限事項です。
 
-### 8.3. `MODELG=3` は iter01 fixture の典型値
+### 8.3. `MODELG=3` は平衡ファイルを読み込むときの選択
 
-`test_run/inputs/fp_iter01.in` で使われている設定を踏襲する場合、`MODELG=3` (PL/EQDSK 等価の解析的平衡) が既定的な選択になります。他のモデル (`MODELG=0, 1, 2, 5, 8, ...`) を選ぶと `fp_init` / `fp_prep` が `FP_ERR_CALC_FAILED` を返すこともあるので、`libfpapi.so` 側の対応状況を確認してください。
+`MODELG=3` は**解析的平衡ではなく、平衡データファイルを読み込むパス**で、平衡ファイルを読み込みたいときに選ぶ値です。必ず `set_param_str("KNAMEQ", <file>)` で実在するファイルを指してください (8.4 参照)。iter01 の既定値ではありません: `test_run/inputs/fp_iter01.in` は `MODELG` を設定しておらず、`pl_init` 既定の `MODELG=2` (解析的平衡) で動きます。`MODELG` を設定しなければ同じく `MODELG=2` で動き、外部ファイルは不要です。他のモデル (`MODELG=0, 1, 5, 8, ...`) を選ぶと `fp_init` / `fp_prep` が `FP_ERR_CALC_FAILED` を返すこともあるので、`libfpapi.so` 側の対応状況を確認してください。
 
-### 8.4. 文字列パラメータは未対応
+### 8.4. 文字列パラメータ (`KNAMEQ`) と EQ→FP 連携
 
-`libfpapi.so` の C ABI (`fp_set_param(const char* name, double value)`) は `double` 値のみを受け付けます。`KNAMFP` のような文字列パラメータは、現状デフォルト値のまま使ってください。将来的に専用 setter が追加された段階で `set_params` へ統合する予定です。
+`fp_set_param(const char* name, double value)` は `double` 値しか受け付けないため、文字列パラメータ用には別の C ABI エントリ `fp_set_param_str(const char* name, const char* value)` (`fp/fp_api.f90`) を使います。MCP からは `set_param_str` ツール、または `set_params` に `str` 値を渡す形で叩けます。
+
+現在レジストリ (`fp/fp_param_registry.f90::fp_param_set_str`) が受け付ける名前は `KNAMEQ` のみです。これは `MODELG=3` のときに `eq_load` が読む平衡データファイル名で、EQ が書き出したファイルを FP に食わせる (EQ→FP 連携) ための入口になります。
+
+読み込むのは TASK/EQ 形式の平衡ファイルです (例: `EQSAVE` / `eq` プログラムが書き出したもの。`eq_mcp` の `save` ツールでも書き出せます)。
+
+```python
+# eq.bin: TASK/EQ 形式の平衡ファイル。これがある作業ディレクトリで fp_mcp を起動して読み込む
+fp.set_param(name="MODELG", value=3)
+fp.set_param_str(name="KNAMEQ", value="eq.bin")
+fp.run(ntmax=2)
+```
+
+パスはサーバプロセスの cwd 基準で解決されます。`KNAMEQ` は `CHARACTER(LEN=80)` なので、パスは 80 バイト以内にしてください (81〜128 バイトのパスはエラーなしで先頭 80 文字に切り詰められ、128 バイトを超えると `invalid parameter` で拒否されます)。`MODELG=3` を指定しつつ `KNAMEQ` が存在しないファイルを指していると、`eq_load` が失敗し、`fp_mesh` がそのエラーを返して (`fp/fpprep.f90`)、`fp_api_run` が `FP_ERR_CALC_FAILED` を返します (`fp/fp_api.f90`)。fplib の `FplibCalcFailedError` が MCP では `calculation failed` を含む `ToolError` に変換され、`run` のエラーとしてクライアントに届きます (開けないファイルやディレクトリを指した場合も同じです)。一方、開けるが TASK/EQ 形式でないファイルを指すと、`eq/eqfile.f90` は先頭のレコードを `IOSTAT` なしで読むため、Fortran ランタイムエラーでサーバプロセスごと終了することがあります (空ファイルやテキストファイルで確認)。`KNAMEQ` には TASK/EQ 形式のファイルだけを指定してください。`fp_param_registry.f90` のコメントにある `BESEKNX` の `NCALC=-2` は、`FP_ERR_CALC_FAILED` へのエラー伝播が入る前の挙動です。`MODELG` を設定しない場合は `pl_init` 既定の `MODELG=2` (解析的平衡) で動くので、`KNAMEQ` は不要です。
+
+なお `KNAMFP` など他の文字列パラメータはまだレジストリに CASE エントリがなく、`invalid parameter` になります。
 
 ### 8.5. `NSMAX` と `NSAMAX` の違い
 

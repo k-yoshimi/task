@@ -10,11 +10,10 @@ Prerequisites:
   - Optional: ``TOTLIB_PATH`` set if the library lives outside the repo.
 
 Stub status note:
-  At Phase L-3/L-4, ``tot_run`` and ``tot_get_state`` are stubs that
-  return ``TOT_ERR_NOT_IMPL``; this script catches that case so the
-  wrapper exercise still completes. Once Phase L-6 lands fan-out, the
-  ``run`` / ``get_state`` calls succeed and the printout shows real
-  scalars.
+  Since Phase L-6, ``tot_run`` and ``tot_get_state`` work and the
+  printout shows real scalars. The script still catches
+  ``TotlibNotImplementedError`` (rc=4, which only the L-3/L-4 stubs
+  returned).
 """
 from __future__ import annotations
 
@@ -59,7 +58,7 @@ def main(argv: "list[str] | None" = None) -> int:
             tot.run(ntmax=args.ntmax)
             state = tot.get_state()
         except TotlibNotImplementedError as e:
-            print(f"[stub] run/get_state not yet wired (L-6 fan-out pending): {e}")
+            print(f"[rc=4] run/get_state not implemented in this library: {e}")
             return 0
 
     print(f"NT={state.nt}  NRMAX={state.nrmax}  NSMAX={state.nsmax}")

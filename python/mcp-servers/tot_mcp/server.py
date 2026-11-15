@@ -25,12 +25,14 @@ Design notes
   re-raised as :class:`ToolError` with a human-readable message. The
   LLM sees the error string and can often recover (e.g. by adding the
   missing namespace prefix or calling ``init`` first).
-* **L-5 stub status.** ``tot_run`` and ``tot_get_state`` return
-  ``TOT_ERR_NOT_IMPL`` until L-6 wires up per-module fan-out. The
-  wrapper surfaces that as
-  :class:`totlib.TotlibNotImplementedError`; the MCP error-mapping
-  layer reports it as ``"not implemented in this libtotapi.so build"``.
-  ``set_param`` / ``set_param_str`` already work end-to-end.
+* **Run and state.** Since L-6 ``tot_run`` advances the
+  TR-authoritative loop and ``tot_get_state`` returns its state;
+  coupling between modules is ``run_pipeline``'s. No entry point
+  returns ``TOT_ERR_NOT_IMPL`` any more (a ``libtotapi.so`` built before
+  #246 is refused at load), so the "not implemented" mapping is kept
+  only for compatibility. String values reach the file-name parameters
+  of ``eq:`` and ``tr:`` only; ``fp:KNAMEQ`` goes in ``run_pipeline``'s
+  ``params``.
 
 The server intentionally mirrors :mod:`tr_mcp.server` so that follow-up
 maintenance can keep the per-module and orchestrator surfaces aligned.
@@ -53,6 +55,7 @@ server's log.
 from __future__ import annotations
 
 import os  # noqa: F401  (re-exported for symmetry with sibling MCP servers)
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -118,11 +121,11 @@ import _fd_isolation  # noqa: E402
 # tot is an orchestrator: rather than re-listing every per-module
 # parameter inline (the union is ~250 entries and would drift quickly),
 # we delegate to the sibling MCP servers' PARAMETER_REGISTRY exports
-# whenever they are importable, and fall back to a small inline
-# registry when the sibling is missing (currently only ``eq:`` — there
-# is no eq_mcp yet). The dispatch matches ``tot_param_registry.f90``:
+# whenever they are importable, and keep a small inline registry for
+# ``eq:`` (written before eq_mcp existed; eq_mcp's registry is not loaded
+# here). The dispatch matches ``tot_param_registry.f90``:
 #
-#   eq   -> inline (no eq_mcp yet)
+#   eq   -> inline
 #   tr   -> tr_mcp.server.PARAMETER_REGISTRY
 #   fp   -> fp_mcp.server.PARAMETER_REGISTRY
 #   ti   -> ti_mcp.server.PARAMETER_REGISTRY
@@ -137,8 +140,8 @@ import _fd_isolation  # noqa: E402
 SupportedValue = Union[float, int, str, List[float], Dict[int, float]]
 
 
-# Inline registry for the ``eq:`` namespace. There is no eq_mcp yet, so
-# we surface the most important parameters by hand. The full list lives
+# Inline registry for the ``eq:`` namespace, written before eq_mcp
+# existed: the most important parameters, by hand. The full list lives
 # in ``eq/eq_param_registry.f90``; LLMs can still set bare names that
 # are not listed here — the request goes through and only fails if the
 # per-module registry rejects the name.
@@ -192,6 +195,52 @@ def _load_sibling_registry(module_name: str) -> Dict[str, Dict[str, Any]]:
     return dict(getattr(mod, "PARAMETER_REGISTRY", {}) or {})
 
 
+# tot_param_set_str (tot/tot_param_registry.f90) passes string values on
+# for these namespaces only; fp:, ti:, wr: and wrx: string sets return
+# ierr=1.
+_TOT_STRING_NAMESPACES = ("eq", "tr")
+# run_pipeline's TotPipeline.set_param (totlib/pipeline.py) hands a string
+# to the module's own set_param_str; of the namespaces tot does not pass
+# strings on for, only fp has one.
+_PIPELINE_ONLY_STRING_NAMESPACES = ("fp",)
+
+
+def _as_tot_sees_it(
+    ns: str, registry: Dict[str, Dict[str, Any]]
+) -> Dict[str, Dict[str, Any]]:
+    """A sibling's registry, with its string entries as tot can set them.
+
+    A sibling server lists every parameter its module takes, string ones
+    included (``fp_mcp`` has ``KNAMEQ``). Through tot's ``set_param``,
+    strings reach ``eq:`` and ``tr:`` only; ``run_pipeline`` also sets
+    ``fp:`` strings, through fplib. So a ``fp:`` string entry stays, its
+    description saying so in place of the sibling's setting advice, and a
+    ``ti:``, ``wr:`` or ``wrx:`` one is left out.
+    """
+    if ns in _TOT_STRING_NAMESPACES:
+        return registry
+    out: Dict[str, Dict[str, Any]] = {}
+    for name, meta in registry.items():
+        if meta.get("type") != "str":
+            out[name] = meta
+        elif ns in _PIPELINE_ONLY_STRING_NAMESPACES:
+            # The sibling's own setting advice (its set_param_str tool) does
+            # not apply here: keep what the parameter is (its first
+            # sentence, ended by a period and a capital, so an "e.g." before
+            # a lowercase word does not end it), say how to set it.
+            what = re.split(r"\.\s+(?=[A-Z])", meta.get("description", ""), maxsplit=1)[0].rstrip(".")
+            out[name] = dict(
+                meta,
+                description=(
+                    f"{what}. Through tot_mcp: a str value in run_pipeline's "
+                    f"params only; set_param, set_params and run_and_get_state "
+                    f"refuse {ns}: strings (tot passes strings on for eq: and "
+                    f"tr: only)."
+                ),
+            )
+    return out
+
+
 def _build_namespaced_registry() -> Dict[str, Dict[str, Dict[str, Any]]]:
     """Assemble per-namespace dicts of {bare_name: {type, group, ...}}.
 
@@ -200,7 +249,7 @@ def _build_namespaced_registry() -> Dict[str, Dict[str, Dict[str, Any]]]:
     sibling MCP package were installed mid-process, which we don't
     support at L-5 scope.
     """
-    return {
+    registries = {
         "eq":  dict(_EQ_INLINE_REGISTRY),
         "tr":  _load_sibling_registry("tr_mcp"),
         "fp":  _load_sibling_registry("fp_mcp"),
@@ -211,6 +260,7 @@ def _build_namespaced_registry() -> Dict[str, Dict[str, Dict[str, Any]]]:
         # describe output mirrors what callers can actually set.
         "wr":  _load_sibling_registry("wrx_mcp"),
     }
+    return {ns: _as_tot_sees_it(ns, reg) for ns, reg in registries.items()}
 
 
 PARAMETER_REGISTRIES: Dict[str, Dict[str, Dict[str, Any]]] = _build_namespaced_registry()
@@ -513,10 +563,33 @@ def _wrap_totlib_error(exc: Exception) -> "ToolError":  # noqa: F821
     on the MCP SDK being installed.
     """
     if isinstance(exc, TotlibInvalidParamError):
-        msg = (
-            f"invalid parameter: {exc}. "
-            f"Hint: tot parameter names must be namespaced as "
-            f"'<ns>:<name>' where <ns> is one of {TOT_NAMESPACES}."
+        text = str(exc)
+        if text.startswith("tot_set_param_str("):
+            # A refused string set: the name may well be namespaced.
+            hint = (
+                "tot passes string values on only to the file names "
+                "eq:KNAMEQ, KNAMEQ2, KNAMWR, KNAMWM, KNAMFP, KNAMFO, "
+                "KNAMPF and tr:KNAMEQ; send numbers as numbers, and give "
+                "fp:KNAMEQ in run_pipeline's params (ti:, wr: and wrx: "
+                "take no strings)"
+            )
+        elif text.startswith("tot_set_param("):
+            # totlib checked the namespace before the call.
+            hint = (
+                "the module does not know the name or refused the value; "
+                "describe_parameters lists the names of each namespace"
+            )
+        elif text.startswith(("TOT C string", "tot_")):
+            # The string itself is unusable (type, ASCII, NUL, length),
+            # or another call (e.g. tot_run) refused its argument.
+            hint = None
+        else:
+            hint = (
+                f"tot parameter names must be namespaced as "
+                f"'<ns>:<name>' where <ns> is one of {TOT_NAMESPACES}"
+            )
+        msg = f"invalid parameter: {text}" if hint is None else (
+            f"invalid parameter: {text.rstrip('.')}. Hint: {hint}."
         )
     elif isinstance(exc, TotlibNotInitializedError):
         msg = f"library not initialized (call init first): {exc}"
@@ -524,9 +597,7 @@ def _wrap_totlib_error(exc: Exception) -> "ToolError":  # noqa: F821
         msg = f"calculation failed: {exc}"
     elif isinstance(exc, TotlibNotImplementedError):
         msg = (
-            f"not implemented in this libtotapi.so build: {exc}. "
-            f"L-3/L-4/L-5 ship stub init/run/get_state/finalize; L-6 "
-            f"will wire up the per-module fan-out."
+            f"not implemented in this libtotapi.so build: {exc}"
         )
     elif isinstance(exc, TotPipelineRunError):
         # H2 fix: surface partial_result metadata so MCP clients can recover
@@ -770,9 +841,9 @@ def build_server() -> Any:
             "applied before the failing key remain set; pre-validate "
             "with `describe_parameters` if a clean rollback matters. "
             "EQ-specific note: PSIB is 0-origin (eq:PSIB[0]..eq:PSIB[5]); "
-            "all other 1D arrays are 1-origin. Note: `run`/`get_state` "
-            "return TotlibNotImplementedError until L-6 lands; "
-            "`set_param`/`set_param_str` already work."
+            "all other 1D arrays are 1-origin. String values reach only "
+            "the file-name parameters of eq: and tr: (eq:KNAMEQ, "
+            "tr:KNAMEQ, ...); give fp:KNAMEQ in `run_pipeline`'s `params`."
         ),
     )
 
@@ -803,7 +874,8 @@ def build_server() -> Any:
         ``wrx_param_set`` (see ``tot/tot_param_registry.f90``).
         ``value`` may be a number or a string — string values route
         to the ``tr:`` / ``eq:`` string setters (other namespaces
-        will reject strings). See `describe_parameters` for the full
+        will reject strings; give ``fp:KNAMEQ`` in ``run_pipeline``'s
+        ``params`` instead). See `describe_parameters` for the full
         registry.
         """
         return handle_set_param(name, value)
@@ -821,7 +893,8 @@ def build_server() -> Any:
           dict form — a list is rejected because it would silently
           start at index 1 and skip ``eq:PSIB[0]``)
         * a string (only the ``tr:`` and ``eq:`` namespaces back
-          string setters today; other namespaces will reject strings)
+          string setters today; other namespaces will reject strings;
+          give ``fp:KNAMEQ`` in ``run_pipeline``'s ``params`` instead)
 
         **Non-transactional**: keys are applied in iteration order and
         a failure on key ``N`` leaves keys ``0..N-1`` already written
@@ -836,10 +909,9 @@ def build_server() -> Any:
     def run(ntmax: int = 1) -> str:
         """Advance the integrated simulation by ``ntmax`` time steps.
 
-        ``ntmax=0`` is a valid no-op (useful as a smoke test). Today
-        ``tot_run`` is a stub returning ``TOT_ERR_NOT_IMPL``; the MCP
-        layer surfaces that as a "not implemented" error. L-6 will
-        flip the switch to per-module fan-out without API changes.
+        ``ntmax=0`` is a valid no-op (useful as a smoke test).
+        ``tot_run`` advances the TR-authoritative loop; coupling between
+        modules is `run_pipeline`'s.
         """
         return handle_run(ntmax)
 
@@ -850,7 +922,7 @@ def build_server() -> Any:
         Returns a dict with ``presence`` (per-sub-module init flags),
         ``NT``, ``NRMAX``, ``NSMAX``, ``scalars`` (14 plasma scalars),
         and ``profile`` (radial profile array). Schema also available
-        via `describe_state_schema`. Stubbed until L-6.
+        via `describe_state_schema`.
         """
         return handle_get_state()
 
@@ -922,7 +994,9 @@ def build_server() -> Any:
             steps: list of {"module": "<name>", "kwargs": {...}} dicts.
                 Module names: "fp", "tr", "eq", "wr", "wrx", "ti".
             params: optional bulk param setter, e.g. {"fp:NSAMAX": 2,
-                "tr:RR": 6.2}.
+                "tr:RR": 6.2}. A str value goes to the module's own
+                string setter, so "fp:KNAMEQ" works here, unlike in
+                set_param / set_params.
 
         Returns:
             dict: PipelineResult.to_dict() — flat per-module final scalars

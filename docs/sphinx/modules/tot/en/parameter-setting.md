@@ -49,12 +49,18 @@ tot.set_param("wrx:RFIN[1]", 170e9)  # wrx's RFIN[1]
 
 ## Method C — string parameters (`set_param_str`)
 
-Strings such as `KNAMEQ` follow the same prefix rule.
+Strings such as `KNAMEQ` follow the same prefix rule, for `eq:` and `tr:`,
+the namespaces tot passes string values on for.
 
 ```python
 tot.set_param_str("eq:KNAMEQ", "eqdata.ITER01")
-tot.set_param_str("fp:KNAMEQ", "eqdata.ITER01")  # fp reads the same file
+tot.set_param_str("tr:KNAMEQ", "eqdata.ITER01")  # tr reads the same file
 ```
+
+`fp:KNAMEQ` is refused here; set it through `totlib.TotPipeline.set_param`
+(in `tot_mcp`, `run_pipeline`'s `params`). fp reads the `KNAMEQ` of `pl`,
+which is eq's: where the two share one copy of `pl`, as in the mono image,
+`eq:KNAMEQ` names fp's file too.
 
 ## Pre-run validation (`validate`)
 

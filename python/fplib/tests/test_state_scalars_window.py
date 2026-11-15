@@ -127,8 +127,14 @@ def test_a_refused_set_leaves_the_scalars():
         with pytest.raises(FplibInvalidParamError):
             fp.set_param("NO_SUCH_PARAMETER", 1.0)
         after = fp.get_state()
+        # the counter did not move, which fp_run sees too: run(1) continues
+        # the last run instead of re-preparing, so TIMEFP doubles
+        fp.run(1)
+        continued = fp.get_state()
     assert before.scalars["PLASMA_VOLUME"] > 0.0
     assert after.scalars == before.scalars
+    assert before.timefp > 0.0
+    assert continued.timefp == pytest.approx(2.0 * before.timefp)
 
 
 def test_a_string_set_opens_the_same_window():

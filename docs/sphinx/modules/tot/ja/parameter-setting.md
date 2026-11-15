@@ -48,12 +48,18 @@ tot.set_param("wrx:RFIN[1]", 170e9)  # wrx の RFIN[1]
 
 ## 方法 C — 文字列パラメータ (`set_param_str`)
 
-`KNAMEQ` などの文字列も同じプレフィックス規則です.
+`KNAMEQ` などの文字列も同じプレフィックス規則です. tot が文字列を渡すのは
+`eq:` と `tr:` だけです.
 
 ```python
 tot.set_param_str("eq:KNAMEQ", "eqdata.ITER01")
-tot.set_param_str("fp:KNAMEQ", "eqdata.ITER01")  # fp も同じファイル参照
+tot.set_param_str("tr:KNAMEQ", "eqdata.ITER01")  # tr も同じファイル参照
 ```
+
+`fp:KNAMEQ` はここでは拒否されます. `totlib.TotPipeline.set_param` で設定して
+ください (`tot_mcp` では `run_pipeline` の `params`). fp が読むのは `pl` の
+`KNAMEQ` で, これは eq のものと同じです. 両者が `pl` を 1 つ共有する場合
+(mono イメージなど) は, `eq:KNAMEQ` が fp のファイルも決めます.
 
 ## 事前検証 (`validate`)
 

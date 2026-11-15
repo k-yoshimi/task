@@ -193,10 +193,11 @@ int eq_validate(eq_diag_entry_t* diag, int diag_cap, int* ndiag_out);
    EQ_ERR_NOT_INIT    before eq_init.
    EQ_ERR_INVALID     nothing is touched: no successful eq_run since
                       eq_init, since a later solve or load that failed, or
-                      since eq_set_param of anything but MODEFR and MODEFW; a
-                      blank KNAMEQ; MODEFW other than 0 (overwrite an
-                      existing file) or 3 (refuse one): with 1, 2 and 4 to
-                      7 FWOPEN can read unit 5.
+                      since a set of anything but MODEFR, MODEFW and the
+                      string parameters (through eq_set_param, or tot's eq:
+                      parameters); a blank KNAMEQ; MODEFW other than 0
+                      (overwrite an existing file) or 3 (refuse one): with
+                      1, 2 and 4 to 7 FWOPEN can read unit 5.
    EQ_ERR_CALC_FAILED the file could not be opened (a directory that is
                       missing or not writable; MODEFW=3 and an existing
                       file), a write failed (an existing file without write
@@ -207,11 +208,13 @@ int eq_validate(eq_diag_entry_t* diag, int diag_cap, int* ndiag_out);
                       file) is left in place and must not be loaded: the
                       loader does not guard its READs.
    EQ_OK              otherwise.
-   "Successful eq_run" is what this API's own entry points saw. In the mono
-   image (libtotapi_mono.so) the sibling modules change the equilibrium
-   without passing through them (for example tot's eq: parameters, eq_init
-   or EQINIT from the other modules' init, eq_load and eq_calc from the tr,
-   fp and wrx run paths), and eq_save then writes what the fields hold. */
+   "Successful eq_run" and "a set since" are what this API and eq's
+   parameter registry saw. In the mono image (libtotapi_mono.so) the
+   sibling modules can change the equilibrium past both (eq_init or EQINIT
+   from the other modules' init, eq_load and eq_calc from the tr, fp and
+   wrx run paths, a plcomm variable set through another module's registry,
+   such as ti:RR), and eq_save then writes what the fields hold (#260).
+   tot's eq: parameters go through the registry and are seen. */
 int eq_save(void);
 
 #ifdef __cplusplus

@@ -47,16 +47,22 @@ parameters.md.
 
 ## String parameters
 
-`set_param_str` follows the same prefix convention.
+`set_param_str` follows the same prefix convention, for the namespaces
+tot passes string values on for, `eq:` and `tr:` (`tot/tot_param_registry.f90`).
+For `fp:`, `ti:`, `wr:` and `wrx:` it raises `TotlibInvalidParamError`.
 
 ```python
 tot.set_param_str("eq:KNAMEQ", "eqdata.ITER01")
-tot.set_param_str("fp:KNAMEQ", "eqdata.ITER01")
-tot.set_param_str("wr:KNAMEQ", "eqdata.ITER01")
+tot.set_param_str("tr:KNAMEQ", "eqdata.ITER01")
 ```
 
-It is normal for eq, fp, and wr to read **the same KNAMEQ file**, but
-prefixes also let you point each module at a different file when needed.
+`fp:KNAMEQ` is set through `totlib.TotPipeline.set_param("fp:KNAMEQ", ...)`
+instead, which hands it to fplib's own `set_param_str` (in `tot_mcp`, a
+string value in `run_pipeline`'s `params`); `ti`, `wr` and `wrx` take no
+string parameters. tr has its own `KNAMEQ`. eq's `KNAMEQ` is the one in
+`pl` (`plcomm`), which fp reads too: where eq and fp share one copy of `pl`,
+as in the mono image `libtotapi_mono.so`, `eq:KNAMEQ` also names the file
+fp loads.
 
 ## Recommended workflow
 

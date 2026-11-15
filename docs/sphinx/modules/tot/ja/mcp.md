@@ -67,7 +67,7 @@ claude mcp add task-tot \
 
 ## 提供ツール一覧
 
-`tot_mcp` は **9 個** のツールを公開. パラメータ名にプレフィックスを使うのが
+`tot_mcp` は **10 個** のツールを公開. パラメータ名にプレフィックスを使うのが
 他モジュールとの違い.
 
 | ツール | 目的 | 主な引数 |
@@ -81,6 +81,7 @@ claude mcp add task-tot \
 | `describe_parameters` | プレフィックス + パラメータ一覧 | なし |
 | `describe_state_schema` | TotState 戻り値 schema | なし |
 | `run_and_get_state` | 一括実行 | `params`, `ntmax` |
+| `run_pipeline` | 複数モジュールをスカラー結合で順に実行 (`totlib.TotPipeline`). `params` の文字列値は各モジュール自身の文字列設定に渡るので `fp:KNAMEQ` もここで設定できる | `steps`, `params` |
 
 ## 使い方の例
 
