@@ -1,4 +1,5 @@
-"""eq_mcp.get_psi_rz returns serialisable JSON with nrg/nzg/psi_rz.
+"""eq_mcp.get_psi_rz returns serialisable JSON with nrg/nzg/psi_rz after a run,
+and an error before one (#227 item 6).
 
 This test drives the REAL stdio transport: it spawns ``python -m eq_mcp.server``
 as a subprocess and speaks JSON-RPC to it. That needs three prerequisites which
@@ -95,7 +96,12 @@ def test_get_psi_rz_via_mcp():
         async with stdio_client(params) as (r, w):
             async with ClientSession(r, w) as session:
                 await session.initialize()
+                refused = await session.call_tool("get_psi_rz", {})
+                assert refused.isError, refused   # no equilibrium yet (#227 item 6)
+                ran = await session.call_tool("run", {"mode": 0})
+                assert not ran.isError, ran
                 result = await session.call_tool("get_psi_rz", {})
+                assert not result.isError, result
                 payload = json.loads(result.content[0].text)
                 assert "nrg" in payload and "nzg" in payload
                 assert payload["nrg"] == 33 and payload["nzg"] == 33

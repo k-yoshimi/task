@@ -156,7 +156,7 @@ eq-mcp install --client cursor --scope user
 | `set_params` | set many at once (dict) | `params` |
 | `run` | run the equilibrium calculation (`eq_run`) | `mode` (default=1) |
 | `get_state` | fetch the current state (`eq_get_state`) | none |
-| `get_psi_rz` | fetch the 2-D PSI(R,Z) field and the RG/ZG grid (EQ-specific; needs numpy) | none |
+| `get_psi_rz` | fetch the 2-D PSI(R,Z) field and the RG/ZG grid (EQ-specific; needs numpy); an error before a successful `run`, after a failed one or after a `set_param` since (`MODEFR` and `MODEFW` aside) | none |
 | `validate` | **pre-run validation (an EQ strength)** | none |
 | `save` | write the equilibrium of the last `run` to a TASK/EQ binary file (`eq_save`); an existing file is replaced only with `overwrite=true`; fails when the file was not opened or is shorter than what was written | `path`, `overwrite` (default `false`) |
 | `finalize` | release resources (`eq_finalize`) | none |

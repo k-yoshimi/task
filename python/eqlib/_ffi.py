@@ -274,15 +274,15 @@ def _apply_prototypes(lib: ctypes.CDLL) -> ctypes.CDLL:
     except AttributeError:  # pragma: no cover - a libeqapi.so built before eq_save
         pass
 
-    # eq_common_get_psi_rz_(int* nr, int* nz, double* psi_out)
+    # eq_get_psi_rz(int nr, int nz, double* psi_out) -> int
     try:
-        lib.eq_common_get_psi_rz_.argtypes = [
-            ctypes.POINTER(ctypes.c_int),
-            ctypes.POINTER(ctypes.c_int),
+        lib.eq_get_psi_rz.argtypes = [
+            ctypes.c_int,
+            ctypes.c_int,
             ctypes.POINTER(ctypes.c_double),
         ]
-        lib.eq_common_get_psi_rz_.restype = None
-    except AttributeError:  # pragma: no cover - only on pre-Task-1.4 builds
+        lib.eq_get_psi_rz.restype = ctypes.c_int
+    except AttributeError:  # pragma: no cover - a libeqapi.so built before eq_get_psi_rz
         pass
 
     lib.eq_finalize.restype = ctypes.c_int

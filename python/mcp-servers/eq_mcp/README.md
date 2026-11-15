@@ -70,7 +70,7 @@ stream is not recognised and fd 1 goes to stderr as usual.
 | `set_params`        | bulk dispatch (scalar / list / dict / str) |
 | `run`               | `eq_run(mode)`; `mode=1` real EQDSK load (default), `mode=0` analytic Grad-Shafranov solve (with `MODELG=2`) |
 | `get_state`         | grid counters, 12 scalars, profile arrays |
-| `get_psi_rz`        | the 2-D PSI(R,Z) field with the RG/ZG grid, after `run` (needs numpy) |
+| `get_psi_rz`        | the 2-D PSI(R,Z) field with the RG/ZG grid, after a successful `run` and before the next `set_param` of anything but `MODEFR` and `MODEFW` (needs numpy) |
 | `validate`          | pre-run diagnostics (Issue #143) |
 | `save`              | write the equilibrium of the last `run` to a TASK/EQ binary file (`eq_save`); an existing file is replaced only with `overwrite=true`; an error when the file was not opened or is shorter than what was written |
 | `describe_parameters` / `describe_state_schema` | discovery / schema |

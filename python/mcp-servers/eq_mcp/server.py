@@ -757,8 +757,10 @@ def build_server() -> Any:
                "psi_rz": list[list[float]]}``  (psi_rz indexed [i_r][i_z],
             runtime active grid only — default 33×33)
 
-        Note: PSI is populated by ``run()``; calling get_psi_rz before run
-        returns whatever is in the buffer (typically zeros on a fresh init).
+        Needs the equilibrium of the present parameters: before a
+        successful ``run()``, after one that failed, or after a
+        ``set_param`` since (``MODEFR`` and ``MODEFW`` aside), the call
+        is an error, as ``save`` is.
         """
         return handle_get_psi_rz()
 
