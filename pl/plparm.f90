@@ -65,6 +65,9 @@ CONTAINS
          RETURN
       END IF
 
+!     Zero means "not given": PT=0 takes (PTPR+2*PTPP)/3 and PU=0 takes
+!     PUPR, so an explicit PU=0 restores PUPR. Set a zero velocity with
+!     PUPR=0.
       DO ns=1,nsmax
          IF(pt(ns).EQ.0.d0) THEN
             pt(ns)=(ptpr(ns)+2.D0*ptpp(ns))/3.D0
