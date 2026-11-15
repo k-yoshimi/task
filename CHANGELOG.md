@@ -64,6 +64,15 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
   returned `EQCALQ`'s code, and left `IERR` unassigned for a `MODELG` that
   is no file format; it now starts from `IERR=0`, calls `EQCALQ` only after
   a successful `EQDSKR`, and returns 1 for an unknown `MODELG`.
+- **EQ library: `eq_get_psi_rz`, `Eq.get_psi_rz()` and the `get_psi_rz`
+  tool of `eq_mcp`** return the 2-D poloidal flux `PSIRZ` of the
+  equilibrium on the `RG`, `ZG` grid (the R index first). They refuse with
+  `EQ_ERR_INVALID` (`EqlibInvalidParamError`) in the cases in which
+  `eq_save` does: no successful `eq_run` since `eq_init`, a later solve or
+  load that failed, a numeric set since (of anything but `MODEFR` and
+  `MODEFW`).
+  `eq_get_psi_rz(nr, nz, psi_out)` also
+  refuses counts other than `NRGMAX`, `NZGMAX` and a NULL buffer.
 - **CI: `clean-tree-build` workflow (#250).** Runs the wrapper READMEs'
   fresh-checkout sequence (per-system files, `make -C ../bpsd libbpsd.a`,
   one `make -C <mod> lib<mod>api.so`) for tr / fp / ti / wr / wrx / eq, one
@@ -173,7 +182,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
   (in a build with them) or `tr_run` returned 0. `EQLOOP` running out of
   `NLPMAX` is still accepted inside the scaling, as `EQCALC` goes on after
   it, and a failure that `EQCALC` or `EQCALQ` do not return is still not
-  seen.
+  seen. **Runs that returned 0 can fail now:** on the defaults, `RIPS` 0.81
+  and 0.84 returned 0 after failed solves inside the scaling and fail now,
+  and so does a scaling that runs out of its 30 iterations. No baseline
+  uses `MODELG=9`.
+- **PL: `pl_parm` refuses `NSMAX` outside 1 to `NSM` (100)** the way
+  `plcheck` refuses a range error: `MODE=0` asks again, the other modes
+  return 101 (a read that failed returns its own error), and `NSMAX` keeps
+  its earlier value. An `NSMAX` above `NSM`
+  ran `plnlin`'s copy of the species-1 profile parameters
+  (`MODEL_PROF=0`) past the species arrays, and `NSMAX=0` was accepted.
 - **FP library: `fp_run` refuses the counts the solver cannot run with**,
   before any work, with `FP_ERR_INVALID` and one `XX fp_run: ...` line per
   violation on unit 6 (`fp_param_check` in `fp/fp_param_registry.f90`).
