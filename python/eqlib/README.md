@@ -148,10 +148,16 @@ contain `[` or `]`).
 
 ### `Eq.run(mode: int = 1) -> None`
 
-Run the EQ solver. **Default is `mode=1`** (real EQDSK load via
-`equnit::eq_load` using the current `MODELG` + `KNAMEQ`); other modes
-return `EQ_ERR_NOT_IMPL` and raise `EqlibNotImplementedError`. Mode 0
-is reserved for a future direct EQCALQ entry. Note that this default
+Run the EQ solver. **Default is `mode=1`** (load of an equilibrium
+file via `equnit::eq_load` using the current `MODELG` + `KNAMEQ`; it
+needs a `MODELG` that reads a file, such as 3, a TASK/EQ file, or 5,
+an EQDSK file). `mode=0` solves the analytic fixed-boundary
+Grad-Shafranov equation in process (`EQCALC`, then `EQCALQ` for the
+flux-surface quantities), without an equilibrium file: the path for
+`MODELG=2`, the default after `eq_init`. A mode above 1 returns
+`EQ_ERR_NOT_IMPL` and raises `EqlibNotImplementedError`; a negative
+mode returns `EQ_ERR_INVALID` and raises `EqlibInvalidParamError`.
+Note that the `mode=1` default
 choice differs from tr/ti/wr/fp where `run(ntmax=...)` is positional;
 EQ's mode is a small integer enum, not a step count.
 
@@ -262,10 +268,10 @@ Every `eq_*` return code maps to a concrete subclass of `EqlibError`:
 | rc | class | meaning |
 |---|---|---|
 | 0 | — | success |
-| 1 | `EqlibInvalidParamError` | invalid parameter name / index / value (incl. bare `"PSIB"`) |
+| 1 | `EqlibInvalidParamError` | invalid parameter name / index / value (incl. bare `"PSIB"`), or a negative `eq_run` mode |
 | 2 | `EqlibNotInitializedError` | API call before `eq_init` or after `close` |
 | 3 | `EqlibCalculationFailedError` | `eq_run` / `eq_get_state` failed (e.g. EQDSK file missing) |
-| 4 | `EqlibNotImplementedError` | Phase L-2 stub — `eq_run(mode != 1)` returns this |
+| 4 | `EqlibNotImplementedError` | `eq_run` with a mode above 1 (modes 0 and 1 are implemented) |
 
 Spec-style aliases (`EqLibError`, `EqLibInvalidParam`,
 `EqLibNotInitialized`, `EqLibCalculationFailed`,
@@ -298,9 +304,11 @@ These three behaviours catch new users:
    passed via `set_params(**kwargs)`.
 3. **`Eq.run()` defaults to `mode=1`.** Calling `eq.run()` with no
    argument loads the current `KNAMEQ` via `equnit::eq_load`. This
-   matches the canonical EQDSK-driven workflow. `mode=0` is reserved
-   for a future direct EQCALQ entry and currently raises
-   `EqlibNotImplementedError`.
+   matches the canonical EQDSK-driven workflow. With the default
+   `MODELG=2` it fails (`EqlibCalculationFailedError`): set a `MODELG`
+   that reads a file and `KNAMEQ` first, or compute the analytic
+   equilibrium (`EQCALC` + `EQCALQ`, without an equilibrium file) with
+   an explicit `eq.run(0)`.
 
 ## Known limitations
 
@@ -312,8 +320,8 @@ These three behaviours catch new users:
 - **No graphics, no MPI, no OpenMP API.** Graphics symbols are
   stubbed; `RTLD_LAZY` defers resolution so the unreferenced stubs
   never block library load.
-- **`eq_run(mode=0)` (direct EQCALQ) is not yet implemented.** Only
-  `mode=1` (EQDSK load) returns success; other modes raise
+- **`eq_run` has two modes.** `mode=0` (the analytic solve) and
+  `mode=1` (the file load) are implemented; a mode above 1 raises
   `EqlibNotImplementedError`.
 - **2-D fields not yet exported.** The current `eq_state_t` carries
   1-D psi-surface profiles, R/Z grids, and 12 scalars only. `PSIRZ`,
@@ -332,8 +340,8 @@ These three behaviours catch new users:
 | `EqlibInvalidParamError` on a name that should work | not yet in `eq_param_registry.f90` | add a `CASE ("MYNAME")` and rebuild `libeqapi.so` |
 | `EqlibInvalidParamError` on `"PSIB"` | bare name has no idx | always use `"PSIB[0]"` … `"PSIB[5]"` |
 | `EqlibError: libeqapi.so does not export eq_set_param_str` | pre-L-3 build | rebuild `libeqapi.so` after the L-3 registry land |
-| `EqlibCalculationFailedError` in `eq.run()` | `KNAMEQ` not set or EQDSK missing | call `set_param_str("KNAMEQ", path)` first |
-| `EqlibNotImplementedError` in `eq.run()` | mode != 1 | use `eq.run()` (mode=1 default) |
+| `EqlibCalculationFailedError` in `eq.run()` | `MODELG` does not read a file (the default 2 does not), `KNAMEQ` not set, or the file missing | set `MODELG` and `set_param_str("KNAMEQ", path)` first, or `eq.run(0)` for the analytic solve |
+| `EqlibNotImplementedError` in `eq.run()` | mode above 1 | `eq.run()` (mode=1, file load) or `eq.run(0)` (analytic solve) |
 
 ## Tests
 

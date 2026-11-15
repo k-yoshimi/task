@@ -49,8 +49,8 @@ UNREGISTERED_KEYS: tuple = ()
 # Source input file this fixture mirrors (relative to repo root).
 SOURCE_INPUT = "eq/in/eq.ITER01.in"
 
-# ``eq.run(mode=...)`` argument. mode=1 is the real EQDSK load via
-# ``equnit::eq_load`` (currently the only implemented mode).
+# ``eq.run(mode=...)`` argument. mode=1 is the file load via
+# ``equnit::eq_load``.
 MODE = 1
 
 # Name of the Phase-0 baseline directory under ``test_run/baselines/``.

@@ -23,7 +23,7 @@ Skip gates (all must pass for the class to run):
 * libeqapi.so is importable via :func:`eqlib._ffi._candidate_paths`,
 * eqlib package is importable,
 * the ``test_run/test_output/eq_iter01/eqdata.ITER01`` file exists --
-  the sweep runs ``eq_run(mode=1)`` which loads a real EQDSK; if
+  the sweep runs ``eq_run(mode=1)``, which loads that TASK/EQ file; if
   the L-0 baseline has not been generated yet we skip with an
   instruction to ``./test_run/run_tests.sh eq_iter01`` first.
 """
@@ -90,7 +90,7 @@ class TestSweep(unittest.TestCase):
     """3x3 RR x BB grid; smoke-only (no numerical regression)."""
 
     #: ``MODE`` passed to ``eq.run(mode=...)`` for each grid point.
-    #: 1 == real EQDSK load via ``equnit::eq_load`` (only implemented mode).
+    #: 1 == the file load via ``equnit::eq_load``.
     MODE = 1
 
     #: Grid centres sit near the ITER01 baseline so every point is a
