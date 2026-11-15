@@ -126,7 +126,8 @@ CONTAINS
   !   mode == 1 : load equilibrium from the file pointed to by KNAMEQ,
   !               then run eq_bpsd_init / eqcalq / eq_bpsd_put via
   !               equnit::eq_load. Mirrors the legacy `L` command.
-  !               Requires MODELG ∈ {3, 5, 8} and a valid KNAMEQ.
+  !               Requires a MODELG that EQ_READ (eq/eqfile.f90) loads
+  !               from KNAMEQ (3, 5, 8, 9, 25) and a valid KNAMEQ.
   !   other     : EQ_ERR_NOT_IMPL (reserved for future modes).
   !-------------------------------------------------------------------
   FUNCTION eq_api_run(mode) RESULT(ierr) BIND(C, NAME="eq_run")

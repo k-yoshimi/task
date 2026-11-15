@@ -281,7 +281,8 @@ class Eq:
 
                 * ``1`` (default) triggers a real EQDSK load via
                   ``equnit::eq_load`` using the current ``MODELG`` and
-                  ``KNAMEQ`` (requires ``MODELG in {3, 5, 8}``).
+                  ``KNAMEQ`` (requires a ``MODELG`` that ``EQ_READ`` loads
+                  from ``KNAMEQ``: 3, 5, 8, 9, 25).
                 * ``0`` runs the in-process analytic Grad-Shafranov
                   solve (``EQCALC`` + ``EQCALQ``); use it with
                   ``MODELG=2`` and the basic geometry parameters
