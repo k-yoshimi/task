@@ -138,7 +138,7 @@ CONTAINS
        nnfmax=4
     CASE(3)    ! DT+DD+DHe3
        nnfmax=6
-    CASE(4,14) ! DT+DD+DHe3+TT+THe3
+    CASE(4,14) ! DT+DD+DHe3+TT+THe3 (14 is refused below)
        nnfmax=13
     CASE DEFAULT
        WRITE(6,*) 'XX Error libnf: undefined model_pnf: model_pnf=',model_pnf
@@ -529,9 +529,6 @@ CONTAINS
     RETURN
   END FUNCTION sigmav_nf_int
 
-
-
-  
   ! --- p-B reaction ---
   !        Ref. A. Tantori and F Belloni, Nucl. Fusion 63 (2023) 086001 (9pp)
   !     cross section --- sigma
