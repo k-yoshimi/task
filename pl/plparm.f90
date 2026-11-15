@@ -27,27 +27,41 @@ CONTAINS
 !     IERR=10X : input parameter out of range
 
       USE libkio
-      USE plcomm, ONLY: nsmax,pt,ptpr,ptpp,pu,pupr,pupp,rkind
+      USE plcomm, ONLY: nsmax,pt,ptpr,ptpp,pu,pupr,pupp,rkind,NSM
       IMPLICIT NONE
       INTEGER,INTENT(IN):: mode
       CHARACTER(LEN=*),INTENT(IN)::  kin
       INTEGER,INTENT(OUT):: ierr
-      REAL(rkind):: pt_save(nsmax),pu_save(nsmax)
-      INTEGER:: ns
+      REAL(rkind):: pt_save(NSM),pu_save(NSM)
+      INTEGER:: ns,nsmax_save
 
+!     The read can change NSMAX, also when it fails: the backups are
+!     sized NSM, and taken and restored for the NSMAX found here.
 1     CONTINUE
-      DO ns=1,nsmax
+      nsmax_save=MIN(MAX(nsmax,0),NSM)
+      DO ns=1,nsmax_save
          pt_save(ns)=pt(ns)
          pu_save(ns)=pu(ns)
          pt(ns)=0.d0
          pu(ns)=0.d0
       END DO
       CALL TASK_PARM(MODE,'PL',KIN,plnlin,plplst,IERR)
-      IF(IERR.NE.0) THEN
-         DO ns=1,nsmax
+      IF(IERR.NE.0.OR.nsmax.LT.1.OR.nsmax.GT.NSM) THEN
+         DO ns=1,nsmax_save
             pt(ns)=pt_save(ns)
             pu(ns)=pu_save(ns)
          END DO
+!        An NSMAX outside 1 to NSM is not kept: every loop over the
+!        species would run past their arrays.
+         IF(nsmax.LT.1.OR.nsmax.GT.NSM) THEN
+            WRITE(6,'(A,I0,A,I0)') &
+                 'XX pl_parm: NSMAX out of range 1 to ',NSM,': NSMAX=',nsmax
+            nsmax=nsmax_save
+            IF(IERR.EQ.0) THEN
+               IF(MODE.EQ.0) GOTO 1
+               IERR=101
+            END IF
+         END IF
          RETURN
       END IF
 
@@ -111,7 +125,8 @@ CONTAINS
       READ(NID,PL,IOSTAT=IST,ERR=9800,END=9900)
 
       IF(MODEL_PROF.EQ.0) THEN
-         DO NS=2,NSMAX
+!        Bounded by NSM: pl_parm refuses an NSMAX above it after this.
+         DO NS=2,MIN(NSMAX,NSM)
             PROFN1(NS)=PROFN1(1)
             PROFN2(NS)=PROFN2(1)
             PROFN3(NS)=PROFN3(1)
