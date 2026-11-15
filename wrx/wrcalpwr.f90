@@ -260,8 +260,8 @@ CONTAINS
     nstpmax_all=MIN(MAXVAL(nstpmax_nray(1:nraymax))+1, nstpmax-1)
     ! Guard the divisor: nstpmax_all collapses to 0 when NSTPMAX<=1
     ! (MIN(MAXVAL(...)+1, nstpmax-1) -> nstpmax-1 = 0), which would make
-    ! dx = 1/0. Reviewers (in-house + codex) flagged this merge-interaction
-    ! div-by-zero (kyoshimi's nstpmax-1 clamp + bpsi's 1/nstpmax_all divisor).
+    ! dx = 1/0: the nstpmax-1 bound above and the 1/nstpmax_all divisor
+    ! together divide by zero there.
     dx=1.D0/MAX(nstpmax_all,1)
     DO nstp=0,nstpmax_all
        xtemp(nstp+1)=nstp*dx
@@ -270,8 +270,8 @@ CONTAINS
        DO nsa=1,nsamax_wr
           ! Clamp to nstpmax_all so ytemp(nstp+1) stays within (0:nstpmax):
           ! a ray that uses all NSTPMAX steps has nstpmax_nray(nray)=nstpmax,
-          ! which would overrun ytemp at nstp+1=nstpmax+1 (the merge re-introduced
-          ! bpsi's unclamped nstpmax_nray bound over kyoshimi's nstpmax_all clamp).
+          ! which would overrun ytemp at nstp+1=nstpmax+1 with nstpmax_nray
+          ! alone as the bound.
           DO nstp=0,MIN(nstpmax_nray(nray),nstpmax_all)
              ytemp(nstp+1,nsa,nray)=pwr_nsa_nstp_nray(nsa,nstp,nray)
           END DO
