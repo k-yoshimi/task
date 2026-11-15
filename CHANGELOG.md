@@ -133,7 +133,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
   D-D branch to He3 gives He3 for `model_pnf` 2, 3 and 4 and He4 for the
   reduced 12 (which ran past an array bound before), the dd2 block sets
   its own `enn_idnf`, and the species check refuses `model_pnf=14` with
-  its own message, since no He5 species can be defined. Results of every
+  its own message: its products and its He3 reactant are not yet mapped
+  onto D, T and He4 (He5 is neglected; #235). Results of every
   `model_pnf>0` run change.
 - **MCP servers: the `mcp` dependency is pinned to `>=1.2,<2`** in the
   seven server `pyproject.toml` files, the CI workflow, the servers' own
@@ -170,6 +171,12 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
   printed beam collisional powers (`PBCLE` to `PBCLA`) are now in MW;
   `PNB_TOT` and `PRF_TOT` are not fixed by this, since the arrays they
   integrate are never filled in trx (#238).
+- **trx: the neutron profiles and two curves of the power plot** (issue
+  #238, items 7, 12 and 13). `SNFNN_NR` and `PNFNN_NR` sum the neutron
+  arrays `SNFNN_NNFNR` and `PNFNN_NNFNR`, as their `_NNF` totals do. In
+  the `PIN,POH,PNB,PRF,PNF,PEX` plot, PRF is `PRF_TOT` once (it was drawn
+  twice over), and PEX no longer adds `PRFVT`, which trx never assigns.
+  Printed results do not change.
 - **MCP servers `eq_mcp`, `tr_mcp`, `tot_mcp`: Fortran output no longer
   reaches the JSON-RPC pipe.** A stdio server's fd 1 is the pipe to its
   client, and the library's `WRITE(6,...)` went into it: in one stdio
