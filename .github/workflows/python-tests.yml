@@ -104,7 +104,12 @@ jobs:
       - name: Install Python test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-mock pytest-subtests pytest-forked pytest-timeout
+          # pytest below 9.2 (#277): pytest 9.2.0 (2026-10-27) puts a NodeId in
+          # every TestReport (`_id`), which pytest-forked 1.7.5 cannot marshal,
+          # so under --forked every test, a passing one too, ends "running the
+          # test EXITED with status 3". Lift the cap once
+          # pytest-dev/pytest-forked#113 is fixed in a release.
+          pip install 'pytest<9.2' pytest-mock pytest-subtests pytest-forked pytest-timeout
           # tomli is needed only on <3.11; keep installed for safety on 3.11 too.
           pip install tomli
           # mcp = Anthropic's official Python MCP SDK. Required by the
@@ -470,7 +475,8 @@ jobs:
       - name: Install pytest deps for the mono equivalence step
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-forked pytest-timeout pytest-mock
+          # pytest below 9.2: see the pytest job's install step.
+          pip install 'pytest<9.2' pytest-forked pytest-timeout pytest-mock
 
       - name: 1e-10 equivalence test against libtotapi_mono.so
         # Phase 2a deliverable (#201): with the unified

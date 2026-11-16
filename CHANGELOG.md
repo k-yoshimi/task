@@ -121,6 +121,15 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **CI: pytest is held below 9.2 (#277).** pytest 9.2.0 (2026-10-27) puts a
+  `NodeId` object in every test report, which pytest-forked 1.7.5 cannot
+  marshal back from the forked child, so under `--forked` every test, a
+  passing one too, failed with "running the test EXITED with status 3": the
+  two `pytest` jobs failed, and so did the mono job at its first pytest
+  step, on `develop` at `a180d39e` and on the pull requests pushed since.
+  Both install steps of `python-tests.yml`, and the local recipe of
+  `docs/baseline-policy.md`, now ask for `'pytest<9.2'`, until
+  pytest-dev/pytest-forked#113 is fixed in a release.
 - **trx: the fusion reaction path** (#269; issues #229, #234, #235, #236,
   #268). `sigmav_nf` returned its tables in cm^3/s where `tr_pnf` takes
   m^3/s, so every `model_pnf` rate was 1e6 too large (#238's 10 keV D-T
