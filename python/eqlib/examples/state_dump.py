@@ -22,7 +22,7 @@ from eqlib import Eq
 def main(argv: "list[str] | None" = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--knameq", default="eqdata",
-                        help="EQDSK file path (default: eqdata)")
+                        help="equilibrium file path (default: eqdata)")
     parser.add_argument("--modelg", type=int, default=3,
                         help="MODELG value (default: 3)")
     parser.add_argument("--mode", type=int, default=1,

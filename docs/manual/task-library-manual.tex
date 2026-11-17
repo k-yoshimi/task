@@ -1305,8 +1305,8 @@ bash test_run/run_tests.sh fplib_equivalence fplib_c_abi \
 \label{ch:eq}
 
 \begin{learn}
-本章では, TASK/EQ (\textbf{MHD 平衡} 計算: EQDSK 形式の平衡データを
-読み込み, ψ プロファイルや磁気軸を求める) を Python から呼ぶ
+本章では, TASK/EQ (\textbf{MHD 平衡} 計算: パラメータから平衡を数値的に解くか,
+平衡ファイルを読み込んで, ψ プロファイルや磁気軸を求める) を Python から呼ぶ
 \texttt{eqlib} の使い方を学びます. eq は他モジュールと違い,
 \textbf{6 個目の C ABI} \texttt{eq\_set\_param\_str} を持ち,
 \texttt{KNAMEQ} 等の文字列パラメータ専用 API があります.
@@ -1317,7 +1317,7 @@ bash test_run/run_tests.sh fplib_equivalence fplib_c_abi \
 \textbf{TASK/EQ} は, トカマクの\textbf{MHD 平衡}を解くモジュールです.
 入力としては
 \begin{itemize}[leftmargin=1.5em]
-  \item EQDSK 形式 (G-EQDSK) の平衡データファイル, あるいは
+  \item 平衡データファイル (TASK/EQ 形式, G-EQDSK 形式など), あるいは
   \item 解析プロファイル (圧力 \(p(\psi)\), 安全係数 \(q(\psi)\) 等)
 \end{itemize}
 を取り, 出力としては磁気軸位置 (\texttt{raxis}, \texttt{zaxis}),
@@ -1352,13 +1352,13 @@ $ nm -D eq/libeqapi.so | grep ' T eq_'
 
 \section{最短 hello-world}
 
-\begin{lstlisting}[style=py,caption={\texttt{eqlib} 最小例 — EQDSK 読込}]
+\begin{lstlisting}[style=py,caption={\texttt{eqlib} 最小例 — 平衡ファイル (TASK/EQ 形式) 読込}]
 from eqlib import Eq
 with Eq() as eq:
     eq.set_param("RR", 6.5)                    # 大半径 [m]
     eq.set_param("BB", 5.3)                    # 磁場 [T]
     eq.set_param("RIP", 1.5)                   # 電流 [MA]
-    eq.set_param("MODELG", 3)                  # EQDSK 経路を選択
+    eq.set_param("MODELG", 3)                  # TASK/EQ ファイルを選択
     eq.set_param_str("KNAMEQ", "eqdata.ITER")  # ファイル名
     eq.run()                                   # mode=1 デフォルト
     st = eq.get_state()
@@ -1389,7 +1389,7 @@ eq.set_param("RIPFC[1]", 0.5)    # PF コイル電流 (1-origin, 1..10)
 
 \subsection{文字列パラメータ — \texttt{set\_param\_str}}
 
-EQDSK ファイル名等の \texttt{CHARACTER(LEN=80)} パラメータには
+平衡ファイル名 (\texttt{KNAMEQ}) 等の \texttt{CHARACTER(LEN=80)} パラメータには
 \textbf{専用 API} を使います. \texttt{set\_param} には渡せません.
 
 \begin{lstlisting}[style=py]
@@ -1411,13 +1411,16 @@ EQ の Fortran ソース \texttt{eqcom1\_mod.f90} で \texttt{PSIB} が
 \end{faq}
 
 \begin{faq}[Q2. なぜ \texttt{eq.run()} のデフォルトが \texttt{mode=1}?]
-\texttt{mode=1} は \texttt{equnit::eq\_load} を呼び, 現在の
-\texttt{KNAMEQ} (= EQDSK ファイル) を読み込んで平衡を構築する,
-EQDSK 駆動の標準ワークフローだからです. tr/ti/wr/fp の \texttt{run}
+\texttt{mode=1} は \texttt{equnit::eq\_load} を呼び, \texttt{MODELG}
+が指す形式の平衡ファイル (3 なら TASK/EQ 形式の \texttt{KNAMEQ}, 5 なら
+G-EQDSK 形式の \texttt{KNAMEQ}) を読み込んで平衡を構築する, ファイル駆動の標準ワークフロー
+だからです. tr/ti/wr/fp の \texttt{run}
 は時間ステップ数 \texttt{ntmax} を引数に取りますが, EQ は時間発展を
-持たないため引数の意味が違います. \texttt{mode=0} (直接 EQCALQ
-呼び出し) は予約済みで, 現状は \texttt{EqlibNotImplementedError}
-を返します.
+持たないため引数の意味が違います. \texttt{mode=0} は固定境界の
+Grad-Shafranov 方程式をパラメータから数値的に解き (\texttt{EQCALC} の後
+\texttt{EQCALQ}), ファイルを読みません. 既定の \texttt{MODELG=2} は
+ファイル形式を指さないので, そのまま \texttt{eq.run()} を呼ぶと
+\texttt{EqlibCalculationFailedError} が送出されます.
 \end{faq}
 
 \begin{faq}[Q3. \texttt{KNAMEQ} を kwargs で渡すとエラー]
@@ -1465,7 +1468,7 @@ eq\_set\_param\_str} が出る]
 \texttt{NLPMAX}, \texttt{NLPNW}              & int    & 最大反復数 \\
 \texttt{RGMIN}, \texttt{RGMAX}, \texttt{ZGMIN}, \texttt{ZGMAX} & double & R-Z 計算領域 \\
 \texttt{ZLIMP}, \texttt{ZLIMM}, \texttt{FRBIN} & double & リミタ位置 \\
-\texttt{MODELG}                              & int   & 1:解析, 3:EQDSK \\
+\texttt{MODELG}                              & int   & 2:トロイダル形状 (既定), 3:TASK/EQ, 5:G-EQDSK \\
 \texttt{MODELQ}, \texttt{IDEBUG}, \texttt{MODEFR}, \texttt{MODEFW} & int & モデル切替 \\
 \texttt{MDLEQF}, \texttt{MDLEQC}, \texttt{MDLEQA}, \texttt{MDLEQX}, \texttt{MDLEQV} & int & EQ 内部モデル選択 \\
 \texttt{NPRINT}                              & int   & 出力詳細度 \\
@@ -2113,7 +2116,7 @@ print("timefp", s.timefp, "RNT[0][:3]", s.RNT[0][:3])
 from eqlib import Eq
 with Eq() as eq:
     eq.set_params(RR=3.0, BB=3.0, RIP=1.0, MODELG=3)
-    eq.set_param_str("KNAMEQ", "eqdata")   # EQDSK ファイル名
+    eq.set_param_str("KNAMEQ", "eqdata")   # TASK/EQ ファイル名
     eq.run()                               # mode=1 デフォルト
     s = eq.get_state()
 print("raxis", s.scalars["raxis"], "qaxis", s.scalars["qaxis"])

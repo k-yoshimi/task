@@ -2,13 +2,13 @@
  * Phase L-4: test_run_so
  *
  * dlopen libeqapi.so, dlsym the 6 C ABI entry points, and exercise a
- * minimal init -> set_param -> get_state -> finalize cycle. This
+ * minimal init -> set_param -> run -> get_state -> finalize cycle. This
  * proves the shared object is loadable, has the expected external
  * symbols, and that the Fortran-side lifecycle works when driven from
  * a C binary that never saw libeq.a.
  *
- * eq_run(0) is still a NOT_IMPL stub at L-3 (see eq_api.h header doc),
- * so for the happy path we only invoke it to confirm the contract.
+ * The run is eq_run(0), the Grad-Shafranov solve (EQCALC, then EQCALQ),
+ * which needs no equilibrium file: it must return EQ_OK.
  *
  * Usage:
  *   EQLIB_PATH=/path/to/libeqapi.so ./test_run_so   (EQLIB_PATH optional,
@@ -16,7 +16,7 @@
  *
  * Return values:
  *   0      = OK
- *   1..8   = step that failed
+ *   1..9   = step that failed
  *   90     = dlopen failed
  *   91     = dlsym failed (one of the 6 entry points missing)
  *   92 = eq_state_abi_version / eq_state_size missing (library predates #246)
@@ -104,22 +104,20 @@ int main(void) {
      * export is caught by this test (Bugbot MED on L-4). */
     rc = f_set_param_str("KNAMEQ", "eqdata.ITER"); if (rc != 0) { dlclose(h); return 9; }
 
-    memset(&st, 0xAA, sizeof(st));
-    rc = f_get_state(&st);                   if (rc != 0) { dlclose(h); return 6; }
-
-    /* eq_run(0) currently returns EQ_ERR_NOT_IMPL (L-3 stub); we verify
-     * the contract but do not treat it as a hard failure for the happy
-     * path. Once eq_run(0) is implemented this can be tightened. */
+    /* eq_run(0): the Grad-Shafranov solve, no file read. */
     rc = f_run(0);
-    if (rc != EQ_OK && rc != EQ_ERR_NOT_IMPL) {
+    if (rc != EQ_OK) {
         fprintf(stderr, "eq_run(0) returned unexpected rc=%d\n", rc);
         dlclose(h);
         return 7;
     }
 
+    memset(&st, 0xAA, sizeof(st));
+    rc = f_get_state(&st);                   if (rc != 0) { dlclose(h); return 6; }
+
     rc = f_finalize();                       if (rc != 0) { dlclose(h); return 8; }
 
-    printf("OK: dlopen(%s) + init/set_param/get_state/finalize cycle"
+    printf("OK: dlopen(%s) + init/set_param/run/get_state/finalize cycle"
            " nrgmax=%d nzgmax=%d npsmax=%d raxis=%g zaxis=%g qaxis=%g\n",
            path, st.nrgmax, st.nzgmax, st.npsmax,
            st.raxis, st.zaxis, st.qaxis);

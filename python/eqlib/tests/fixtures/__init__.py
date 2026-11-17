@@ -12,6 +12,6 @@ trlib fixtures so the equivalence / sweep drivers stay schema-uniform:
                            ``eq_param_registry.f90`` (skipped by ``apply``)
 * ``BASELINE_NAME``     -- str, ``test_run/baselines/<name>/`` subdir
 * ``MODE``              -- int, the ``eq.run(mode=...)`` argument
-                           (1 = real EQDSK load via ``equnit::eq_load``)
+                           (1 = the equilibrium-file load via ``equnit::eq_load``)
 * ``apply(eq)``         -- callable that applies all of the above
 """

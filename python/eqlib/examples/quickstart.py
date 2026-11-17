@@ -6,8 +6,9 @@ Run from the repository root::
 
 Prerequisites:
   - ``make -C eq libeqapi.so`` has been run once.
-  - An EQDSK input file readable via the current ``MODELG`` + ``KNAMEQ``
-    setting; the default below ("eqdata") matches the test fixture.
+  - An equilibrium file readable via the current ``MODELG`` + ``KNAMEQ``
+    setting; the defaults below expect a TASK/EQ file named "eqdata"
+    (MODELG=3), the format the test fixtures load.
   - Optional: ``EQLIB_PATH`` set if the library lives outside the repo.
 """
 from __future__ import annotations
@@ -21,11 +22,12 @@ from eqlib import Eq
 def main(argv: "list[str] | None" = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--knameq", default="eqdata",
-                        help="EQDSK file path passed to set_param_str (default: eqdata)")
+                        help="equilibrium file path passed to set_param_str (default: eqdata)")
     parser.add_argument("--modelg", type=int, default=3,
-                        help="MODELG value (default: 3 = EQDSK file load)")
+                        help="MODELG value (default: 3 = a TASK/EQ file)")
     parser.add_argument("--mode", type=int, default=1,
-                        help="eq.run(mode=...) (default: 1 = real EQDSK load)")
+                        help="eq.run(mode=...) (default: 1 = the equilibrium-file load; "
+                             "0 = the Grad-Shafranov solve, no file, with --modelg 2)")
     parser.add_argument("--dry-run", action="store_true",
                         help="validate argument parsing only; skip FFI calls")
     args = parser.parse_args(argv)

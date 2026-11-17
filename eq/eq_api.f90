@@ -10,10 +10,14 @@
 !                        and returns EQ_OK. Does NOT touch the legacy
 !                        eq COMMON blocks so existing eq / pl / ak
 !                        binaries keep bit-identical behavior.
-!   eq_run            -> L-3: mode=1 loads equilibrium via
+!   eq_run            -> mode=0 solves the fixed-boundary Grad-Shafranov
+!                        equation numerically from the parameters
+!                        (EQCALC, then EQCALQ; no file).
+!                        mode=1 loads the equilibrium file via
 !                        equnit::eq_load using the current MODELG +
-!                        KNAMEQ. Other modes still return
-!                        EQ_ERR_NOT_IMPL.
+!                        KNAMEQ (MODELG=15 reads the fixed eqdb.dat).
+!                        A mode above 1 returns EQ_ERR_NOT_IMPL, a
+!                        negative one EQ_ERR_INVALID.
 !   eq_set_param      -> delegates to eq_param_registry::eq_param_set
 !                        (Phase L-3 real dispatch).
 !   eq_set_param_str  -> delegates to eq_param_registry::eq_param_set_str
@@ -107,12 +111,18 @@ CONTAINS
   END FUNCTION eq_api_init
 
   !-------------------------------------------------------------------
-  ! eq_run : dispatch on `mode` to the analytic or file-load path.
+  ! eq_run : dispatch on `mode` to the Grad-Shafranov solve or the file load.
+  ! Before the dispatch below, an uninitialised library returns
+  ! EQ_ERR_NOT_INIT and a negative mode EQ_ERR_INVALID.
   !
-  !   mode == 0 : run the analytic Grad-Shafranov solver (EQCALC).
+  !   mode == 0 : solve the fixed-boundary Grad-Shafranov equation
+  !               numerically, without an equilibrium file: EQCALC
+  !               iterates until the relative change of PSI is below
+  !               EPSEQ (at most NLPMAX times, else EQ_ERR_CALC_FAILED),
+  !               then EQCALQ computes the flux-surface quantities.
   !               Mirrors the legacy `eqx2` CLI's `R` command and is
   !               the natural run path when MODELG=2 (the default,
-  !               analytic toroidal geometry). EQCALC reads
+  !               toroidal geometry). EQCALC reads
   !               PP*/PJ*/FF*/PT*/PV* coefficients from the EQCOMM
   !               module and solves the fixed-boundary Grad-Shafranov
   !               problem; callers set those via eq_set_param
@@ -164,7 +174,7 @@ CONTAINS
        g_has_equilibrium = .TRUE.
        ierr = EQ_OK
     CASE (1)
-       ! EQDSK-based load via equnit::eq_load(MODELG, KNAMEQ, ierr).
+       ! Equilibrium-file load via equnit::eq_load(MODELG, KNAMEQ, ierr).
        ! MODELG and KNAMEQ come from plcomm_parm; callers are expected
        ! to set them via eq_set_param / eq_set_param_str beforehand.
        knameq_local = KNAMEQ

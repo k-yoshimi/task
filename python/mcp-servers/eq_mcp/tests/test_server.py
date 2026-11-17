@@ -342,12 +342,12 @@ class TestHandlersWithMockedState(unittest.TestCase):
         self.assertEqual(self.mock_eq.run_calls, [1])
 
     def test_handle_run_default_mode(self) -> None:
-        # mode defaults to 1 (real EQDSK load).
+        # mode defaults to 1 (the equilibrium-file load).
         srv.handle_run()
         self.assertEqual(self.mock_eq.run_calls, [1])
 
     def test_handle_run_mode_zero(self) -> None:
-        # mode=0 = analytic Grad-Shafranov solve (EQCALC + EQCALQ);
+        # mode=0 = the Grad-Shafranov solve (EQCALC + EQCALQ);
         # the handler must forward mode through to eq.run unchanged.
         msg = srv.handle_run(0)
         self.assertIn("mode=0", msg)

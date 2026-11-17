@@ -7,8 +7,8 @@ For each case (``eq_iter01``, ``eq_tst2``):
 2. replay the registered subset of the namelist fixture via
    :py:meth:`~eqlib.Eq.set_param` /
    :py:meth:`~eqlib.Eq.set_param_str`,
-3. drive ``eq_run`` with the fixture's ``MODE`` (default 1 == real
-   EQDSK load),
+3. drive ``eq_run`` with the fixture's ``MODE`` (default 1 == the
+   equilibrium-file load),
 4. serialise the resulting :class:`~eqlib.state.EqState` via
    :py:meth:`~eqlib.state.EqState.to_dict`,
 5. compare against ``test_run/baselines/<case>/metrics.json`` using

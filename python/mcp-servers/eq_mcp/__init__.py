@@ -10,7 +10,7 @@ The EQ-specific surface adds two extras over the canonical sister set:
   routed through ``eqlib.Eq.set_param_str``.
 * ``validate`` — pre-run cross-parameter validation (Issue #143)
   exposing ``eqlib.Eq.validate()`` so an LLM can spot configuration
-  errors before paying for a real EQDSK load.
+  errors before paying for a run.
 
 See :mod:`eq_mcp.server` for the tool implementations.
 """
