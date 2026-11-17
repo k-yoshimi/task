@@ -45,7 +45,7 @@ class EqlibNotImplementedError(EqlibError):
     """The mode is not implemented (rc == 4).
 
     ``eq_run(mode)`` returns this for a mode above 1; modes 0 (the
-    analytic solve, EQCALC + EQCALQ) and 1 (the file load via
+    Grad-Shafranov solve, EQCALC + EQCALQ) and 1 (the file load via
     equnit::eq_load) are implemented.
     """
 
