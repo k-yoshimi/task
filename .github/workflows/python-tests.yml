@@ -836,6 +836,8 @@ jobs:
     #   dpseki — links only against the MPI mtxp variant
     # Add them here as they are fixed.
     name: build modules not covered by pytest
+    # ubuntu-latest on purpose, unlike the pytest and mono build jobs: this
+    # job only builds and compares no baseline, as clean-tree-build.yml does.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
