@@ -121,6 +121,23 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **CI: pytest is held below 9.2 (#277).** pytest 9.2.0 (2026-10-27) puts a
+  `NodeId` object in every test report, which pytest-forked 1.7.5 cannot
+  marshal back from the forked child, so under `--forked` every test, a
+  passing one too, failed with "running the test EXITED with status 3": the
+  two `pytest` jobs failed, and so did the mono job at its first pytest
+  step, on `develop` at `a180d39e` and on the pull requests pushed since.
+  Both install steps of `python-tests.yml`, and the local recipe of
+  `docs/baseline-policy.md`, now ask for `'pytest<9.2'`, until
+  pytest-dev/pytest-forked#113 is fixed in a release.
+- **CI: `python-tests.yml` runs on `ubuntu-24.04`, not `ubuntu-latest`.**
+  The 1e-10 equivalence baselines are gfortran 13's, and `ubuntu-latest`
+  is now `ubuntu-26.04`, whose gfortran 15.2.0 (13.3.0 on the last green
+  run, 2026-10-23) moves five cases, FP `dt1` and `iter01` and WRX `demo`,
+  `iter01` and `jt60`, by 1e-10 to 1e-7: with pytest held below 9.2, they
+  were the two `pytest` jobs' only failures. `regen-baselines.yml` already
+  pinned `ubuntu-24.04` and foresaw this; its comment now says it
+  happened.
 - **trx: the fusion reaction path** (#269; issues #229, #234, #235, #236,
   #268). `sigmav_nf` returned its tables in cm^3/s where `tr_pnf` takes
   m^3/s, so every `model_pnf` rate was 1e6 too large (#238's 10 keV D-T
