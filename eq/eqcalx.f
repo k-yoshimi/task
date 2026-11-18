@@ -781,7 +781,8 @@ C
                CALL EQJPSI(PSIPNL,HJPSID,HJPSI)
                TTRZ(NRG,NZG)=SQRT((2.D0*PI*BB*RR)**2
      &                           +2.D0*RMU0*RRC
-     &                           *(2.D0*PI*TJ*HJPSID-RRC*PPSI))
+     &                           *(2.D0*PI*TJ*HJPSID
+     &                            -4.D0*PI**2*RRC*PPSI))
                PPRZ(NRG,NZG)=PPSI
             ELSE
                TTRZ(NRG,NZG)=2.D0*PI*BB*RR
@@ -1002,7 +1003,7 @@ C
             CALL EQOPSI(PSIPNL,OMGPSI,DOMGPSI)
             TTVL=SQRT((2.D0*PI*BB*RR)**2
      &                  +2.D0*RMU0*RRC
-     &                  *(2.D0*PI*TJ*HJPSID-RRC*PPSI
+     &                  *(2.D0*PI*TJ*HJPSID-4.D0*PI**2*RRC*PPSI
      &                  *EXP(RRC**2*OMGPSI**2*AMP/(2.D0*TPSI))))
          ELSEIF (IMDLEQF.EQ.1) THEN
             CALL EQPPSI(PSIPNL,PPSI,DPPSI)
@@ -1240,7 +1241,8 @@ C
                CALL EQJPSI(PSIPNL,HJPSID,HJPSI)
                TTRZ(NRG,NZG)=SQRT((2.D0*PI*BB*RR)**2
      &                           +2.D0*RMU0*RRC
-     &                           *(2.D0*PI*TJ*HJPSID-RRC*PPSI))
+     &                           *(2.D0*PI*TJ*HJPSID
+     &                            -4.D0*PI**2*RRC*PPSI))
                PPRZ(NRG,NZG)=PPSI
             ELSE
                TTRZ(NRG,NZG)=2.D0*PI*BB*RR
@@ -1457,7 +1459,7 @@ C
             CALL EQOPSI(PSIPNL,OMGPSI,DOMGPSI)
             TTVL=SQRT((2.D0*PI*BB*RR)**2
      &                  +2.D0*RMU0*RRC
-     &                  *(2.D0*PI*TJ*HJPSID-RRC*PPSI
+     &                  *(2.D0*PI*TJ*HJPSID-4.D0*PI**2*RRC*PPSI
      &                  *EXP(RRC**2*OMGPSI**2*AMP/(2.D0*TPSI))))
          ELSEIF (IMDLEQF.EQ.1) THEN
             CALL EQPPSI(PSIPNL,PPSI,DPPSI)

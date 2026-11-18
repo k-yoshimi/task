@@ -249,7 +249,7 @@ against the `eq` binary.
 | `zg` | `list[float]` | `[nzgmax]` Z-grid coordinates |
 | `psips` | `list[float]` | `[npsmax]` psi-surface ψ values |
 | `ppps` | `list[float]` | `[npsmax]` pressure profile |
-| `ttps` | `list[float]` | `[npsmax]` T (= R·Bφ) profile |
+| `ttps` | `list[float]` | `[npsmax]` T (= 2π·R·Bφ) profile |
 | `qqps` | `list[float]` | `[npsmax]` q profile |
 
 Scalars (canonical order): `raxis`, `zaxis`, `psi0`, `psipa`,
