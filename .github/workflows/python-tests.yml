@@ -19,7 +19,14 @@ concurrency:
 jobs:
   pytest:
     name: pytest (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    # ubuntu-24.04, not ubuntu-latest: the 1e-10 equivalence baselines are
+    # gfortran 13's (see "Install Fortran/C build deps" below), and
+    # ubuntu-latest is now ubuntu-26.04, whose gfortran 15.2 moves five of
+    # them (fp dt1 and iter01, wrx demo, iter01 and jt60) by 1e-10 to 1e-7.
+    # regen-baselines.yml pins the same image. Move both together, with
+    # every 1e-10 baseline regenerated on the new image (that workflow
+    # makes the eq, tr and tot ones only).
+    runs-on: ubuntu-24.04
     # Hard upper bound on the whole job: if any test enters a genuine
     # infinite loop inside libXapi.so (runaway physics iteration, not a
     # clean STOP), per-test --timeout=signal cannot interrupt it — the
@@ -108,7 +115,12 @@ jobs:
       - name: Install Python test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-mock pytest-subtests pytest-forked pytest-timeout
+          # pytest below 9.2 (#277): pytest 9.2.0 (2026-10-27) puts a NodeId in
+          # every TestReport (`_id`), which pytest-forked 1.7.5 cannot marshal,
+          # so under --forked every test, a passing one too, ends "running the
+          # test EXITED with status 3". Lift the cap once
+          # pytest-dev/pytest-forked#113 is fixed in a release.
+          pip install 'pytest<9.2' pytest-mock pytest-subtests pytest-forked pytest-timeout
           # tomli is needed only on <3.11; keep installed for safety on 3.11 too.
           pip install tomli
           # mcp = Anthropic's official Python MCP SDK. Required by the
@@ -432,7 +444,7 @@ jobs:
     # (2) bpsd storage symbols dedupe to one set (the central PoC
     # claim), (3) no per-module `lib*api.so` deps leak in.
     name: mono build (Linux libtotapi_mono.so)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # the pytest job's image and gfortran (see there)
     # Generous cap: full PIC chain + 5 per-module .so + mono link
     # is roughly 5-8 minutes on the GitHub runner. The eqdata step
     # adds the full NON-PIC chain on top (`make -C tot libs`, ~16
@@ -566,7 +578,8 @@ jobs:
       - name: Install pytest deps for the mono equivalence step
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-forked pytest-timeout pytest-mock
+          # pytest below 9.2: see the pytest job's install step.
+          pip install 'pytest<9.2' pytest-forked pytest-timeout pytest-mock
 
       - name: Generate Layer 1 (1e-10 equivalence) eqdata baselines (demo2014 + ht6m)
         # KEEP IN SYNC with the identically-named step in the `pytest`

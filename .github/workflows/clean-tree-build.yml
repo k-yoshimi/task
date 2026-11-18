@@ -94,8 +94,9 @@ jobs:
           ref: ${{ github.event_name == 'schedule' && 'develop' || '' }}
 
       - name: Install Fortran/C build deps
-        # Same toolchain as python-tests.yml: Ubuntu 24.04's default
-        # gfortran. No Python packages are needed.
+        # ubuntu-latest's default gfortran: python-tests.yml pins
+        # ubuntu-24.04 for its 1e-10 baselines, and this job compares none.
+        # No Python packages are needed.
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \

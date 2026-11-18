@@ -117,7 +117,7 @@ Run a Linux container with gfortran 13.x:
 ```bash
 docker run --rm -it -v "$(pwd)":/work -w /work ubuntu:24.04 bash -c "
   apt-get update && apt-get install -y gfortran python3 python3-pip
-  pip3 install pytest pytest-forked pytest-timeout pytest-mock
+  pip3 install 'pytest<9.2' pytest-forked pytest-timeout pytest-mock   # as CI (#277)
   ./scripts/setup.sh   # bpsd clone + lib*api.so build
   python3 -m pytest python/ --forked --timeout=120 --timeout-method=signal
 "
