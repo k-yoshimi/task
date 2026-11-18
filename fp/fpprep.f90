@@ -64,11 +64,12 @@
       IF(MODELG.EQ.3.OR.MODELG.EQ.5.OR.MODELG.EQ.8) THEN
          IF(nrank.EQ.0) THEN
             CALL eq_load(MODELG,KNAMEQ,IERR)
-            IF(IERR.NE.0) THEN
-               write(6,*) 'XX FPMESH:EQLOAD:IERR=',IERR
-               RETURN
-            ENDIF
+            IF(IERR.NE.0) write(6,*) 'XX FPMESH:EQLOAD:IERR=',IERR
          ENDIF
+!        Every rank returns on a failed load: a return on rank 0 alone
+!        would leave the others waiting in fp_eq_broadcast.
+         CALL mtx_broadcast1_integer(IERR)
+         IF(IERR.NE.0) RETURN
          CALL fp_eq_broadcast
 !         write(LINE,'(A,I5)') 'nrmax=',51
 !         call eq_parm(2,line,ierr)
