@@ -32,9 +32,11 @@ jobs:
     # clean STOP), per-test --timeout=signal cannot interrupt it — the
     # child is spinning in C/Fortran and never returns to Python. This
     # cap ensures the runner aborts instead of hanging up to the
-    # default 360 min. Typical runtime is ~12 s; 10 min is plenty of
-    # slack for a slow CI host without wasting minutes on a hung test.
-    timeout-minutes: 10
+    # default 360 min. The job takes 5 to 9 min (the builds, the C ABI
+    # checks and about 90 s of pytest) with under a minute of apt install;
+    # 20 min leaves room for slow apt downloads: on 2026-11-18 the install
+    # step took up to 7.5 min, and three jobs ran into the old 10 min cap.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
