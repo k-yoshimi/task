@@ -19,7 +19,7 @@ extern "C" {
  *                    KNAMFP/KNAMFO/KNAMPF/KNAMEQ2 (CHARACTER(LEN=80)).
  *   - eq_run(1) : load of an equilibrium file via equnit::eq_load using
  *                 the current MODELG + KNAMEQ. eq_run(0) solves the
- *                 analytic equilibrium (EQCALC, then EQCALQ). A mode
+ *                 Grad-Shafranov equation (EQCALC, then EQCALQ). A mode
  *                 above 1 returns EQ_ERR_NOT_IMPL, a negative one
  *                 EQ_ERR_INVALID.
  *   - eq_save   : writes the TASK/EQ binary file named by KNAMEQ (EQSAVE).
@@ -62,7 +62,7 @@ enum eq_error {
     EQ_ERR_INVALID     = 1,  /* invalid parameter name or value     */
     EQ_ERR_NOT_INIT    = 2,  /* eq_init has not been called yet     */
     EQ_ERR_CALC_FAILED = 3,  /* calculation / initialization failed */
-    EQ_ERR_NOT_IMPL    = 4   /* L-2 stub return: not implemented    */
+    EQ_ERR_NOT_IMPL    = 4   /* not implemented: eq_run mode > 1    */
 };
 
 /*

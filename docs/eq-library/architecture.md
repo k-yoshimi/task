@@ -51,7 +51,7 @@ parameters (`KNAMEQ`, `KNAMEQ2`, `KNAMWR`, `KNAMWM`, `KNAMFP`,
             |   eq_api.f90              wraps eqcom* + COMMON    |
             |   eq_param_registry.f90   name -> variable dispatch|
             |   eq_state.f90            BIND(C) eq_state_t       |
-            |   equnit::eq_load         EQDSK file loader        |
+            |   equnit::eq_load         equilibrium-file loader  |
             |   eqcalc / eqcalq / ...   Grad-Shafranov kernels   |
             |   eqcom*_mod              COMMON-block + module    |
             |   eq_graphics_stubs.f90   graphics-symbol stubs    |
@@ -95,10 +95,10 @@ Return codes (`enum eq_error`):
 | code | meaning | Python exception |
 |---|---|---|
 | 0 | OK | — |
-| 1 | invalid name / value (incl. bare `"PSIB"` with no idx) | `EqlibInvalidParamError` |
+| 1 | invalid name / value (incl. bare `"PSIB"` with no idx; a negative `eq_run` mode) | `EqlibInvalidParamError` |
 | 2 | not initialised | `EqlibNotInitializedError` |
 | 3 | calculation failed (`eq_run` / `eq_get_state`) | `EqlibCalculationFailedError` |
-| 4 | not implemented (Phase L-2 stub; e.g. `eq_run(mode=0)`) | `EqlibNotImplementedError` |
+| 4 | not implemented: an `eq_run` mode above 1 | `EqlibNotImplementedError` |
 
 `eq_state_t` carries six grid-counter ints (`nrgmax`, `nzgmax`,
 `npsmax`, `nrmax`, `nthmax`, `nsumax`), 12 plasma scalars (`raxis`,
@@ -157,10 +157,16 @@ Three behaviours differ from the sibling tr/ti/wr/fp wrappers:
    keys. The numeric `eq_set_param` cannot dispatch them because the
    value type is `c_double`. tr/ti/wr/fp do not currently expose
    string parameters.
-3. **`eq.run()` defaults to `mode=1`.** `mode=1` is the real EQDSK
-   load via `equnit::eq_load`; `mode=0` is reserved for a future
-   direct EQCALQ call and currently returns `EQ_ERR_NOT_IMPL`. The
-   default lets `eq.run()` (no arg) do the canonical thing.
+3. **`eq.run()` defaults to `mode=1`.** `mode=1` is the
+   equilibrium-file load via `equnit::eq_load`: it reads the file of
+   the format `MODELG` names (`EQ_READ` in `eq/eqfile.f90`), so with
+   the default `MODELG=2`, which names none, `eq.run()` fails
+   (`EqlibCalculationFailedError`). `mode=0` is the Grad-Shafranov
+   solve: `EQCALC` solves the fixed-boundary equation numerically from
+   the parameters, then `EQCALQ`; it needs no file.
+   A mode above 1 raises `EqlibNotImplementedError`
+   (`EQ_ERR_NOT_IMPL`), a negative one `EqlibInvalidParamError`
+   (`EQ_ERR_INVALID`).
 
 ## Phase L completion matrix
 
@@ -203,10 +209,6 @@ Mirrors the tr spec's §12.2 for the EQ module:
   state; the second `eq_init` resets globals. Use `multiprocessing`
   for parallel sweeps — each worker process gets its own
   `libeqapi.so` load.
-- **`eq_run(mode=0)` is not implemented.** Only `mode=1` (EQDSK load
-  via `equnit::eq_load`) is wired. `mode=0` is reserved for a future
-  direct EQCALQ entry and currently raises
-  `EqlibNotImplementedError`.
 - **2-D fields not yet exported.** `PSIRZ`, `RPS(NPSM,NTHM)`, and
   `ZPS(NPSM,NTHM)` will require a future `eq_state_t` extension.
 - **Seven string keys only.** Other character-valued entries (if any

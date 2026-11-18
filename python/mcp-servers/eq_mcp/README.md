@@ -7,11 +7,11 @@ Code / Cursor) can drive equilibrium loads without writing Fortran.
 It is the EQ-specific sister of `tr_mcp` / `ti_mcp` / `wrx_mcp`; the
 shape, packaging and invocation are identical, with two EQ extras:
 
-- `set_param_str` — string parameters such as `KNAMEQ` (the EQDSK file
+- `set_param_str` — string parameters such as `KNAMEQ` (the equilibrium file
   path); routed through `eqlib.Eq.set_param_str`.
 - `validate` — pre-run cross-parameter validation (Issue #143);
   returns a list of `{param, code, message}` diagnostics so the LLM
-  can spot configuration errors before paying for a real EQDSK load.
+  can spot configuration errors before paying for a run.
 
 ## Install
 
@@ -68,7 +68,7 @@ stream is not recognised and fd 1 goes to stderr as usual.
 | `set_param`         | numeric scalar / array element (`NAME[i]`) |
 | `set_param_str`     | string parameter (`KNAMEQ` etc.) |
 | `set_params`        | bulk dispatch (scalar / list / dict / str) |
-| `run`               | `eq_run(mode)`; `mode=1` real EQDSK load (default), `mode=0` analytic Grad-Shafranov solve (with `MODELG=2`) |
+| `run`               | `eq_run(mode)`; `mode=1` the equilibrium-file load (default; fails with the default `MODELG=2`), `mode=0` the Grad-Shafranov solve, no file (with `MODELG=2`) |
 | `get_state`         | grid counters, 12 scalars, profile arrays |
 | `validate`          | pre-run diagnostics (Issue #143) |
 | `save`              | write the equilibrium of the last `run` to a TASK/EQ binary file (`eq_save`); an existing file is replaced only with `overwrite=true`; an error when the file was not opened or is shorter than what was written |

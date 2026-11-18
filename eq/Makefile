@@ -279,7 +279,8 @@ clean_commontest:
 #
 # `make eq_api_check` additionally builds a minimal C driver
 # (tests/c_abi/test_smoke.c) that links libeq.a + OBJ_API and
-# calls eq_init -> eq_get_state -> eq_finalize.
+# drives eq_init, eq_get_state, eq_run (modes -1, 2, 1, 0),
+# eq_set_param[_str] and eq_finalize.
 # ---------------------------------------------------------------------
 CC ?= gcc
 CFLAGS_API ?= -Wall -Wextra -O2

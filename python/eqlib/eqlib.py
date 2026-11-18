@@ -9,10 +9,10 @@ Usage::
     from eqlib import Eq
 
     with Eq() as eq:
-        eq.set_params(RR=3.0, BB=3.0, RIP=1.0)
+        eq.set_params(RR=3.0, BB=3.0, RIP=1.0, MODELG=3)  # 3: a TASK/EQ file
         eq.set_param("PSIB[0]", 0.0)        # array element (0-origin!)
         eq.set_param_str("KNAMEQ", "eqdata")  # string parameter
-        eq.run(mode=1)                       # 1 == real EQDSK load
+        eq.run(mode=1)                       # 1 == the equilibrium-file load
         state = eq.get_state()
         print(state.scalars["raxis"])
 """
@@ -279,7 +279,7 @@ class Eq:
         Args:
             mode: Solver mode.
 
-                * ``1`` (default) triggers a real EQDSK load via
+                * ``1`` (default) triggers the equilibrium-file load via
                   ``equnit::eq_load`` using the current ``MODELG`` and
                   ``KNAMEQ`` (requires ``MODELG in {3, 5, 8}``).
                 * ``0`` runs the in-process analytic Grad-Shafranov
@@ -287,7 +287,9 @@ class Eq:
                   ``MODELG=2`` and the basic geometry parameters
                   (``RR``, ``RA``, ``BB``, ``RIP``, ``RKAP``,
                   ``RDLT``, ...) to produce a self-consistent
-                  equilibrium without any external EQDSK file.
+                  equilibrium without any equilibrium file.
+                * a negative ``mode`` raises
+                  :class:`EqlibInvalidParamError` (``EQ_ERR_INVALID``).
 
                 Other values return ``EQ_ERR_NOT_IMPL``.
         """
