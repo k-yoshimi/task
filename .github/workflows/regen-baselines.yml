@@ -45,6 +45,11 @@ jobs:
     # re-trigger this workflow to regenerate baselines once. The new pin
     # should match what python-tests.yml uses.
     #
+    # That happened by 2026-11-16: `ubuntu-latest` became ubuntu-26.04
+    # (gfortran 15.2) and five cases failed at 1e-10. The pytest and mono
+    # build jobs of python-tests.yml now pin ubuntu-24.04, where the
+    # existing baselines pass as they are, so none was regenerated.
+    #
     # Re-pin to the next LTS
     # when GitHub deprecates this image and regenerate baselines once.
     runs-on: ubuntu-24.04
