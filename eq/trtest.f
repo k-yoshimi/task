@@ -82,8 +82,10 @@ C
       IF(KIN.EQ.'L') THEN
          KNAMEQ='testeq'
          CALL EQLOAD(9,KNAMEQ,IERR)
-         IF(IERR.NE.0) 
-     &        WRITE(6,*) 'XX TRTEST: EQLOAD ERROR: IERR=',IERR
+         IF(IERR.NE.0) THEN
+            WRITE(6,*) 'XX TRTEST: EQLOAD ERROR: IERR=',IERR
+            GOTO 1
+         ENDIF
          CALL EQPARM(2,'NPRINT=2',IERR)
          ICONT=1
          RIP1=0.D0

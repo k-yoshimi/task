@@ -50,6 +50,10 @@ CONTAINS
           ELSE
              WRITE(6,*) 'XX EQLOAD: IERR=',IERR
              INITEQ=0
+!            No equilibrium: return the load's IERR. Going on would set
+!            the bounds below from an earlier run (or zero), and the IERR
+!            would be lost in pl_load and dp_prep_ns (which sets it to 0).
+             RETURN
           ENDIF
        ENDIF
     ELSE IF(MODELG.EQ.8) THEN ! task/equ
@@ -74,6 +78,7 @@ CONTAINS
           ELSE
              WRITE(6,*) 'XX EQREAD: IERR=',IERR
              INITEQ=0
+             RETURN
           ENDIF
        ENDIF
     ELSE
