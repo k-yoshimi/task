@@ -317,8 +317,8 @@
       ! --- fusion neutron ---
 
       DO NR=1,NRMAX
-         SNFNN_NR(NR)=SUM(SNF_NNFNR(1:NNFMAX,NR))
-         PNFNN_NR(NR)=SUM(PNF_NNFNR(1:NNFMAX,NR))
+         SNFNN_NR(NR)=SUM(SNFNN_NNFNR(1:NNFMAX,NR))
+         PNFNN_NR(NR)=SUM(PNFNN_NNFNR(1:NNFMAX,NR))
       END DO
 
       DO NNF=1,NNFMAX
