@@ -287,8 +287,7 @@ CONTAINS
        END SELECT
     ELSE
        RW=2.D6*PI*RF
-       !       RKWG=WGNZ*RW/VC
-       RKWG=RKZ
+       RKWG=WGNZ*RW/VC
        WRITE(6,'(A,1P3E12.4)') 'RF,RW,VC=',RF,RW,VC
        IF(ABS(RKWG).GT.1.E-8) THEN
           WRITE(6,'(A,1P2E12.4)') 'RKWG,LWG=',RKWG,2.D0*PI/RKWG
@@ -318,9 +317,10 @@ CONTAINS
                 CWG4(NZ)=CAMP*FACT
              END SELECT
           END IF
+          IF(ABS(CWG1(NZ)+CWG2(NZ)+CWG3(NZ)+CWG4(NZ)).NE.0.0) &
+             WRITE(6,'(I6,6ES12.4)') NZ,CWG1(NZ),CWG3(NZ),CWG4(NZ)
        END DO
     END IF
-
     RETURN
   END SUBROUTINE W1WGS
 

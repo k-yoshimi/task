@@ -129,16 +129,16 @@ CONTAINS
     INTEGER:: ntemp,id,ierr
 
     SELECT CASE(model_pnf)
-    CASE(0)
+    CASE(0) ! no fusion reaction
        nnfmax=0
        RETURN
-    CASE(1)
+    CASE(1) ! DT
        nnfmax=1
-    CASE(2,12)
+    CASE(2,12) ! DT+DD 
        nnfmax=4
-    CASE(3)
+    CASE(3)    ! DT+DD+DHe3
        nnfmax=6
-    CASE(4,14)
+    CASE(4,14) ! DT+DD+DHe3+TT+THe3 (14 is refused below)
        nnfmax=13
     CASE DEFAULT
        WRITE(6,*) 'XX Error libnf: undefined model_pnf: model_pnf=',model_pnf

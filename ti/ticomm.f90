@@ -2,7 +2,9 @@
 
 MODULE ticomm_parm
 
-  USE plcomm,pm=>pa
+  ! pt_pl=>PT: ti has a PT(NSM) of its own (below; computed from PTPR and
+  ! PTPP in tiinit), so plcomm_parm's PT is renamed: it would clash with it.
+  USE plcomm,pm=>pa,pt_pl=>PT
   USE commpi
 
 !     NSM=100 ! imported from plcomm

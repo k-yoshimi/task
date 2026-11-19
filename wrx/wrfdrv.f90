@@ -236,13 +236,6 @@ CONTAINS
        WRITE(26,'(A,6ES12.4)') 'y   :',Y(1),Y(2),Y(3),Y(4),Y(5),Y(6)
        WRITE(26,'(A,6ES12.4)') 'f   :',F(1),F(2),F(3),F(4),F(5),F(6)
     END IF
-    IF(X.GT.1.345D0) THEN
-       WRITE(82,'(A,6ES12.4)') 'x7ds:',X,Y(7),F(7),DS,ROMG,DOMG
-       WRITE(82,'(A,6ES12.4)') 'y   :',Y(1),Y(2),Y(3),Y(4),Y(5),Y(6)
-       WRITE(82,'(A,6ES12.4)') 'f   :',F(1),F(2),F(3),F(4),F(5),F(6)
-       WRITE(82,'(A,6ES12.4)') 'r   :',RXP,RYP,RZP,RRKXP,RRKYP,RRKZP
-       WRITE(82,'(A,6ES12.4)') 'd   :',DXP,DYP,DZP,DKXP,DKYP,DKZP
-    END IF
     RETURN
   END SUBROUTINE wr_fdrv2
 
@@ -359,13 +352,6 @@ CONTAINS
        WRITE(26,'(A,6ES12.4)') 'y   :',Y(1),Y(2),Y(3),Y(4),Y(5),Y(6)
        WRITE(26,'(A,6ES12.4)') 'f   :',F(1),F(2),F(3),F(4),F(5),F(6)
     END IF
-    IF(X.GT.1.345D0) THEN
-       WRITE(83,'(A,6ES12.4)') 'x7ds:',X,Y(7),F(7),DS,DROMG,DOMG
-       WRITE(83,'(A,6ES12.4)') 'y   :',Y(1),Y(2),Y(3),Y(4),Y(5),Y(6)
-       WRITE(83,'(A,6ES12.4)') 'f   :',F(1),F(2),F(3),F(4),F(5),F(6)
-       WRITE(83,'(A,6ES12.4)') 'r   :',DRXP,DRYP,DRZP,DRKXP,DRKYP,DRKZP
-       WRITE(83,'(A,6ES12.4)') 'd   :',DXP,DYP,DZP,DKXP,DKYP,DKZP
-    END IF
     RETURN
   END SUBROUTINE wr_fdrv3
 
@@ -481,13 +467,6 @@ CONTAINS
        WRITE(26,'(A,4ES12.4)') 'x7ds:',X,Y(7),F(7),DS
        WRITE(26,'(A,6ES12.4)') 'y   :',Y(1),Y(2),Y(3),Y(4),Y(5),Y(6)
        WRITE(26,'(A,6ES12.4)') 'f   :',F(1),F(2),F(3),F(4),F(5),F(6)
-    END IF
-    IF(X.GT.1.345D0) THEN
-       WRITE(26,'(A,6ES12.4)') 'x7ds:',X,Y(7),F(7),DS,DROMG,DOMG
-       WRITE(26,'(A,6ES12.4)') 'y   :',Y(1),Y(2),Y(3),Y(4),Y(5),Y(6)
-       WRITE(26,'(A,6ES12.4)') 'f   :',F(1),F(2),F(3),F(4),F(5),F(6)
-       WRITE(26,'(A,6ES12.4)') 'r   :',DRXP,DRYP,DRZP,DRKXP,DRKYP,DRKZP
-       WRITE(26,'(A,6ES12.4)') 'd   :',DXP,DYP,DZP,DKXP,DKYP,DKZP
     END IF
     RETURN
   END SUBROUTINE wr_fdrv4

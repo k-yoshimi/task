@@ -47,8 +47,6 @@ CONTAINS
     COMPLEX(rkind):: CT0,CT1,CT2,CT3
     COMPLEX(rkind):: CW,CARG,FWP,FWC,WC
     
-    WRITE(6,*) '@@@ exec11: RZ=',RZ
-
     ! Allocation of local data array
 
     IF(ALLOCATED(XM)) DEALLOCATE(XM,YX,YK,CS0,CS1,CS2,CS3)
@@ -490,7 +488,7 @@ CONTAINS
 !       END IF
 !    END DO
 
-    WRITE(6,'(A,3I5)') 'NZ,MLEN,MWID=',NZ,MLEN,MWID
+    WRITE(6,'(A,3I8)') 'NZ,MLEN,MWID=',NZ,MLEN,MWID
     CALL BANDCD(CF,CA,MLEN,MWID,MWID,IERR)
     IF(IERR.NE.0) WRITE(6,601) IERR
 

@@ -189,7 +189,7 @@ $$F(\psi) = B_T R + \mathrm{FF}_0 (1-\psi^{P_{R0}})^{P_{F0}} + \cdots$$
 | `NTHMAX` | int | 64  | 磁束座標のポロイダルメッシュ |
 | `NSUMAX` | int | 65  | 境界点数 |
 | `NRVMAX` | int | 50  | 面平均の半径メッシュ |
-| `NTVMAX` | int | 200 | 面平均のポロイダルメッシュ |
+| `NTVMAX` | int | 400 | 面平均のポロイダルメッシュ |
 | `NPFCMAX` | int | 0  | PF コイル数 |
 
 ## 10. 反復・収束 (Iteration / convergence)
@@ -197,7 +197,7 @@ $$F(\psi) = B_T R + \mathrm{FF}_0 (1-\psi^{P_{R0}})^{P_{F0}} + \cdots$$
 | 名前 | 型 | 既定値 | 意味 |
 |---|---|---|---|
 | `EPSEQ`  | double | 1×10⁻⁶ | 平衡反復の収束判定 |
-| `NLPMAX` | int    | 20     | 平衡反復の最大数 |
+| `NLPMAX` | int    | 100    | 平衡反復の最大数 |
 | `EPSNW`  | double | 1×10⁻² | Newton 法の収束判定 |
 | `DELNW`  | double | 1×10⁻² | Newton 法での微分の刻み幅 |
 | `NLPNW`  | int    | 20     | Newton 法の最大反復数 |
