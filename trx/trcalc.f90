@@ -148,7 +148,7 @@
                   ELSE IF(NS.EQ.NS_He4) THEN
                      SSIN(NR,NS_He4) &
                           =SNF_NSNR(NS_He4,NR)+SNB_NSNR(NS_He4,NR) &
-                          +SEX(NR,NS_He4)+SPSC_NSNR(NS_He4,NS)
+                          +SEX(NR,NS_He4)+SPSC_NSNR(NS_He4,NR)
                   END IF
                ELSEIF(NS.EQ.NSMAX+NSZMAX+1) THEN
                   SSIN(NR,NSMAX+NSZMAX+1)=-SIE(NR)        -SCX(NR)
@@ -187,7 +187,7 @@
          IF(NS_T.LE.NSMAX) &
               PIN(NR,NS_T)=PNBCL_NSNR(NS_T,NR)+PNFCL_NSNR(NS_T,NR) &
               +PRF(NR,NS_T) &
-              -PN(NS_D)*PCX(NR)/(PN(NS_D)+PN(NS_T))+PEX(NR,NS_T)
+              -PN(NS_T)*PCX(NR)/(PN(NS_D)+PN(NS_T))+PEX(NR,NS_T)
          IF(NS_He4.LE.NSMAX) &
               PIN(NR,NS_He4)=PNBCL_NSNR(NS_He4,NR)+PNFCL_NSNR(NS_He4,NR) &
               +PRF(NR,NS_He4) &
