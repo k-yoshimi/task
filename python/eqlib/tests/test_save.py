@@ -38,7 +38,7 @@ def _in_tmp_dir(tmp_path, monkeypatch):
 
 
 def _solved():
-    """An Eq with the analytic equilibrium of the defaults computed."""
+    """An Eq with the Grad-Shafranov equilibrium of the defaults computed."""
     e = eqlib.Eq()
     e.run(0)
     return e

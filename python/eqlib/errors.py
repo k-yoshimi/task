@@ -6,7 +6,7 @@ Mirrors the ``enum eq_error`` codes declared in ``eq/eq_api.h``:
     EQ_ERR_INVALID     = 1  (invalid parameter name or value)
     EQ_ERR_NOT_INIT    = 2  (eq_init has not been called yet)
     EQ_ERR_CALC_FAILED = 3  (eq_run / eq_get_state failed)
-    EQ_ERR_NOT_IMPL    = 4  (entry point is a stub)
+    EQ_ERR_NOT_IMPL    = 4  (eq_run: a mode above 1)
 
 The same hierarchy is used by trlib / tilib so test patterns can be
 shared verbatim. ``raise_for_rc`` (and the alias ``raise_for_ierr``)
@@ -42,10 +42,11 @@ class EqlibCalculationFailedError(EqlibError):
 
 
 class EqlibNotImplementedError(EqlibError):
-    """Entry point is a stub and not yet implemented (rc == 4).
+    """The mode is not implemented (rc == 4).
 
-    ``eq_run(mode)`` returns this for every mode except ``mode == 1``
-    (real EQDSK load via equnit::eq_load).
+    ``eq_run(mode)`` returns this for a mode above 1; modes 0 (the
+    Grad-Shafranov solve, EQCALC + EQCALQ) and 1 (the file load via
+    equnit::eq_load) are implemented.
     """
 
 
