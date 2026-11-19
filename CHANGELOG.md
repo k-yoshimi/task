@@ -121,6 +121,12 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **CI: the pytest job may take 20 minutes, not 10.** The job takes 5 to
+  9 minutes, and slow apt downloads on 2026-11-18 (the install step took
+  up to 7.5 minutes instead of under one) ran three jobs into the
+  10-minute limit (one on `develop`, one each on two pull requests),
+  which GitHub reports as cancelled; the one on `develop` had finished
+  its tests (1161 passed). Its comment no longer says the job takes ~12 s.
 - **CI: pytest is held below 9.2 (#277).** pytest 9.2.0 (2026-10-27) puts a
   `NodeId` object in every test report, which pytest-forked 1.7.5 cannot
   marshal back from the forked child, so under `--forked` every test, a
