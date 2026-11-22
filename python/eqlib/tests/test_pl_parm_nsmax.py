@@ -16,10 +16,28 @@ change ``NSMAX``, also when it fails. The backups were sized with the
 - a read that sets ``NSMAX`` outside 1 to ``NSM`` (100) runs the loops of
   ``pl_parm`` past the species arrays themselves.
 
-The build has run-time checks (``-fcheck=all``), so the overruns end the
-driver. As in ``test_plcheck_modelg.py``, each test compiles a few lines of
-Fortran against the PIC build of ``pl`` and reads back what ``pl_parm``
-returned and left. One test per case, no ``subTest``.
+CI builds ``pl`` with ``OFLAGS`` (``-g -O3 -m64 -std=legacy``), without
+run-time checks: an overrun is not trapped there, and whether it ends the
+driver depends on the platform. So the tests assert what ``pl_parm`` returned
+and left (``IERR``, ``NSMAX``, ``PT``, ``PU``, the messages), and a driver that
+ends abnormally fails its test too.
+
+One overrun cannot be relied on to show in those values. When MODE=0 asks again
+after ``plcheck`` refused a read that raised ``NSMAX`` and the next read
+succeeds, the too-short backups are written and never read back: where that
+was measured (macOS arm64) the code before the fix left the right values and
+the driver then ended with SIGSEGV. What a write or a read past an array does
+is not defined, so neither a value nor a crash is certain on another platform.
+``test_mode_0_retry_keeps_its_backups_in_bounds`` therefore runs the two MODE=0
+inputs with ``MODELG=26`` once more with ``pl/plparm.f90`` compiled by the test
+itself with ``-fcheck=bounds`` and linked ahead of the library's copy: an index
+past a backup then ends the driver with gfortran's run-time error on every
+platform.
+
+As in ``test_plcheck_modelg.py``, each test compiles a few lines of Fortran
+against the PIC build of ``pl`` (that one test adds ``pl/plparm.f90`` itself)
+and reads back what ``pl_parm`` returned and left. One test per case, no
+``subTest``.
 """
 from __future__ import annotations
 
@@ -36,6 +54,11 @@ from eqlib.tests.test_plcheck_modelg import (
     REPO,
     _free_form_compiler,
 )
+
+# What a test needs to compile pl/plparm.f90 itself (its modules are pl's,
+# lib's and mtxp's).
+PLPARM = REPO / "pl" / "plparm.f90"
+MOD_DIRS = (REPO / "pl" / "mod_pic", REPO / "lib" / "mod_pic", REPO / "mtxp" / "mod_pic")
 
 pytestmark = pytest.mark.skipif(
     not all(p.exists() for p in (LIB_PL, LIB_TASK, OBJ_MTX, MAKE_HEADER)),
@@ -76,26 +99,45 @@ END PROGRAM pl_parm_nsmax_driver
 """
 
 
-def _run(tmp_path: Path, mode: int, line: str = "", stdin: str = "",
-         entry_nsmax: int | None = None) -> dict:
-    """Compile the driver, call ``pl_parm(mode, line)``, return what it printed.
+def _build(tmp_path: Path, bounds_checked: bool = False) -> Path:
+    """Compile the driver in ``tmp_path`` and return the executable.
 
-    A non-zero exit of the driver (a run-time check) fails the test here.
+    With ``bounds_checked``, ``pl/plparm.f90`` is compiled here with
+    ``-fcheck=bounds`` and linked ahead of the library, whose copy of the
+    module is then not used: an index outside an array of ``pl_parm`` ends
+    the driver with a run-time error instead of doing whatever the platform
+    does with it.
     """
     source = tmp_path / "pl_parm_nsmax_driver.f90"
     source.write_text(DRIVER)
     exe = tmp_path / "pl_parm_nsmax_driver"
+    if bounds_checked:
+        flags = ["-std=legacy", "-fcheck=bounds", *(f"-I{d}" for d in MOD_DIRS)]
+        sources = [str(PLPARM), str(source)]
+    else:
+        flags = [f"-I{REPO / 'pl' / 'mod_pic'}"]
+        sources = [str(source)]
     build = subprocess.run(
-        [*_free_form_compiler(), f"-I{REPO / 'pl' / 'mod_pic'}",
-         str(source), str(OBJ_MTX), str(LIB_PL), str(LIB_TASK), "-o", str(exe)],
-        capture_output=True, text=True, cwd=tmp_path, timeout=100,
+        [*_free_form_compiler(), *flags, *sources,
+         str(OBJ_MTX), str(LIB_PL), str(LIB_TASK), "-o", str(exe)],
+        capture_output=True, text=True, cwd=tmp_path, timeout=60,
     )
     assert build.returncode == 0, f"driver did not build:\n{build.stdout}\n{build.stderr}"
+    return exe
+
+
+def _call(exe: Path, mode: int, line: str = "", stdin: str = "",
+          entry_nsmax: int | None = None) -> dict:
+    """Call ``pl_parm(mode, line)`` in the driver, return what it printed.
+
+    A driver that ends abnormally (a signal, or a run-time check in a build
+    that has them) fails the test here.
+    """
     args = [str(exe), str(mode), line]
     if entry_nsmax is not None:
         args.append(str(entry_nsmax))
     run = subprocess.run(args, input=stdin,
-                         capture_output=True, text=True, cwd=tmp_path, timeout=20)
+                         capture_output=True, text=True, cwd=exe.parent, timeout=20)
     assert run.returncode == 0, f"driver ended with {run.returncode}:\n{run.stdout}\n{run.stderr}"
     out = {"output": run.stdout}
     for key in ("IERR", "NSMAX", "PT", "PU", "PT0", "PU0"):
@@ -104,6 +146,12 @@ def _run(tmp_path: Path, mode: int, line: str = "", stdin: str = "",
         value = lines[0].split("=", 1)[1]
         out[key] = int(value) if key in ("IERR", "NSMAX") else [float(v) for v in value.split()]
     return out
+
+
+def _run(tmp_path: Path, mode: int, line: str = "", stdin: str = "",
+         entry_nsmax: int | None = None) -> dict:
+    """Compile the driver against the library and call ``pl_parm(mode, line)``."""
+    return _call(_build(tmp_path), mode, line, stdin, entry_nsmax)
 
 
 def test_failed_read_that_raises_nsmax_restores_only_what_it_saved(tmp_path):
@@ -132,10 +180,67 @@ def test_failed_read_that_lowers_nsmax_restores_every_species_it_saved(tmp_path)
     assert r["PU"] == r["PU0"], r["output"]
 
 
+MODE_0_RETRY = "&PL NSMAX=4, MODELG=26 /\n&PL MODELG=2 /\n"
+MODE_0_INPUT_ENDS = "&PL NSMAX=4, MODELG=26 /\n"
+
+
+def _after_a_good_read_of_nsmax_4(exe: Path) -> dict:
+    """What ``&PL NSMAX=4 /`` alone leaves in MODE=0: no refusal, no retry.
+
+    This, not the state at entry, is what PT and PU are compared with after a
+    retry: ``pl_init`` does not set ``PT(2)`` (zero in the driver, static
+    storage that nothing has written), and a read that succeeds without giving
+    a ``PT`` turns a zero one into ``(PTPR+2*PTPP)/3``.
+    """
+    r = _call(exe, 0, stdin="&PL NSMAX=4 /\n")
+    assert r["IERR"] == 0 and r["NSMAX"] == 4, r["output"]
+    assert r["PT"][2:] == r["PT0"][2:], r["output"]   # the marks of species 3 and 4
+    assert r["PU"] == r["PU0"], r["output"]
+    return r
+
+
 def test_mode_0_asks_again_after_plcheck_refuses_a_read_that_raised_nsmax(tmp_path):
-    """MODELG=26 is refused by plcheck; MODE=0 goes back to label 1 with NSMAX=4."""
-    r = _run(tmp_path, 0, stdin="&PL NSMAX=4, MODELG=26 /\n&PL MODELG=2 /\n")
+    """MODELG=26 is refused by plcheck; MODE=0 goes back to label 1 with NSMAX=4.
+
+    The second read gives no PT and no PU: they end as after a read of NSMAX=4
+    that nothing refused.
+    """
+    exe = _build(tmp_path)
+    r = _call(exe, 0, stdin=MODE_0_RETRY)
     assert r["IERR"] == 0, r["output"]
+    assert r["NSMAX"] == 4, r["output"]
+    assert "XX plcheck: INVALID MODELG" in r["output"]
+    reference = _after_a_good_read_of_nsmax_4(exe)
+    assert r["PT"] == reference["PT"], r["output"]
+    assert r["PU"] == reference["PU"], r["output"]
+
+
+def test_mode_0_restores_at_end_of_input_after_a_read_that_raised_nsmax(tmp_path):
+    """As above, but the input ends where MODE=0 asks again: the read at label 1
+    fails, and PT and PU of all four species come back from the backups taken
+    there with NSMAX=4."""
+    exe = _build(tmp_path)
+    r = _call(exe, 0, stdin=MODE_0_INPUT_ENDS)
+    assert r["IERR"] == 1, r["output"]   # TASK_PARM: end of the standard input
+    assert r["NSMAX"] == 4, r["output"]
+    assert "XX plcheck: INVALID MODELG" in r["output"]
+    reference = _after_a_good_read_of_nsmax_4(exe)
+    assert r["PT"] == reference["PT"], r["output"]
+    assert r["PU"] == reference["PU"], r["output"]
+
+
+@pytest.mark.parametrize(
+    "stdin, ierr",
+    [(MODE_0_RETRY, 0), (MODE_0_INPUT_ENDS, 1)],
+    ids=["second_read_succeeds", "input_ends"],
+)
+def test_mode_0_retry_keeps_its_backups_in_bounds(tmp_path, stdin, ierr):
+    """The two inputs above with ``pl/plparm.f90`` compiled here with the bounds
+    check: at label 1 the backups hold the four species of the retry. Backups
+    sized for the two species at entry end the driver at the first index past
+    them, whatever the platform does with an overrun it does not check."""
+    r = _call(_build(tmp_path, bounds_checked=True), 0, stdin=stdin)
+    assert r["IERR"] == ierr, r["output"]
     assert r["NSMAX"] == 4, r["output"]
     assert "XX plcheck: INVALID MODELG" in r["output"]
 
