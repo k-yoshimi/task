@@ -1,7 +1,7 @@
 # Decision record — regenerate the `wrx_demo`, `wrx_iter01`, `wrx_jt60` equivalence baselines for the rl-binning change of `wrx/wrcalpwr.f90`
 
 - **Date:** 2026-10-21
-- **Status:** PROPOSED. Quantified by K. Yoshimi on #226 (2026-10-13, comments "wrx gate: quantified shift and a baseline-layout problem" and its follow-up); measured again here. Physics sign-off by the module lead pending.
+- **Status:** ACCEPTED. Physics sign-off by Prof. A. Fukuyama: the rl bin width `(rlmax-rlmin)/nrlmax`, in place of `(rlmax-rlmin)/(nrlmax-1)`, is the correct change (reported by H. Li on 2026-11-22). Quantified by K. Yoshimi on #226 (2026-10-13, comments "wrx gate: quantified shift and a baseline-layout problem" and its follow-up); measured again here.
 - **Scope:** upstream PR #226 (`merge/upstream-reconcile-2026-07`), after the merge of `develop` `ea9806ac`.
 - **Affects:** `test_run/baselines/wrx_demo/metrics.json`, `wrx_iter01/metrics.json`, `wrx_jt60/metrics.json` (the 1e-10 equivalence baselines of `python/wrxlib/tests/test_equivalence.py`).
 - **Adds to:** `2026-06-29-tot-ht6m-qsolver-baseline.md`, whose wrx failures were `pwr_tot` compiler drift and which could not see the array change described here.
@@ -71,6 +71,6 @@ species-major. The 1e-10 tolerance is unchanged.
 
 ## 4. Decision
 
-Take the post-change values as the reference for the three cases, pending the module lead's physics sign-off on the rl
-binning. If the lead prefers the old node-based binning, the change to revert is the two lines in §1, and the three
-baselines are captured again from CI.
+Take the post-change values as the reference for the three cases. Prof. A. Fukuyama confirmed the bin width (the
+status line above), so the node-based binning is not kept and the three baselines stay as captured in §3. The
+confirmation is of the bin width; the formula of `pos_pwrmax_rl_nsa_nray` (§2) is not part of it and stays as it is.
