@@ -14,4 +14,13 @@ trlib fixtures so the equivalence / sweep drivers stay schema-uniform:
 * ``MODE``              -- int, the ``eq.run(mode=...)`` argument
                            (1 = real EQDSK load via ``equnit::eq_load``)
 * ``apply(eq)``         -- callable that applies all of the above
+
+Data files:
+
+* ``iter_taskeq.geqdsk`` -- the GEQDSK file that ``test_modelg25_geqdsk.py``
+  loads with ``MODELG`` 5 and 25 (25 KB, COCOS 1, flux per radian). It is
+  TASK/EQ's own output: the ``MODELG=2`` equilibrium with ``RR=6.2``,
+  ``RA=2.0``, ``RB=2.4``, ``RKAP=1.7``, ``RDLT=0.33``, ``BB=5.3``, ``RIP=15``
+  on the default 33 x 33 grid, written as GEQDSK by the TASK web client's
+  exporter.
 """

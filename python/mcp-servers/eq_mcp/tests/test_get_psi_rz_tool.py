@@ -98,6 +98,8 @@ def test_get_psi_rz_via_mcp():
                 await session.initialize()
                 refused = await session.call_tool("get_psi_rz", {})
                 assert refused.isError, refused   # no equilibrium yet (#227 item 6)
+                assert ("no equilibrium of the present parameters"
+                        in refused.content[0].text), refused
                 ran = await session.call_tool("run", {"mode": 0})
                 assert not ran.isError, ran
                 result = await session.call_tool("get_psi_rz", {})

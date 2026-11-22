@@ -71,10 +71,15 @@ def test_the_field_is_indexed_r_then_z():
 
 
 def test_the_shape_follows_the_grid_counts():
+    """NRGMAX=65 with NZGMAX=33: a grid that is not square is where a mixed-up
+    layout would show, so the field is checked for its symmetry here too."""
     with eqlib.Eq() as e:
         e.set_param("NRGMAX", 65)
         e.run(0)
-        assert e.get_psi_rz().shape == (65, 33)
+        psi = e.get_psi_rz()
+    assert psi.shape == (65, 33)
+    assert np.max(np.abs(psi - psi[:, ::-1])) < 1e-10 * np.max(np.abs(psi))
+    assert np.max(np.abs(psi - psi[::-1, :])) > 1e-2 * np.max(np.abs(psi))
 
 
 def test_before_any_run_is_refused():
