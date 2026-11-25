@@ -45,7 +45,17 @@ was generated on clavius
 (memory `reference_clavius_baseline_regen.md`) and is exercised on
 every push by `.github/workflows/python-tests.yml` line 323's
 whole-tree pytest (which sweeps the 7 module `test_equivalence.py`
-suites).
+suites). The exception is `tot_ht6m_short`: its baseline was
+regenerated with the 4*pi**2 correction of EQ's T(psi) by
+`.github/workflows/regen-baselines.yml` on a GitHub `ubuntu-24.04`
+runner with gfortran 13.3.0 (run 45555967982 of
+HengyuLi-Ozaki-lab/task, 2026-11-25, on a scratch branch holding develop
+`47aa06f2` with the fix), together with
+`python/totlib/tests/fixtures/eqdata-HT6M`, the eqdata that run solved
+(`test_run/test_output/tot_ht6m_short/eqdata-HT6M`; the scratch branch
+added a step to keep it, which the workflow does not have). The mono job
+of `python-tests.yml` solves no eqdata and loads that committed file, so
+the two are regenerated together.
 
 ## Non-Linux behavior
 

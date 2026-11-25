@@ -206,17 +206,26 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
     `MDLEQF` 1 to 4 and 6 to 9 are unchanged.
   - **Reference data.** The equivalence baseline of `tot_ht6m_short`, whose
     equilibrium CI solves with the standalone `tot` before the test, moves
-    by at most 7.3e-6 relative. Data made earlier with the old T:
+    by at most 7.3e-6 relative. It and its eqdata
+    `python/totlib/tests/fixtures/eqdata-HT6M` are regenerated together on
+    the CI compiler: the eqdata is the file the same `regen-baselines.yml`
+    run solved (`test_run/test_output/tot_ht6m_short/eqdata-HT6M`), which
+    the workflow does not keep by itself. It differs from the old file in T
+    and what is computed from it, and elsewhere by round-off (the old file
+    was made on another build). Data made earlier with the old T:
     - the baselines `test_run/baselines/eq_iter01`, `eq_tst2`, `eq_jt60`
       (standalone solves; `eq_jt60` with `MDLEQA` 1), and `tr_iter01`,
       `tr_tst2`, which run on those equilibria;
     - the committed `eqdata.ITER01` / `eqdata.TST-2` under
       `python/eqlib/tests/fixtures/` and `python/trlib/tests/fixtures/`,
-      and `python/totlib/tests/fixtures/eqdata-HT6M` / `eqdata.demo2014`.
+      and `python/totlib/tests/fixtures/eqdata.demo2014`.
     A test that loads one of those committed files (MODELG 3) is unchanged:
-    the load path does not compute T. In CI, `tot_ht6m_short` loads the file
-    CI has just solved instead. A fresh standalone solve of any of these
-    cases gives the new T. So a local `test_run/run_tests.sh` reports a
+    the load path does not compute T. CI's pytest jobs run `tot_ht6m_short`
+    on the file they have just solved; the mono job, which solves none, and
+    `test_mono_bpsd_smoke.py` and `test_mono_pipeline_coupling.py` load the
+    committed `eqdata-HT6M`, so that file changes with the baseline. A fresh
+    standalone solve of any of these cases gives the new T. So a local
+    `test_run/run_tests.sh` reports a
     regression for `eq_iter01`, `eq_tst2` and `eq_jt60` and skips the
     `tr_*` cases that depend on them; after it, on Linux, the eqlib
     equivalence tests, which prefer its `test_output/<case>/` eqdata to the
