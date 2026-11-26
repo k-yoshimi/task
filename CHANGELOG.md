@@ -273,6 +273,18 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
   `EBADF`; another error means fd 2 is there, so it is left alone and the
   installation fails before changing anything. A host's `sys.stdout` whose
   `flush` raises an `Exception` no longer stops the installation.
+- **trx: two source terms in `trx/trcalc.f90`** (suggested in the review of
+  #226; the two lines of bpsi's `e296d125`). The He-4 particle source
+  (`MDLEQ0=0`) added `SPSC_NSNR(NS_He4,NS)`, the species index in place of
+  the radial one, so a particle source into He-4 (`MDLPSC`, `NSPSC=NS_He4`)
+  was taken at grid point `NS_He4` at every radius; it is
+  `SPSC_NSNR(NS_He4,NR)`, as for the other species.
+  The T heat source took D's share of the charge-exchange loss,
+  `PN(NS_D)*PCX(NR)/(PN(NS_D)+PN(NS_T))`; it takes `PN(NS_T)` now, and the
+  D and T shares add up to `PCX`. Results change only for a particle source
+  into He-4 with the densities evolved (`MDLEQN=1`), and for runs with a
+  neutral density (`NSMAX>=8`, or `MDLEQ0=1`) and `PN(NS_D)` other than
+  `PN(NS_T)`.
 
 ## TR Phase L — library-ization (2026-04-18)
 
