@@ -2,7 +2,7 @@
 
 MODULE trcomm_parm
 
-  USE plcomm
+  USE plcomm,pt_pl=>PT  ! renamed: plcomm_parm's PT(NSM) would clash with trm's own PT
   USE commpi
   IMPLICIT NONE
 

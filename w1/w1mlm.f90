@@ -44,6 +44,7 @@ CONTAINS
           KK = (NX-1)*2 + N
           DX = RKV*(XA(NX+1)-XA(NX))
           CK = SQRT(CSOL(N,NX))
+!          IF(MOD(NX,100).EQ.1) WRITE(6,'(A,2I6,2ES12.4)') '@@@ ',NX,N,CSOL(N,NX)
           IF(ABS(AIMAG(CK)*DX).GT.EXPARG) THEN
              IF(AIMAG(CK).GE.0.D0) THEN
                 CK = DCMPLX(DBLE(CK), EXPARG/DX)
@@ -52,6 +53,7 @@ CONTAINS
              ENDIF
           ENDIF
           CSKX ( KK ) =   CK
+!          IF(MOD(NX,100).EQ.1) WRITE(6,'(A,2I6,2ES12.4)') '@@@ ',NX,N,CSOL(N,NX)
 
           CDTXX = CD0(1,NX) + CSOL(N,NX)*CD2(1,NX)
           CDTXY = CD0(2,NX) + CSOL(N,NX)*CD2(2,NX)

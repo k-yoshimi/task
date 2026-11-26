@@ -2,9 +2,10 @@
 !
 ! Phase L-2/L-3: C ABI entry points for libeqapi.
 !
-! Ten BIND(C) functions are exposed (eq_validate, eq_save and the layout
-! queries eq_state_abi_version / eq_state_size are described where they
-! are defined, at the end of the module):
+! Eleven BIND(C) functions are exposed (eq_validate, eq_save,
+! eq_get_psi_rz and the layout queries eq_state_abi_version /
+! eq_state_size are described where they are defined, at the end of the
+! module):
 !
 !   eq_init           -> marks the library as initialized (idempotent)
 !                        and returns EQ_OK. Does NOT touch the legacy
@@ -66,7 +67,7 @@ MODULE eq_api
   PRIVATE
   PUBLIC :: eq_api_init, eq_api_run, eq_api_get_state, &
             eq_api_set_param, eq_api_set_param_str, eq_api_finalize, &
-            eq_api_validate, eq_api_save
+            eq_api_validate, eq_api_save, eq_api_get_psi_rz
 
   ! Error codes. Must match eq_api.h.
   INTEGER(C_INT), PARAMETER :: EQ_OK              = 0
@@ -135,7 +136,8 @@ CONTAINS
   !   mode == 1 : load equilibrium from the file pointed to by KNAMEQ,
   !               then run eq_bpsd_init / eqcalq / eq_bpsd_put via
   !               equnit::eq_load. Mirrors the legacy `L` command.
-  !               Requires MODELG ∈ {3, 5, 8} and a valid KNAMEQ.
+  !               Requires a MODELG that EQ_READ (eq/eqfile.f90) loads
+  !               from KNAMEQ (3, 5, 8, 9, 25) and a valid KNAMEQ.
   !   other     : EQ_ERR_NOT_IMPL (reserved for future modes).
   !-------------------------------------------------------------------
   FUNCTION eq_api_run(mode) RESULT(ierr) BIND(C, NAME="eq_run")
@@ -601,6 +603,46 @@ CONTAINS
     END IF
     ierr = EQ_OK
   END FUNCTION eq_api_save
+
+  !=====================================================================
+  ! eq_get_psi_rz : copy the poloidal flux PSIRZ of the equilibrium.
+  !
+  !   - psi_out holds nr*nz doubles in Fortran order: element (i,j) is
+  !     PSIRZ(i,j), the flux at RG(i), ZG(j); R varies fastest.
+  !   - EQ_ERR_NOT_INIT before eq_init.
+  !   - EQ_ERR_INVALID, nothing written: the fields do not hold the
+  !     equilibrium of the present parameters (the cases of eq_save: no
+  !     successful eq_run since eq_init, a later solve or load that
+  !     failed, or a set since); nr, nz other than the grid's NRGMAX,
+  !     NZGMAX (eq_get_state's nrgmax, nzgmax); a NULL psi_out.
+  !   - EQ_OK otherwise.
+  !=====================================================================
+  FUNCTION eq_api_get_psi_rz(nr, nz, psi_out) RESULT(ierr) &
+           BIND(C, NAME="eq_get_psi_rz")
+    USE eqcom1_mod, ONLY: NRGMAX, NZGMAX, PSIRZ
+    INTEGER(C_INT), VALUE, INTENT(IN) :: nr, nz
+    TYPE(C_PTR),    VALUE, INTENT(IN) :: psi_out
+    INTEGER(C_INT) :: ierr
+    REAL(C_DOUBLE), POINTER :: psi(:,:)
+    IF (.NOT. g_initialized) THEN
+       ierr = EQ_ERR_NOT_INIT
+       RETURN
+    END IF
+    IF (.NOT. g_has_equilibrium .OR. &
+        g_equilibrium_generation /= eq_param_generation()) THEN
+       WRITE(6,*) 'XX eq_get_psi_rz: no equilibrium of the present', &
+                  ' parameters: call eq_run first'
+       ierr = EQ_ERR_INVALID
+       RETURN
+    END IF
+    IF (nr /= NRGMAX .OR. nz /= NZGMAX .OR. .NOT. C_ASSOCIATED(psi_out)) THEN
+       ierr = EQ_ERR_INVALID
+       RETURN
+    END IF
+    CALL C_F_POINTER(psi_out, psi, [INT(nr), INT(nz)])
+    psi(:,:) = PSIRZ(1:nr, 1:nz)
+    ierr = EQ_OK
+  END FUNCTION eq_api_get_psi_rz
 
   !-------------------------------------------------------------------
   ! eq_state_abi_version / eq_state_size : layout query (#246).

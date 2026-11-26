@@ -6,9 +6,11 @@ MODULE trparm
   NAMELIST /TR/ &
        RR,RA,RB,RKAP,RDLT,BB,RIPS,RIPE,RHOA, &
        NSMAX,NSZMAX,NSNMAX, &
-       PM,PZ,PN,PNS,PT,PTS,PU,PUS, &
+       PA,PZ,NPA,ID_NS,KID_NS, &
+       PN,PNS,PNM,PT,PTS,PTM,PTPR,PTPP,PU,PUS,PUM,PUPR,PUPP, &
+       PROFN1,PROFN2,PROFN3,PROFT1,PROFT2,PROFT3,PROFU1,PROFU2,PROFU3, &
+       PROFJ1,PROFJ2,ALP, &
        MDLIMP,PNC,PNFE,PNNU,PNNUS, &
-       PROFN1,PROFN2,PROFT1,PROFT2,PROFU1,PROFU2, &
        PROFNU1,PROFNU2,PROFJ1,PROFJ2,ALP, &
        model_prof,knam_prof,knam_profn_time,knam_proft_time, &
        AD0,AV0,CNP,CNH,CDP,CDH,CNN,CDW, &
@@ -76,10 +78,41 @@ CONTAINS
       INTEGER,INTENT(IN) :: MODE
       CHARACTER(LEN=*),INTENT(IN)::  KIN
       INTEGER,INTENT(OUT):: IERR
+      REAL(rkind):: pt_save(nsmax),pu_save(nsmax)
+      INTEGER:: ns
 
-    1 CALL TASK_PARM(MODE,'TR',KIN,tr_nlin,trplst,IERR)
-      IF(IERR.NE.0) RETURN
+1     CONTINUE
+      DO ns=1,nsmax
+         pt_save(ns)=pt(ns)
+         pu_save(ns)=pu(ns)
+         pt(ns)=0.d0
+         pu(ns)=0.d0
+      END DO
+      CALL TASK_PARM(MODE,'TR',KIN,tr_nlin,trplst,IERR)
+      IF(IERR.NE.0) THEN
+         DO ns=1,nsmax
+            pt(ns)=pt_save(ns)
+            pu(ns)=pu_save(ns)
+         END DO
+         RETURN
+      END IF
 
+      DO ns=1,nsmax
+         IF(pt(ns).EQ.0.d0) THEN
+            pt(ns)=(ptpr(ns)+2.D0*ptpp(ns))/3.D0
+         ELSE
+            ptpr(ns)=pt(ns)
+            ptpp(ns)=pt(ns)
+         END IF
+         
+         IF(pu(ns).EQ.0.D0) THEN
+            pu(ns)=pupr(ns)
+         ELSE
+            pupr(ns)=pu(ns)
+            pupp(ns)=0.D0
+         END IF
+      END DO
+      
       CALL TRCHEK(IERR)
       NTMAX_SAVE=NTMAX
       IF(MODE.EQ.0.AND.IERR.NE.0) GOTO 1
@@ -119,9 +152,11 @@ CONTAINS
       RETURN
 
   601 FORMAT(' ','# &TR : RR,RA,RB,RKAP,RDLT,BB,RIPS,RIPE,RHOA'/ &
-             ' ',8X,'(PM,PZ,PN,PNS,PT,PTS:NSM)'/ &
+             ' ',8X,'PA,PZ,ID_NS,KID_NS,PN,PNS,PNM:NSM'/ &
+             ' ',8X,'PT,PTS,PTM,PTPR,PTPP,PU,PUS,PUM,PUPR,PUPP:NSM'/ &
+             ' ',8X,'PROFN1,PROFN2,PROFN3:NSM'/ &
+             ' ',8X,'PROFT1,PROFT2,PROFT3,PROFU1,PROFU2,PROFU3:NSM'/ &
              ' ',8X,'PNC,PNFE,PNNU,PNNUS'/ &
-             ' ',8X,'PROFN1,PROFN2,PROFT1,PROFT2,PROFU1,PROFU2'/ &
              ' ',8X,'PROFJ1,PROFJ2,ALP'/ &
              ' ',8X,'CK0,CK1,CNP,CNH,CDP,CDH,CNN,CDW,CSPRS'/ &
              ' ',8X,'CWEB,CALF,CKALFA,CKBETA,MDLKNC,MDLTPF'/ &

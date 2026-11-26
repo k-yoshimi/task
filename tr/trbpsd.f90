@@ -9,6 +9,8 @@ MODULE trbpsd
   type(bpsd_metric1D_type),private,save :: metric1D
   type(bpsd_plasmaf_type), private,save :: plasmaf
   LOGICAL, PRIVATE, SAVE :: tr_bpsd_init_flag = .TRUE.
+  REAL(8), PUBLIC, SAVE :: tr_rip_eq = 0.D0  ! EQ boundary-loop Ip [MA] (monitor/init-scaling)
+  LOGICAL, PUBLIC, SAVE :: tr_eq_init = .TRUE.  ! .TRUE. during init (adopt EQ psi_p)
   PRIVATE
   PUBLIC tr_bpsd_init,tr_bpsd_get,tr_bpsd_put
 
@@ -162,10 +164,19 @@ CONTAINS
       USE trcomm
       integer,intent(out) :: ierr
 ! local variables
-      integer :: ns,nr
-      real(rkind)    :: temp(nrmp,nsm,3)
-      real(rkind)    :: tempx(nrmp,17),psita,dpsitdrho,dvdrho,rgl
+      integer :: ns,nr,nrtmp,nrqp
+! temp/tempx made ALLOCATABLE: bpsd_get_data(plasmaf) can return
+! plasmaf%nrmax > nrmp (=nrmax+1) for file-baked fixtures such as
+! eqdata.TST-2 (nrmax=50 -> nrmp=51 but plasmaf%nrmax=52), which made the
+! former fixed-size temp(nrmp,...)/tempx(nrmp,...) overflow by one row
+! (k-yoshimi/task#203 bug-B). Size to whichever is larger so the copy loops
+! that iterate 1..plasmaf%nrmax stay in bounds.
+      real(rkind), allocatable :: temp(:,:,:)
+      real(rkind), allocatable :: tempx(:,:)
+      real(rkind)    :: psita,dpsitdrho,dvdrho,rgl
       REAL(rkind)    :: FACTOR0, FACTORM, FACTORP
+      REAL(rkind)    :: rdpv_eq(nrmp)     ! EQ's dpsi/dV (not adopted for modelg=9)
+      REAL(rkind)    :: rip_eq            ! EQ boundary-loop Ip (-> tr_rip_eq)
 !=======================================================================
 
       call bpsd_get_data(device,ierr)
@@ -182,6 +193,12 @@ CONTAINS
 
       call bpsd_get_data(plasmaf,ierr)
 
+! Size the work arrays now that plasmaf%nrmax is known. nrmp = nrmax+1, but
+! plasmaf%nrmax can exceed that for file-baked fixtures (see decl comment).
+      nrtmp=max(plasmaf%nrmax,nrmp)
+      allocate(temp(nrtmp,nsm,3))
+      allocate(tempx(nrtmp,17))
+
       do ns=1,plasmaf%nsmax
          do nr=1,plasmaf%nrmax
             temp(nr,ns,1)=plasmaf%data(nr,ns)%density*1.d-20
@@ -189,7 +206,11 @@ CONTAINS
             temp(nr,ns,3)=plasmaf%data(nr,ns)%velocity_tor
          enddo
       enddo
-      do nr=2,plasmaf%nrmax
+! qp is allocated to size NRMAX, so the qp(nr-1) write must stop at NRMAX
+! (=nrmax+1-1). plasmaf%nrmax may be larger; clamp the upper bound so the
+! one-past-end write (qp(51) for TST-2) cannot occur (k-yoshimi/task#203 bug-B).
+      nrqp=min(plasmaf%nrmax,nrmax+1)
+      do nr=2,nrqp
          qp(nr-1)=1.d0/plasmaf%qinv(nr)
       enddo
       Q0=2.d0*qp(1)-qp(2)
@@ -306,7 +327,14 @@ CONTAINS
       RMJRHO  (1:nrmax)=tempx(2:nrmax+1,10) ! local R
       RMNRHO  (1:nrmax)=tempx(2:nrmax+1,11) ! local r
       RKPRHOG (1:nrmax)=tempx(2:nrmax+1,12) ! local kappa
-      RDPVRHOG(1:nrmax)=tempx(2:nrmax+1,13) ! dpsi/dV
+      rdpv_eq (1:nrmax)=tempx(2:nrmax+1,13) ! EQ's dpsi/dV (monitor)
+!     For the q-solver coupling (modelg=9) after initialization, the transport
+!     owns psi_p (evolved by the current diffusion equation), so do NOT
+!     overwrite it with EQ's dpsi/dV. During initialization (tr_eq_init) and
+!     for the other modelg, adopt EQ's dpsi/dV.
+      if(modelg.ne.9 .or. tr_eq_init) then
+         RDPVRHOG(1:nrmax)=rdpv_eq(1:nrmax) ! dpsi/dV
+      endif
       ABVRHOG (1:nrmax)=tempx(2:nrmax+1,14) ! <|grad V|^2/R^2>
 
       PVOLRHOG(1:nrmax)=tempx(2:nrmax+1,15) ! Plasma volume
@@ -314,7 +342,14 @@ CONTAINS
 
       do nr=1,nrmax
 !         RDP(nr)=TTRHOG(nr)*ARRHOG(nr)*DVRHOG(nr)/(4.D0*PI**2*QP(nr))
-         RDP(nr)=DVRHOG(nr)*RDPVRHOG(nr)
+         if(modelg.eq.9 .and. .not.tr_eq_init) then
+!           RDP(=dpsi/drho) is the transport current-diffusion state variable.
+!           Keep it and recompute dpsi/dV on the updated metric (DVRHOG).
+            RDPVRHOG(nr)=RDP(nr)/DVRHOG(nr)
+         else
+!           Init / other modelg: adopt EQ's psi_p -> RDP from EQ dpsi/dV.
+            RDP(nr)=DVRHOG(nr)*RDPVRHOG(nr)
+         endif
       enddo
 !      BP(1:NRMAX) =AR1RHOG(1:NRMAX)*RDP(1:NRMAX)/RR
 
@@ -367,8 +402,15 @@ CONTAINS
 !      write(6,'(1P5E12.4)') (rt(nr,1),nr=1,nrmax)
 !      pause
 
+      ! EQ boundary-loop Ip (from EQ's dpsi/dV) -- monitor / init-scaling
+      rip_eq = ABVRHOG(NRMAX)*rdpv_eq(NRMAX)/(2.D0*PI*RMU0)*1.D-6
+      tr_rip_eq = rip_eq
       ! Calibration in order to keep consistency between metrics and plasma current
-      if(modelg.eq.3.or.modelg.eq.5.or.modelg.eq.8.or.modelg.eq.9) then
+      ! modelg=9 is excluded: for the q-solver coupling the plasma current is the
+      ! transport command (RIPS/RIPE) and must not be overwritten here.
+      ! Consistency with the commanded Ip is set by the q-scaling at
+      ! initialization (see tr_set_metric).
+      if(modelg.eq.3.or.modelg.eq.5.or.modelg.eq.8) then
          RIP  = ABVRHOG(NRMAX)*RDPVRHOG(NRMAX)/(2.D0*PI*RMU0)*1.D-6
          RIPS = RIP
          RIPE = RIP
@@ -376,6 +418,8 @@ CONTAINS
 
       endif
 
+      if(allocated(temp))  deallocate(temp)
+      if(allocated(tempx)) deallocate(tempx)
       return
   END SUBROUTINE tr_bpsd_get
 

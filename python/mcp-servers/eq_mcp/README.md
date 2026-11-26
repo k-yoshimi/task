@@ -24,7 +24,7 @@ pip install -e python/mcp-servers/eq_mcp
 
 ```bash
 python -m eq_mcp.server --help
-python -m eq_mcp.server --print-tools   # 12 tool names, sorted
+python -m eq_mcp.server --print-tools   # 13 tool names, sorted
 ```
 
 ## Use from Claude
@@ -70,6 +70,7 @@ stream is not recognised and fd 1 goes to stderr as usual.
 | `set_params`        | bulk dispatch (scalar / list / dict / str) |
 | `run`               | `eq_run(mode)`; `mode=1` the equilibrium-file load (default; fails with the default `MODELG=2`), `mode=0` the Grad-Shafranov solve, no file (with `MODELG=2`) |
 | `get_state`         | grid counters, 12 scalars, profile arrays |
+| `get_psi_rz`        | the 2-D PSI(R,Z) field with the RG/ZG grid, after a successful `run` and before the next `set_param` of anything but `MODEFR` and `MODEFW` (needs numpy) |
 | `validate`          | pre-run diagnostics (Issue #143) |
 | `save`              | write the equilibrium of the last `run` to a TASK/EQ binary file (`eq_save`); an existing file is replaced only with `overwrite=true`; an error when the file was not opened or is shorter than what was written |
 | `describe_parameters` / `describe_state_schema` | discovery / schema |

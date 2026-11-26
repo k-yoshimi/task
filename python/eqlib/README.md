@@ -207,6 +207,16 @@ both (the `eq_init` or `EQINIT` of the other modules' init, `eq_load` and
 another module's registry, such as `ti:RR`), and `save` then writes what
 the fields hold (#260).
 
+### `Eq.get_psi_rz() -> numpy.ndarray`
+
+The 2-D poloidal flux `PSIRZ` of the equilibrium (`eq_get_psi_rz`; needs
+numpy): a new float64 array of shape `(nrgmax, nzgmax)`, indexed
+`psi[i_r, i_z]` on the `rg`, `zg` grids of `get_state()`. It raises
+`EqlibInvalidParamError` in the cases in which `save` does: no `run` since
+the handle was opened, a later solve or load that failed, or `set_param` of
+anything but `MODEFR` and `MODEFW` since the last one (run again first).
+The same holds for the mono image as for `save` (#260).
+
 ### `Eq.close() -> None`
 
 Idempotent. The context manager calls this automatically on exit.
@@ -327,10 +337,10 @@ These three behaviours catch new users:
 - **`eq_run` has only two modes.** `mode=0` (the Grad-Shafranov
   solve) and `mode=1` (the file load); a mode above 1 raises
   `EqlibNotImplementedError`.
-- **2-D fields not yet exported.** The current `eq_state_t` carries
-  1-D psi-surface profiles, R/Z grids, and 12 scalars only. `PSIRZ`,
-  `RPS(NPSM, NTHM)`, and `ZPS(NPSM, NTHM)` will require a future
-  C-ABI extension.
+- **One 2-D field exported.** The current `eq_state_t` carries
+  1-D psi-surface profiles, R/Z grids, and 12 scalars only. `PSIRZ`
+  comes through `eq_get_psi_rz` (`Eq.get_psi_rz()`); `RPS(NPSM, NTHM)`
+  and `ZPS(NPSM, NTHM)` will require a future C-ABI extension.
 - **Only seven string keys are wired.** Other character-valued
   namelist entries in `eqparm` (if any are added later) need
   registry extension.

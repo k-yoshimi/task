@@ -25,6 +25,8 @@ extern "C" {
  *   - eq_save   : writes the TASK/EQ binary file named by KNAMEQ (EQSAVE).
  *                 Fails (see eq_save below) when the file was not opened
  *                 or is shorter than what was written.
+ *   - eq_get_psi_rz : the 2-D poloidal flux PSI(R,Z) of the equilibrium
+ *                 (see eq_get_psi_rz below).
  *
  * Memory note: every array in eq_state_t is fixed-size (max-capacity).
  * Valid runtime slots are 1..nrmax / 1..npsmax / 1..nrgmax / etc.;
@@ -216,6 +218,20 @@ int eq_validate(eq_diag_entry_t* diag, int diag_cap, int* ndiag_out);
    such as ti:RR), and eq_save then writes what the fields hold (#260).
    tot's eq: parameters go through the registry and are seen. */
 int eq_save(void);
+
+/* Copy the poloidal flux PSI(R,Z) of the equilibrium (PSIRZ) into
+   psi_out: nr*nz doubles in Fortran order, psi_out[i + j*nr] is the flux
+   at the grid point (RG[i], ZG[j]) of eq_state_t (i, j from 0); R varies
+   fastest. nr and nz are the grid's counts, eq_get_state's nrgmax and
+   nzgmax.
+   EQ_ERR_NOT_INIT    before eq_init.
+   EQ_ERR_INVALID     nothing is written: the fields do not hold the
+                      equilibrium of the present parameters (as for
+                      eq_save: no successful eq_run since eq_init, a later
+                      solve or load that failed, a set since); nr or nz
+                      other than the grid's counts; a NULL psi_out.
+   EQ_OK              otherwise. */
+int eq_get_psi_rz(int nr, int nz, double* psi_out);
 
 #ifdef __cplusplus
 }

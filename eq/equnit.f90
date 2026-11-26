@@ -45,15 +45,46 @@
 !=======================================================================
 !            calculate equilibrium
 !-----------------------------------------------------------------------
-      subroutine eq_calc
+!     ierr (optional): 0 when the equilibrium was calculated and put to
+!     BPSD. Otherwise the step named on unit 6 failed and the steps after
+!     it were not run, so a failure before the put leaves the previous
+!     equilibrium in BPSD. EQLOOP using up NLPMAX without converging
+!     (EQCALC's ierr=100) is not a failure here: EQCALC goes on after it
+!     and so does this routine.
+!     A call without ierr runs the four steps whatever they return, as
+!     this routine always did.
+!-----------------------------------------------------------------------
+      subroutine eq_calc(ierr)
 
       implicit none
-      integer ierr
+      integer, intent(out), optional :: ierr
+      integer :: ierr_step
 !-----------------------------------------------------------------------
+      if(.not.present(ierr)) then
+         call eq_bpsd_get(ierr_step)
+         call eqcalc(ierr_step)
+         call eqcalq(ierr_step)
+         call eq_bpsd_put(ierr_step)
+         return
+      endif
+
       call eq_bpsd_get(ierr)
+      if(ierr.ne.0) then
+         write(6,*) 'XX eq_calc: eq_bpsd_get: ierr=',ierr
+         return
+      endif
       call eqcalc(ierr)
+      if(ierr.ne.0.and.ierr.ne.100) then
+         write(6,*) 'XX eq_calc: eqcalc: ierr=',ierr
+         return
+      endif
       call eqcalq(ierr)
+      if(ierr.ne.0) then
+         write(6,*) 'XX eq_calc: eqcalq: ierr=',ierr
+         return
+      endif
       call eq_bpsd_put(ierr)
+      if(ierr.ne.0) write(6,*) 'XX eq_calc: eq_bpsd_put: ierr=',ierr
       return
       end subroutine eq_calc
 !=======================================================================
@@ -108,7 +139,10 @@
 
       implicit none
 !-----------------------------------------------------------------------
-      call eqgout(0)
+!     MODE=1: the coupled eq_calc has done EQCALC+EQCALQ (same as the
+!     standalone solve), so both the (sigma,theta) GS solution (C series)
+!     and the flux-surface-averaged quantities (S series) are available.
+      call eqgout(1)
       return
       end subroutine eq_gout
 !=======================================================================

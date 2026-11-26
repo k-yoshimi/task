@@ -9,7 +9,7 @@ focuses on the parts specific to `eq`.
 
 ## Entry layer (`eq_api.f90`)
 
-There are **six** functions callable from C, plus `eq_validate` and `eq_save`. The
+There are **six** functions callable from C, plus `eq_validate`, `eq_save` and `eq_get_psi_rz`. The
 defining feature of `eq` is the additional `eq_set_param_str` (for
 string parameters) on top of the standard five.
 
@@ -23,6 +23,7 @@ string parameters) on top of the standard five.
 | `eq_finalize`       | `eq_api_finalize`       | re-arms the SAVE flag via `eq_bpsd_reset` |
 | `eq_validate`       | `eq_api_validate`       | grid-dimension + `KNAMEQ` file-existence checks |
 | `eq_save`           | `eq_api_save`           | writes the equilibrium of the last `eq_run` to the file named by `KNAMEQ` (`EQSAVE`); an error when the file was not opened or is shorter than what was written |
+| `eq_get_psi_rz`     | `eq_api_get_psi_rz`     | copies the 2-D poloidal flux `PSIRZ` (R index fastest); `EQ_ERR_INVALID` when there is no equilibrium of the present parameters (the cases of `eq_save`) |
 
 All are bound to fixed C ABI symbols via `BIND(C, NAME="eq_xxx")`.
 

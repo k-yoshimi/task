@@ -108,6 +108,29 @@ contains
     real(8) :: TIME0, DIP, EPSabs
     real(8), dimension(1:NQMAX) :: tiny_array
     character(len=80) :: MSG_NQ
+#ifdef TX_PROFILE
+    real(8) :: prof_total_t0, prof_total_t1
+    real(8) :: prof_ic_t0, prof_ic_t1
+    real(8) :: prof_t0, prof_t1
+    real(8) :: prof_ic_sum, prof_txcala_sum, prof_txcalb_sum, prof_solver_sum, prof_io_sum
+#endif
+#ifdef TX_SOLVER_BENCH
+    logical, save :: solver_bench_done = .false.
+    integer(4) :: solver_bench_unit
+    integer(4) :: m_bench, n_bench, kl_bench, ku_bench, ldbl_bench, ldbx_bench
+    character(len=*), parameter :: solver_bench_matrix_file = 'solver_bench_matrix.bin'
+    character(len=*), parameter :: solver_bench_solution_file = 'solver_bench_solution_ref.bin'
+#endif
+#ifdef TX_SOLVER_VERIFY
+    logical, save :: solver_verify_done = .false.
+    real(8), dimension(:,:), allocatable :: bl_verify
+    real(8), dimension(:), allocatable :: bx_rhs_verify, bx_ref_verify
+    real(8) :: verify_max_abs, verify_max_rel, verify_max_rel_floor, verify_scale, verify_diff
+    integer(4) :: verify_i, ierr_verify
+#if _LAPACK == 2
+    integer(4), dimension(1:NQMAX*(NRMAX+1)) :: ipiv_verify
+#endif
+#endif
 
     allocate( BA(1:4*NQMAX-1,1:NQMAX*(NRMAX+1)) &
          &  , BL(1:6*NQMAX-2,1:NQMAX*(NRMAX+1)) &
@@ -129,6 +152,14 @@ contains
     TIME0 = T_TX
     if(NTMAX /= 0) DIP = (rIPe - rIPs) / NTMAX
     ICSUM = 0
+#ifdef TX_PROFILE
+    call CPU_TIME(prof_total_t0)
+    prof_ic_sum    = 0.d0
+    prof_txcala_sum = 0.d0
+    prof_txcalb_sum = 0.d0
+    prof_solver_sum = 0.d0
+    prof_io_sum     = 0.d0
+#endif
 
     ! Save X -> XP -> XOLD for BDF only at the beginning of the calculation
     if(IGBDF /= 0 .and. (T_TX == 0.d0 .or. ICONT /= 0)) XOLD= X
@@ -149,6 +180,9 @@ contains
 
        ! In the following loop, XN is being updated during iteration.
        L_IC : do IC = 1, ICMAX
+#ifdef TX_PROFILE
+          call CPU_TIME(prof_ic_t0)
+#endif
           ! Save past X := XP
           XP = XN
 
@@ -160,11 +194,28 @@ contains
           end if
 
           call TXCALC(IC)
+#ifdef TX_PROFILE
+          call CPU_TIME(prof_t0)
+#endif
           call TXCALA
+#ifdef TX_PROFILE
+          call CPU_TIME(prof_t1)
+          prof_txcala_sum = prof_txcala_sum + (prof_t1 - prof_t0)
+#endif
           ! Get BA or BL, and BX
+#ifdef TX_PROFILE
+          call CPU_TIME(prof_t0)
+#endif
           call TXCALB(BA,BL,BX)
+#ifdef TX_PROFILE
+          call CPU_TIME(prof_t1)
+          prof_txcalb_sum = prof_txcalb_sum + (prof_t1 - prof_t0)
+#endif
 !          call TXGLOB
 
+#ifdef TX_PROFILE
+          call CPU_TIME(prof_t0)
+#endif
           if(MDLPCK == 0) then
              call BANDRD(BA, BX, NQMAX*(NRMAX+1), 4*NQMAX-1, 4*NQMAX-1, IERR)
              if (IERR >= 30000) then
@@ -174,6 +225,89 @@ contains
                 XN = XP
                 goto 180
              end if
+          else if(MDLPCK == 2) then
+#ifdef TX_SOLVER_VERIFY
+             if(.not. solver_verify_done) then
+                allocate(bl_verify(size(BL,1), size(BL,2)), bx_rhs_verify(size(BX,1)), bx_ref_verify(size(BX,1)))
+                bl_verify = BL
+                bx_rhs_verify = BX
+             end if
+#endif
+             call TXSOLV_BLOCKTRI(BL, BX, NQMAX, NRMAX, ierr_la)
+             if(ierr_la == -2 .or. ierr_la > 0) then
+                ! Fallback to the band solver on the structural case (-2) and on
+                ! any LAPACK factorization failure (always positive, see below).
+                ! IER=-1 (BL/BX too small, txexec.f90:1092) is deliberately NOT
+                ! routed here: the fallback would call LAPACK_DGBSV with the very
+                ! dimensions just found unsatisfied. It keeps the loud error path.
+                ! -2 means BL has non-zero far blocks (the original trigger).
+                ! Other non-zero values are LAPACK factorization failures mapped
+                ! as IER = 200000/220000 + 1000*k + info -- always POSITIVE, so
+                ! the old `== -2` test skipped the fallback for every one of
+                ! them, including info=-1 from the lib/nolapack.f stubs used by
+                ! the repository-default LAPACK-free build. That fell straight
+                ! through to the error branch below with the solution vector
+                ! left unsolved (#228 findings 10/15).
+#if   _LAPACK == 2
+                m    = NQMAX*(NRMAX+1)
+                kl   = 2*NQMAX-1
+                n    = m
+                ku   = kl
+                nrhs = 1
+                ldBL = 6*NQMAX-2
+                ldBX = NQMAX*(NRMAX+1)
+                call LAPACK_DGBSV(n,kl,ku,nrhs,BL,ldBL,ipiv,BX,ldBX,ierr_la)
+#else
+                call GBSV(BL,BX,INFO=ierr_la)
+#endif
+             end if
+             if(ierr_la /= 0) then
+                write(6,'(3(A,I6))') '### ERROR(TXLOOP) : BLKTRI, NT = ',  &
+                     &              NT, ' -', IC, ' step. IERR=',ierr_la
+                IERR = 1
+                XN = XP
+                goto 180
+             end if
+#ifdef TX_SOLVER_VERIFY
+             if(.not. solver_verify_done) then
+                bx_ref_verify = bx_rhs_verify
+#if   _LAPACK == 2
+                m    = NQMAX*(NRMAX+1)
+                kl   = 2*NQMAX-1
+                n    = m
+                ku   = kl
+                nrhs = 1
+                ldBL = 6*NQMAX-2
+                ldBX = NQMAX*(NRMAX+1)
+                call LAPACK_DGBSV(n,kl,ku,nrhs,bl_verify,ldBL,ipiv_verify,bx_ref_verify,ldBX,ierr_verify)
+#else
+                call GBSV(bl_verify,bx_ref_verify,INFO=ierr_verify)
+#endif
+                if(ierr_verify == 0) then
+                   verify_max_abs = 0.d0
+                   verify_max_rel = 0.d0
+                   verify_max_rel_floor = 0.d0
+                   do verify_i = 1, size(BX)
+                      verify_diff = abs(BX(verify_i) - bx_ref_verify(verify_i))
+                      verify_max_abs = max(verify_max_abs, verify_diff)
+                      verify_scale = max(abs(BX(verify_i)), abs(bx_ref_verify(verify_i)))
+                      if(verify_scale > 0.d0) then
+                         verify_max_rel = max(verify_max_rel, verify_diff / verify_scale)
+                         if(verify_scale > 1.d-3) verify_max_rel_floor = max(verify_max_rel_floor, verify_diff / verify_scale)
+                      end if
+                   end do
+                   write(6,'(A,1X,A,1X,ES12.4,1X,A,1X,ES12.4,1X,A,1X,ES12.4,1X,A,1X,I6,1X,A,1X,I6)') &
+                        & '## TX_SOLVER_VERIFY', 'max_abs=', verify_max_abs, 'max_rel=', verify_max_rel, &
+                        & 'max_rel_floor=', verify_max_rel_floor, 'NT=', NT, 'IC=', IC
+                else
+                   write(6,'(A,1X,A,1X,I6,1X,A,1X,I6,1X,A,1X,I6)') &
+                        & '## TX_SOLVER_VERIFY', 'reference_GBSV_failed ierr=', ierr_verify, &
+                        & 'NT=', NT, 'IC=', IC
+                end if
+                deallocate(bl_verify, bx_rhs_verify, bx_ref_verify)
+                solver_verify_done = .true.
+             end if
+#endif
           else
              ! +++ NOTE ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
              !  These LAPACK subroutines are threaded via BLAS in Intel MKL.
@@ -183,6 +317,23 @@ contains
              !  Thus, these routines are executed as a single threaded regardless of the
              !    MKL link option.
              ! +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#ifdef TX_SOLVER_BENCH
+             if(.not. solver_bench_done) then
+                m_bench = NQMAX*(NRMAX+1)
+                n_bench = m_bench
+                kl_bench = 2*NQMAX-1
+                ku_bench = kl_bench
+                ldbl_bench = 6*NQMAX-2
+                ldbx_bench = NQMAX*(NRMAX+1)
+                open(newunit=solver_bench_unit, file=solver_bench_matrix_file, &
+                     & status='replace', form='unformatted', access='stream')
+                write(solver_bench_unit) NQMAX, NRMAX, m_bench, n_bench, kl_bench, ku_bench, &
+                     & ldbl_bench, ldbx_bench, NT, IC
+                write(solver_bench_unit) BL
+                write(solver_bench_unit) BX
+                close(solver_bench_unit)
+             end if
+#endif
 #if   _LAPACK == 2
              m    = NQMAX*(NRMAX+1)
              kl   = 2*NQMAX-1
@@ -210,7 +361,25 @@ contains
                 XN = XP
                 goto 180
              end if
+#ifdef TX_SOLVER_BENCH
+             if(.not. solver_bench_done) then
+                open(newunit=solver_bench_unit, file=solver_bench_solution_file, &
+                     & status='replace', form='unformatted', access='stream')
+                write(solver_bench_unit) NQMAX, NRMAX, m_bench, n_bench, kl_bench, ku_bench, &
+                     & ldbl_bench, ldbx_bench, NT, IC
+                write(solver_bench_unit) BX
+                close(solver_bench_unit)
+                solver_bench_done = .true.
+                write(6,'(A,1X,A,1X,A,1X,2(A,I6))') &
+                     & '[TX_SOLVER_BENCH] dumped', trim(solver_bench_matrix_file), &
+                     & trim(solver_bench_solution_file), 'NT=', NT, ' IC=', IC
+             end if
+#endif
           end if
+#ifdef TX_PROFILE
+          call CPU_TIME(prof_t1)
+          prof_solver_sum = prof_solver_sum + (prof_t1 - prof_t0)
+#endif
 
           ! Copy calculated variables' vector to variable matrix
           forall (NR = 0:NRMAX, NQ = 1:NQMAX) XN(NR,NQ) = BX(NQMAX * NR + NQ)
@@ -245,7 +414,14 @@ contains
              call TXCALV(X)
 !             call TXCALC(IC)
              call TXGLOB
+#ifdef TX_PROFILE
+             call CPU_TIME(prof_t0)
+#endif
              call TX_GRAPH_SAVE
+#ifdef TX_PROFILE
+             call CPU_TIME(prof_t1)
+             prof_io_sum = prof_io_sum + (prof_t1 - prof_t0)
+#endif
              return
           end if
 
@@ -253,6 +429,10 @@ contains
 
           ! Convergence check
           call check_convergence(IC,IDIV,istat)
+#ifdef TX_PROFILE
+          call CPU_TIME(prof_ic_t1)
+          prof_ic_sum = prof_ic_sum + (prof_ic_t1 - prof_ic_t0)
+#endif
           if(istat == 0) then ! going to next time step
              exit L_IC
           else if(istat == 1) then
@@ -264,6 +444,9 @@ contains
 
        ICSUM = ICSUM + IC
 
+#ifdef TX_PROFILE
+       call CPU_TIME(prof_t0)
+#endif
        if(IDIAGL >= 2) then
           if(MODECV == 0) then
              write(6,'(A2,3(A,X),8X,A,15X,A,12X,A,11X,A)') &
@@ -283,7 +466,14 @@ contains
                   & IC,maxloc(L2)-1,maxval(L2),EPSabs
           end if
        end if
+#ifdef TX_PROFILE
+       call CPU_TIME(prof_t1)
+       prof_io_sum = prof_io_sum + (prof_t1 - prof_t0)
+#endif
 
+#ifdef TX_PROFILE
+       call CPU_TIME(prof_t0)
+#endif
        if(IDIAG >= 10) then
           if(MODECV == 0) then
              write(6,'(A,2(X,A,X),5X,A,11X,A)') &
@@ -312,7 +502,14 @@ contains
              end do
           end if
        end if
-          
+#ifdef TX_PROFILE
+       call CPU_TIME(prof_t1)
+       prof_io_sum = prof_io_sum + (prof_t1 - prof_t0)
+#endif
+
+#ifdef TX_PROFILE
+       call CPU_TIME(prof_t0)
+#endif
        if(IDIAGL >= 4 .and. MODECV == 0) then
           do nq = 1, NQMAX
              do nr = 0, NRMAX
@@ -320,6 +517,10 @@ contains
              end do
           end do
        end if
+#ifdef TX_PROFILE
+       call CPU_TIME(prof_t1)
+       prof_io_sum = prof_io_sum + (prof_t1 - prof_t0)
+#endif
 
        if(istat == 2) then
           IERR = 1
@@ -341,6 +542,9 @@ contains
 !!$       ErV_FIX (:) = ErV (:)
        call TXCALC(IC)
 
+#ifdef TX_PROFILE
+       call CPU_TIME(prof_t0)
+#endif
        if(IDIAGL == 0 .or. IDIAGL == 2) then
           if ((mod(NT, NTSTEP) == 0) .and. (NT /= NTMAX)) &
                & write(6,'(1x,"NT =",I4,"   T =",ES9.2,"   IC =",I3)') NT,T_TX,IC
@@ -353,19 +557,57 @@ contains
              end if
           end if
        end if
+#ifdef TX_PROFILE
+       call CPU_TIME(prof_t1)
+       prof_io_sum = prof_io_sum + (prof_t1 - prof_t0)
+#endif
 
-180    if (mod(NT, NGRSTP) == 0) call TXSTGR(NGR,GT,GY,NGRM)
+180    if (mod(NT, NGRSTP) == 0) then
+#ifdef TX_PROFILE
+          call CPU_TIME(prof_t0)
+#endif
+          call TXSTGR(NGR,GT,GY,NGRM)
+#ifdef TX_PROFILE
+          call CPU_TIME(prof_t1)
+          prof_io_sum = prof_io_sum + (prof_t1 - prof_t0)
+#endif
+       end if
 
        call TXGLOB
        if (mod(NT, NGTSTP) == 0) then
+#ifdef TX_PROFILE
+          call CPU_TIME(prof_t0)
+#endif
           call TXSTGT(real(T_TX))
           call txstgq !!!temporary
           if(IDIAG < 0) call steady_check
+#ifdef TX_PROFILE
+          call CPU_TIME(prof_t1)
+          prof_io_sum = prof_io_sum + (prof_t1 - prof_t0)
+#endif
        end if
 
-       if (mod(NT, NGVSTP) == 0) call TXSTGV(real(T_TX))
+       if (mod(NT, NGVSTP) == 0) then
+#ifdef TX_PROFILE
+          call CPU_TIME(prof_t0)
+#endif
+          call TXSTGV(real(T_TX))
+#ifdef TX_PROFILE
+          call CPU_TIME(prof_t1)
+          prof_io_sum = prof_io_sum + (prof_t1 - prof_t0)
+#endif
+       end if
 
-       if (mod(NT, NTMAX ) == 0) call TXSTGQ
+       if (mod(NT, NTMAX ) == 0) then
+#ifdef TX_PROFILE
+          call CPU_TIME(prof_t0)
+#endif
+          call TXSTGQ
+#ifdef TX_PROFILE
+          call CPU_TIME(prof_t1)
+          prof_io_sum = prof_io_sum + (prof_t1 - prof_t0)
+#endif
+       end if
 
 !       call cal_flux
 
@@ -375,16 +617,33 @@ contains
 
     rIPs = rIPe
 
+#ifdef TX_PROFILE
+    call CPU_TIME(prof_t0)
+#endif
     if(IC == ICMAX) then
        write(6,'(1x,"NT =",I4,"   T =",ES9.2,"   IC =",I3,"  *")') NT,T_TX,IC
     else
        write(6,'(1x,"NT =",I4,"   T =",ES9.2,"   IC =",I3)') NT,T_TX,IC
     end if
+#ifdef TX_PROFILE
+    call CPU_TIME(prof_t1)
+    prof_io_sum = prof_io_sum + (prof_t1 - prof_t0)
+#endif
     if(NTMAX /= 0) then
        AVE_IC = real(ICSUM) / NTMAX
     else
        AVE_IC = 0.d0
     end if
+
+#ifdef TX_PROFILE
+    call CPU_TIME(prof_total_t1)
+    write(6,'(A,ES15.7)') '## TX_PROFILE total_sec=',          prof_total_t1 - prof_total_t0
+    write(6,'(A,ES15.7)') '## TX_PROFILE iteration_loop_sec=', prof_ic_sum
+    write(6,'(A,ES15.7)') '## TX_PROFILE txcala_sec=',         prof_txcala_sum
+    write(6,'(A,ES15.7)') '## TX_PROFILE txcalb_sec=',         prof_txcalb_sum
+    write(6,'(A,ES15.7)') '## TX_PROFILE solver_sec=',         prof_solver_sum
+    write(6,'(A,ES15.7)') '## TX_PROFILE io_sec=',             prof_io_sum
+#endif
 
     deallocate(BA,BL,BX)
     deallocate(XN,XP,ASG,L2)
@@ -803,6 +1062,268 @@ contains
     end if
 
   end subroutine TXCALB
+
+  subroutine TXSOLV_BLOCKTRI(BL, BX, NQMAX, NRMAX, IER)
+
+    real(8), dimension(:,:), intent(in) :: BL
+    real(8), dimension(:), intent(inout) :: BX
+    integer(4), intent(in) :: NQMAX, NRMAX
+    integer(4), intent(out) :: IER
+
+    integer(4), parameter :: NREFINE = 1
+    integer(4) :: p, nb, n, ldbl, kl, ku, center
+    integer(4) :: k, ir, jc, i, j, row, iter, bi, bj, i_min, i_max
+    real(8) :: max_far
+    real(8), dimension(:,:,:), allocatable :: DORG, DLU, LBLK, UBLK, WBLK
+    real(8), dimension(:,:), allocatable :: RHSBLK, SOLBLK
+    integer(4), dimension(:,:), allocatable :: IPIV
+    real(8), dimension(:), allocatable :: RHS0, XWORK, AX, RES, DX
+
+    IER = 0
+    p = NQMAX
+    nb = NRMAX + 1
+    n = p * nb
+    ldbl = size(BL,1)
+    kl = 2 * p - 1
+    ku = kl
+    center = kl + ku + 1
+
+    if(size(BL,2) < n .or. size(BX,1) < n) then
+      IER = -1
+      return
+    end if
+
+    ! Block-tridiagonal solver assumes only main/upper/lower neighboring blocks.
+    ! If far blocks are non-zero, request fallback to the original band solver.
+    max_far = 0.d0
+    do j = 1, n
+       bj = (j - 1) / p + 1
+       i_min = max(1, j - ku)
+       i_max = min(n, j + kl)
+       do i = i_min, i_max
+          bi = (i - 1) / p + 1
+          if(abs(bi - bj) > 1) then
+             row = center + i - j
+             max_far = max(max_far, abs(BL(row,j)))
+          end if
+       end do
+    end do
+    if(max_far /= 0.d0) then
+       IER = -2
+       return
+    end if
+
+    allocate(DORG(p,p,nb), DLU(p,p,nb), LBLK(p,p,nb-1), UBLK(p,p,nb-1), WBLK(p,p,nb-1))
+    allocate(RHSBLK(p,nb), SOLBLK(p,nb), IPIV(p,nb))
+    allocate(RHS0(n), XWORK(n), AX(n), RES(n), DX(n))
+
+    DORG = 0.d0
+    LBLK = 0.d0
+    UBLK = 0.d0
+
+    do k = 1, nb
+       do jc = 1, p
+          j = (k - 1) * p + jc
+          do ir = 1, p
+             i = (k - 1) * p + ir
+             row = center + i - j
+             DORG(ir,jc,k) = BL(row,j)
+          end do
+       end do
+    end do
+
+    do k = 1, nb - 1
+       do jc = 1, p
+          j = k * p + jc
+          do ir = 1, p
+             i = (k - 1) * p + ir
+             row = center + i - j
+             UBLK(ir,jc,k) = BL(row,j)
+          end do
+       end do
+    end do
+
+    do k = 2, nb
+       do jc = 1, p
+          j = (k - 2) * p + jc
+          do ir = 1, p
+             i = (k - 1) * p + ir
+             row = center + i - j
+             LBLK(ir,jc,k-1) = BL(row,j)
+          end do
+       end do
+    end do
+
+    do k = 1, nb
+       RHSBLK(:,k) = BX((k - 1) * p + 1:k * p)
+    end do
+    RHS0 = BX(1:n)
+
+    DLU = DORG
+    call TXSOLV_BLOCKTRI_FACTOR_SOLVE(DLU, LBLK, UBLK, WBLK, IPIV, RHSBLK, SOLBLK, IER)
+    if(IER /= 0) then
+       deallocate(DORG, DLU, LBLK, UBLK, WBLK, RHSBLK, SOLBLK, IPIV, RHS0, XWORK, AX, RES, DX)
+       return
+    end if
+
+    do k = 1, nb
+       XWORK((k - 1) * p + 1:k * p) = SOLBLK(:,k)
+    end do
+
+    do iter = 1, NREFINE
+       call TXSOLV_BLOCKTRI_MATVEC(DORG, LBLK, UBLK, XWORK, AX)
+       RES = RHS0 - AX
+       call TXSOLV_BLOCKTRI_SOLVE_FACT(DLU, LBLK, WBLK, IPIV, RES, DX, IER)
+       if(IER /= 0) then
+          deallocate(DORG, DLU, LBLK, UBLK, WBLK, RHSBLK, SOLBLK, IPIV, RHS0, XWORK, AX, RES, DX)
+          return
+       end if
+       XWORK = XWORK + DX
+    end do
+
+    BX(1:n) = XWORK
+
+    deallocate(DORG, DLU, LBLK, UBLK, WBLK, RHSBLK, SOLBLK, IPIV, RHS0, XWORK, AX, RES, DX)
+
+  end subroutine TXSOLV_BLOCKTRI
+
+  subroutine TXSOLV_BLOCKTRI_FACTOR_SOLVE(DLU, LBLK, UBLK, WBLK, IPIV, RHSBLK, SOLBLK, IER)
+
+    real(8), dimension(:,:,:), intent(inout) :: DLU
+    real(8), dimension(:,:,:), intent(in) :: LBLK, UBLK
+    real(8), dimension(:,:,:), intent(out) :: WBLK
+    integer(4), dimension(:,:), intent(out) :: IPIV
+    real(8), dimension(:,:), intent(inout) :: RHSBLK
+    real(8), dimension(:,:), intent(out) :: SOLBLK
+    integer(4), intent(out) :: IER
+
+    integer(4) :: p, nb, k, info
+
+    IER = 0
+    p = size(DLU,1)
+    nb = size(DLU,3)
+    WBLK = 0.d0
+    SOLBLK = 0.d0
+
+    do k = 1, nb - 1
+       call LAPACK_DGETRF(p, p, DLU(:,:,k), p, IPIV(:,k), info)
+       if(info /= 0) then
+          IER = 200000 + 1000 * k + info
+          return
+       end if
+       WBLK(:,:,k) = UBLK(:,:,k)
+       call LAPACK_DGETRS('N', p, p, DLU(:,:,k), p, IPIV(:,k), WBLK(:,:,k), p, info)
+       if(info /= 0) then
+          IER = 210000 + 1000 * k + info
+          return
+       end if
+
+       SOLBLK(:,k) = RHSBLK(:,k)
+       call LAPACK_DGETRS('N', p, 1, DLU(:,:,k), p, IPIV(:,k), SOLBLK(:,k), p, info)
+       if(info /= 0) then
+          IER = 220000 + 1000 * k + info
+          return
+       end if
+
+       RHSBLK(:,k+1) = RHSBLK(:,k+1) - matmul(LBLK(:,:,k), SOLBLK(:,k))
+       DLU(:,:,k+1) = DLU(:,:,k+1) - matmul(LBLK(:,:,k), WBLK(:,:,k))
+    end do
+
+    call LAPACK_DGETRF(p, p, DLU(:,:,nb), p, IPIV(:,nb), info)
+    if(info /= 0) then
+       IER = 200000 + 1000 * nb + info
+       return
+    end if
+
+    SOLBLK(:,nb) = RHSBLK(:,nb)
+    call LAPACK_DGETRS('N', p, 1, DLU(:,:,nb), p, IPIV(:,nb), SOLBLK(:,nb), p, info)
+    if(info /= 0) then
+       IER = 220000 + 1000 * nb + info
+       return
+    end if
+
+    do k = nb - 1, 1, -1
+       SOLBLK(:,k) = SOLBLK(:,k) - matmul(WBLK(:,:,k), SOLBLK(:,k+1))
+    end do
+
+  end subroutine TXSOLV_BLOCKTRI_FACTOR_SOLVE
+
+  subroutine TXSOLV_BLOCKTRI_SOLVE_FACT(DLU, LBLK, WBLK, IPIV, RHSVEC, DXVEC, IER)
+
+    real(8), dimension(:,:,:), intent(in) :: DLU, LBLK, WBLK
+    integer(4), dimension(:,:), intent(in) :: IPIV
+    real(8), dimension(:), intent(in) :: RHSVEC
+    real(8), dimension(:), intent(out) :: DXVEC
+    integer(4), intent(out) :: IER
+
+    integer(4) :: p, nb, k, info
+    real(8), dimension(:,:), allocatable :: G, Y
+
+    IER = 0
+    p = size(DLU,1)
+    nb = size(DLU,3)
+    allocate(G(p,nb), Y(p,nb))
+
+    do k = 1, nb
+       G(:,k) = RHSVEC((k - 1) * p + 1:k * p)
+    end do
+
+    do k = 1, nb - 1
+       Y(:,k) = G(:,k)
+       call LAPACK_DGETRS('N', p, 1, DLU(:,:,k), p, IPIV(:,k), Y(:,k), p, info)
+       if(info /= 0) then
+          IER = 230000 + 1000 * k + info
+          deallocate(G, Y)
+          return
+       end if
+       G(:,k+1) = G(:,k+1) - matmul(LBLK(:,:,k), Y(:,k))
+    end do
+
+    Y(:,nb) = G(:,nb)
+    call LAPACK_DGETRS('N', p, 1, DLU(:,:,nb), p, IPIV(:,nb), Y(:,nb), p, info)
+    if(info /= 0) then
+       IER = 230000 + 1000 * nb + info
+       deallocate(G, Y)
+       return
+    end if
+
+    do k = nb - 1, 1, -1
+       Y(:,k) = Y(:,k) - matmul(WBLK(:,:,k), Y(:,k+1))
+    end do
+
+    do k = 1, nb
+       DXVEC((k - 1) * p + 1:k * p) = Y(:,k)
+    end do
+
+    deallocate(G, Y)
+
+  end subroutine TXSOLV_BLOCKTRI_SOLVE_FACT
+
+  subroutine TXSOLV_BLOCKTRI_MATVEC(DBLK, LBLK, UBLK, XVEC, AXVEC)
+
+    real(8), dimension(:,:,:), intent(in) :: DBLK, LBLK, UBLK
+    real(8), dimension(:), intent(in) :: XVEC
+    real(8), dimension(:), intent(out) :: AXVEC
+
+    integer(4) :: p, nb, k
+    real(8), dimension(:), allocatable :: xk, axk
+
+    p = size(DBLK,1)
+    nb = size(DBLK,3)
+    AXVEC = 0.d0
+    allocate(xk(p), axk(p))
+
+    do k = 1, nb
+       xk = XVEC((k - 1) * p + 1:k * p)
+       axk = matmul(DBLK(:,:,k), xk)
+       if(k < nb) axk = axk + matmul(UBLK(:,:,k), XVEC(k * p + 1:(k + 1) * p))
+       if(k > 1)  axk = axk + matmul(LBLK(:,:,k - 1), XVEC((k - 2) * p + 1:(k - 1) * p))
+       AXVEC((k - 1) * p + 1:k * p) = axk
+    end do
+
+    deallocate(xk, axk)
+
+  end subroutine TXSOLV_BLOCKTRI_MATVEC
 
 !***************************************************************
 !

@@ -250,6 +250,13 @@ contains
           x(ne,3) = x(ne,2)
           x(ne,4) = x(ne,1)
        end do
+    case(7)
+       do concurrent (ne = 1:nemax)
+          x(ne,1) = 0.5d0 * ( a(ne-1) - a(ne) ) / hv(ne)
+          x(ne,2) = 0.5d0 * (-a(ne-1) + a(ne) ) / hv(ne)
+          x(ne,3) = x(ne,1)
+          x(ne,4) = x(ne,2)
+       end do
     case(8)
        do concurrent (ne = 1:nemax)
           x(ne,1) =-0.5d0
@@ -291,6 +298,13 @@ contains
           x(ne,2) = x(ne,1)
           x(ne,3) =-x(ne,1)
           x(ne,4) = x(ne,3)
+       end do
+    case(14)
+       do concurrent (ne = 1:nemax)
+          x(ne,1) = (-a(ne-1) + a(ne)) / hv(ne)**2
+          x(ne,2) = ( a(ne-1) - a(ne)) / hv(ne)**2
+          x(ne,3) = x(ne,2)
+          x(ne,4) = x(ne,1)
        end do
     case(20)
        do concurrent (ne = 1:nemax)
@@ -658,7 +672,7 @@ contains
 !      id = 22 : a * b * u'* w
 !      id = 23 : a * b * u * w'
 !      id = 24 :(a * b * u)'* w
-!      id = 25 : a'* b'* u * w
+!      id = 25 : a * b'* u'* w
 !      id = 26 : a * b'* u * w'
 !      id = 27 : a * b * u'* w'
 !
@@ -793,9 +807,9 @@ contains
        x(4) = (- a1 + a2) * c13
     case(7)
        x(1) = 0.5d0 * ( a1 - a2) * hvlinv
-       x(2) = 0.5d0 * ( a1 - a2) * hvlinv
-       x(3) = 0.5d0 * (-a1 + a2) * hvlinv
-       x(4) = 0.5d0 * (-a1 + a2) * hvlinv
+       x(2) = 0.5d0 * (-a1 + a2) * hvlinv
+       x(3) = x(1)
+       x(4) = x(2)
     case(8)
        x(1) =-0.5d0
        x(2) =-0.5d0
@@ -865,10 +879,10 @@ contains
             &+(-     a1*b1 - 3.d0*a1*b2 +      a2*b1 + 3.d0*a2*b2) * c112 &
             &+(      a1*b1 +      a1*b2 +      a2*b1 + 3.d0*a2*b2) * c112
     case(25)
-       x(1) = (-3.d0*a1*b1 -      a1*b2 + 3.d0*a2*b1 +      a2*b2) * c112
-       x(2) = (-     a1*b1 -      a1*b2 +      a2*b1 +      a2*b2) * c112
-       x(3) = (-     a1*b1 -      a1*b2 +      a2*b1 +      a2*b2) * c112
-       x(4) = (-     a1*b1 - 3.d0*a1*b2 +      a2*b1 + 3.d0*a2*b2) * c112
+       x(1) = (2.d0*a1+     a2)*(b1-b2) * hvlinv * c16
+       x(2) =-(2.d0*a1+     a2)*(b1-b2) * hvlinv * c16
+       x(3) = (     a1+2.d0*a2)*(b1-b2) * hvlinv * c16
+       x(4) =-(     a1+2.d0*a2)*(b1-b2) * hvlinv * c16
     case(26)
        x(1) = ( 2.d0*a1*b1 - 2.d0*a1*b2 +      a2*b1 -      a2*b2) * hvlinv * c16
        x(2) = (      a1*b1 -      a1*b2 + 2.d0*a2*b1 - 2.d0*a2*b2) * hvlinv * c16

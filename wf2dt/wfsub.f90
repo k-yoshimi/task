@@ -398,11 +398,11 @@ SUBROUTINE SETBDY(IERR)
         DO ISD=1,3
            NSDL=ABS(NSDELM(ISD,NEL))
            IF (NSDL.NE.0) THEN
-              IF  ((NDSID(1,NSDL).EQ.NN1).AND.&
-                  &(NDSID(2,NSDL).EQ.NN2)) THEN
+              IF  ((NDSID(1,NSDL).EQ.NN1).AND. &
+                   (NDSID(2,NSDL).EQ.NN2)) THEN
                  NSDELM(1,NE)=NSDL
-              ELSEIF((NDSID(1,NSDL).EQ.NN2).AND.&
-                   & (NDSID(2,NSDL).EQ.NN1)) THEN
+              ELSEIF((NDSID(1,NSDL).EQ.NN2).AND. &
+                     (NDSID(2,NSDL).EQ.NN1)) THEN
                  NSDELM(1,NE)=-NSDL
               END IF
            ENDIF
@@ -413,11 +413,11 @@ SUBROUTINE SETBDY(IERR)
         DO ISD=1,3
            NSDL=ABS(NSDELM(ISD,NEL))
            IF (NSDL.NE.0) THEN
-              IF  ((NDSID(1,NSDL).EQ.NN2).AND.&
-                  &(NDSID(2,NSDL).EQ.NN3)) THEN
+              IF  ((NDSID(1,NSDL).EQ.NN2).AND. &
+                   (NDSID(2,NSDL).EQ.NN3)) THEN
                  NSDELM(2,NE)=NSDL
-              ELSEIF((NDSID(1,NSDL).EQ.NN3).AND.&
-                   & (NDSID(2,NSDL).EQ.NN2)) THEN
+              ELSEIF((NDSID(1,NSDL).EQ.NN3).AND. &
+                     (NDSID(2,NSDL).EQ.NN2)) THEN
                  NSDELM(2,NE)=-NSDL
               ENDIF
            ENDIF
@@ -428,11 +428,11 @@ SUBROUTINE SETBDY(IERR)
         DO ISD=1,3
            NSDL=ABS(NSDELM(ISD,NEL))
            IF (NSDL.NE.0) THEN
-              IF  ((NDSID(1,NSDL).EQ.NN3).AND.&
-                  &(NDSID(2,NSDL).EQ.NN1)) THEN
+              IF  ((NDSID(1,NSDL).EQ.NN3).AND. &
+                   (NDSID(2,NSDL).EQ.NN1)) THEN
                  NSDELM(3,NE)=NSDL
-              ELSEIF((NDSID(1,NSDL).EQ.NN1).AND.&
-                   & (NDSID(2,NSDL).EQ.NN3)) THEN
+              ELSEIF((NDSID(1,NSDL).EQ.NN1).AND. &
+                     (NDSID(2,NSDL).EQ.NN3)) THEN
                  NSDELM(3,NE)=-NSDL
               ENDIF
            END IF

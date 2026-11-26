@@ -9,7 +9,7 @@
 
 ## エントリ層 (`eq_api.f90`)
 
-C から呼ばれる関数は **6 つ** + `eq_validate` と `eq_save`. 標準の 5 関数に加えて
+C から呼ばれる関数は **6 つ** + `eq_validate`, `eq_save` と `eq_get_psi_rz`. 標準の 5 関数に加えて
 `eq_set_param_str` (文字列パラメータ用) があるのが eq の特徴です.
 
 | C シンボル | Fortran 側 | 役割 |
@@ -22,6 +22,7 @@ C から呼ばれる関数は **6 つ** + `eq_validate` と `eq_save`. 標準の
 | `eq_finalize`       | `eq_api_finalize`       | `eq_bpsd_reset` で SAVE フラグを再起動 |
 | `eq_validate`       | `eq_api_validate`       | グリッド寸法 + `KNAMEQ` ファイル存在チェック |
 | `eq_save`           | `eq_api_save`           | 直前の `eq_run` の平衡を `KNAMEQ` のファイルに保存 (`EQSAVE`). ファイルを開けない, または書いた長さより短い場合はエラー |
+| `eq_get_psi_rz`     | `eq_api_get_psi_rz`     | 2 次元のポロイダル磁束 `PSIRZ` をコピー (R の添字が先). 現在のパラメータの平衡がない場合 (`eq_save` と同じ場合) は `EQ_ERR_INVALID` |
 
 すべて `BIND(C, NAME="eq_xxx")` で C ABI シンボルを固定しています.
 

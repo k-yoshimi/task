@@ -281,7 +281,8 @@ class Eq:
 
                 * ``1`` (default) triggers the equilibrium-file load via
                   ``equnit::eq_load`` using the current ``MODELG`` and
-                  ``KNAMEQ`` (requires ``MODELG in {3, 5, 8}``).
+                  ``KNAMEQ`` (requires a ``MODELG`` that ``EQ_READ`` loads
+                  from ``KNAMEQ``: 3, 5, 8, 9, 25).
                 * ``0`` runs the in-process analytic Grad-Shafranov
                   solve (``EQCALC`` + ``EQCALQ``); use it with
                   ``MODELG=2`` and the basic geometry parameters
@@ -375,6 +376,46 @@ class Eq:
         rc = self._lib.eq_get_state(ctypes.byref(c))
         raise_for_rc("eq_get_state", rc)
         return EqState.from_c(c)
+
+    def get_psi_rz(self) -> "np.ndarray":  # type: ignore[name-defined]
+        """Return the 2-D PSI(R,Z) field of the equilibrium as a numpy array.
+
+        Returns a fresh ``np.ndarray`` of shape ``(nrgmax, nzgmax)``
+        (default 33×33) and dtype float64, indexed ``psi[i_r, i_z]`` on
+        the ``rg``, ``zg`` grid of :meth:`get_state`. Requires numpy.
+
+        Raises :class:`EqlibInvalidParamError` when there is no equilibrium
+        of the present parameters, the cases in which :meth:`save` refuses
+        too: no successful :meth:`run` since the library was initialised,
+        a later run that failed, or a :meth:`set_param` of anything but
+        ``MODEFR`` and ``MODEFW`` since. A set that puts ``NRGMAX`` or
+        ``NZGMAX`` out of range is refused first by :meth:`get_state`, with
+        its own error.
+        """
+        if self._closed:
+            raise EqlibError("get_psi_rz on closed Eq")
+        if not hasattr(self._lib, "eq_get_psi_rz"):
+            raise EqlibError(
+                "libeqapi.so does not export eq_get_psi_rz; rebuild it"
+            )
+
+        import numpy as np
+        st = self.get_state()
+        # EqState exposes nrgmax/nzgmax as lowercase int attributes (see state.py).
+        nr = int(st.nrgmax)
+        nz = int(st.nzgmax)
+        # (nz, nr) C-contiguous is the (nr, nz) Fortran layout the library fills.
+        buf = np.zeros((nz, nr), dtype=np.float64, order="C")
+        rc = self._lib.eq_get_psi_rz(
+            nr, nz, buf.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+        )
+        if rc == _ffi.EQ_ERR_INVALID:  # nr and nz are the grid's, from get_state
+            raise EqlibInvalidParamError(
+                "eq_get_psi_rz: rc=1: no equilibrium of the present "
+                "parameters; call run first"
+            )
+        raise_for_rc("eq_get_psi_rz", rc)
+        return buf.T.copy()  # contiguous (nr, nz) for caller convenience
 
     # --- validation (Issue #143) ---------------------------------------
     def validate(self) -> List[EqDiagEntryPy]:

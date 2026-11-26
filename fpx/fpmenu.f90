@@ -21,6 +21,7 @@ CONTAINS
     USE fpfout
     USE plinit
     USE plparm
+    USE plview,ONLY: pl_view  ! pl_view is in module plview: without this USE, CALL pl_view does not link
     USE fpfile
     USE fpcaltp
     USE fpcalte

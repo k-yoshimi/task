@@ -176,7 +176,12 @@ CONTAINS
 
       GOTO 1
 
- 9000 IF(MDLUF.NE.0.AND.MDLXP.NE.0) CALL IPDB_CLOSE
+9000  IF(MDLUF.NE.0.AND.MDLXP.NE.0) CALL IPDB_CLOSE
+!     NOTE: cleanup is deliberately NOT done here. tr_menu is reusable and is
+!     entered from TOT's submenu; deallocating TRCOMM on exit destroys RN/RT/
+!     AJ/QP before the integrated caller consumes them. Ownership belongs to
+!     the standalone program (trmain) and to tr_api_finalize for the library
+!     path; ALLOCATE_TRCOMM is self-healing on re-entry.
       RETURN
       END SUBROUTINE tr_menu
     END MODULE trmenu

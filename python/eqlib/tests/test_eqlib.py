@@ -196,6 +196,8 @@ class TestEqLifecycle(unittest.TestCase):
             eq.set_param_str("KNAMEQ", "x")
         with self.assertRaises(EqlibError):
             eq.save("eq.bin")
+        with self.assertRaises(EqlibError):
+            eq.get_psi_rz()
 
     def test_invalid_param_raises(self):
         with Eq() as eq:

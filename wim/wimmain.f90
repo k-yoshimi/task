@@ -30,6 +30,10 @@ PROGRAM wim_main
   CALL wim_menu
 
   CLOSE(7)
+  IF(id_wave_dump.GT.0) THEN
+     CLOSE(fid_wave_dump)
+     WRITE(6,*) '## wave_dump: CLOSED'
+  END IF
   CALL GSCLOS
   STOP
 END PROGRAM wim_main
