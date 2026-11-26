@@ -73,7 +73,7 @@ One value per ψ surface (magnetic surface). 1-D arrays of length
 ```python
 state.psips   # [npsmax] ψ value of each magnetic surface
 state.ppps    # [npsmax] pressure profile p(ψ)
-state.ttps    # [npsmax] T(ψ) = R · B_φ
+state.ttps    # [npsmax] T(ψ) = 2π · R · B_φ
 state.qqps    # [npsmax] safety-factor profile q(ψ)
 ```
 

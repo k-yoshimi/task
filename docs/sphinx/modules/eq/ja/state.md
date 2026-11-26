@@ -69,7 +69,7 @@ state.zg   # [nzgmax] Z 軸座標
 ```python
 state.psips   # [npsmax] 磁束面の ψ 値
 state.ppps    # [npsmax] 圧力プロファイル p(ψ)
-state.ttps    # [npsmax] T(ψ) = R · B_φ
+state.ttps    # [npsmax] T(ψ) = 2π · R · B_φ
 state.qqps    # [npsmax] q(ψ) 安全係数プロファイル
 ```
 

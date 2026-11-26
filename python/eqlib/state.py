@@ -66,7 +66,7 @@ class EqState:
         zg:      [nzgmax] Z-grid coordinates
         psips:   [npsmax] psi-surface psi values
         ppps:    [npsmax] pressure profile (psi-surface)
-        ttps:    [npsmax] T (= R*B_phi) profile
+        ttps:    [npsmax] T (= 2*pi*R*B_phi) profile
         qqps:    [npsmax] q profile
     """
 

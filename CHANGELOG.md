@@ -233,6 +233,67 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
   `get_state` are stubs until L-6 (#96, #124), nor that `tot_mcp` has a
   `set_param_str`; `architecture.md`'s quirks and limitations follow the
   code (eq in the fan-out, one live `Tot()` per process).
+- **EQ: T(psi) of the toroidal-current model (`MDLEQF` 0, and 5 through
+  `MOD(MDLEQF,5)`) has the factor 4*pi**2 on its pressure term.** EQ's psi
+  is the total poloidal flux and T = 2*pi*R*B_phi. Integrated from the
+  boundary, the model's j_zeta0 = -2*pi*R0*dp/dpsi - T*dT/dpsi/(2*pi*mu0*R0)
+  gives T**2 = (2*pi*BB*RR)**2 + 4*pi*mu0*R0*TJ*int(HJPSI dpsi)
+  - 8*pi**2*mu0*R0**2*p. `EQRHSV` and `EQCALP` (`TT`, `TTV`, `TTPS`) had
+  -2*mu0*R0**2*p: the conversion of 2005-01-22 from per-radian flux and
+  F = R*B_phi multiplied the current term by 2*pi and left this one as it
+  was. The psi that `EQCALC` solves was right: its current used the correct
+  -2*pi*R*dp/dpsi. Only the exported T did not belong to it.
+  - **Results change.** For `MDLEQF` 0 with `MDLEQA` 0 and positive
+    pressure, on the same poloidal-flux surface, T (`TTPS`, `TTS`, bpsd
+    `equ1D%pip`), q and the toroidal flux integrated from q (`PSIT`, `PSITA`)
+    are lower than before, and the normalised rho_t mapping changes.
+    psi(R,Z) and the current are unchanged. In `MDLEQF` 0 with `MDLEQA` 1,
+    and in `MDLEQF` 5 (whose profiles come through `EQPSITN` and q), T
+    feeds the toroidal-flux coordinate of the profiles, so psi changes too.
+    `MDLEQF` 1 to 4 and 6 to 9 are unchanged.
+  - **Reference data.** The equivalence baseline of `tot_ht6m_short`, whose
+    equilibrium CI solves with the standalone `tot` before the test, moves
+    by at most 7.3e-6 relative. It and its eqdata
+    `python/totlib/tests/fixtures/eqdata-HT6M` are regenerated together on
+    the CI compiler: the eqdata is the file the same `regen-baselines.yml`
+    run solved (`test_run/test_output/tot_ht6m_short/eqdata-HT6M`), which
+    the workflow does not keep by itself. It differs from the old file in T
+    and what is computed from it, and elsewhere by round-off (the old file
+    was made on another build). Data made earlier with the old T:
+    - the baselines `test_run/baselines/eq_iter01`, `eq_tst2`, `eq_jt60`
+      (standalone solves; `eq_jt60` with `MDLEQA` 1), and `tr_iter01`,
+      `tr_tst2`, which run on those equilibria;
+    - the committed `eqdata.ITER01` / `eqdata.TST-2` under
+      `python/eqlib/tests/fixtures/` and `python/trlib/tests/fixtures/`,
+      and `python/totlib/tests/fixtures/eqdata.demo2014`.
+    A test that loads one of those committed files (MODELG 3) is unchanged:
+    the load path does not compute T. CI's pytest jobs run `tot_ht6m_short`
+    on the file they have just solved; the mono job, which solves none, and
+    `test_mono_bpsd_smoke.py` and `test_mono_pipeline_coupling.py` load the
+    committed `eqdata-HT6M`, so that file changes with the baseline. A fresh
+    standalone solve of any of these cases gives the new T. So a local
+    `test_run/run_tests.sh` reports a
+    regression for `eq_iter01`, `eq_tst2` and `eq_jt60` and skips the
+    `tr_*` cases that depend on them; after it, on Linux, the eqlib
+    equivalence tests, which prefer its `test_output/<case>/` eqdata to the
+    committed fixtures, fail too. The Python-test CI does not run it.
+  - **Size.** Measured on an ITER-like case, on axis: 1.1 % at beta_t
+    0.76 %, 2.3 % at 1.5 %, 3.9 % at 2.5 %.
+  - **What the old T implied.** The current that the exported p' and TT'
+    gave was about (1 + 0.77 beta_p) times Ip. It is now Ip.
+  - **Also corrected:** the same expression in `eq/eqcalx.f`, which no make
+    target builds; and the descriptions that called T (and F, FF0 to FF2)
+    R*B_phi where EQ stores 2*pi*R*B_phi (`python/eqlib/state.py` and its
+    README, `eq_mcp`'s parameter and state descriptions, the Sphinx state
+    pages, the library manual and the quickstart notebook).
+  - **Test.** `python/eqlib/tests/test_gs_consistency.py` integrates the
+    current of the exported profiles over the plasma and compares it with
+    the solver's own, and checks that EQCALV's `TTV` and the exported
+    `TTPS` are one function of the normalised flux.
+  - **Not fixed here.** In `MDLEQF` 0 with `MDLEQA` 1, and in `MDLEQF` 5,
+    the current term of T**2 has a separate inconsistency (`HJPSID = FD/FDN`
+    in `EQJPSI` divides an integral over normalised toroidal flux by the
+    local q/psi_ta).
 - **MCP servers `ti_mcp`, `wr_mcp`, `wrx_mcp`: the same fd isolation** (#262).
   The three servers had the layout of the other three and the same exposure:
   `main()` now calls `_fd_isolation.install()` immediately before the stdio

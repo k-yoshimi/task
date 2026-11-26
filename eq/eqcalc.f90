@@ -540,9 +540,16 @@
             CALL EQJPSI(PSIPNL,HJPSID,HJPSI)
             CALL EQTPSI(PSIPNL,TPSI,DTPSI)
             CALL EQOPSI(PSIPNL,OMGPSI,DOMGPSI)
+!           T = 2*pi*R*B_phi of the current HJT above (psi is the total
+!           poloidal flux). From j_zeta0 = -2*pi*RRC*dp/dpsi
+!           - T*dT/dpsi/(2*pi*mu0*RRC), with p = p(psi,RRC), integrated
+!           from the boundary:
+!             T**2 = (2*pi*BB*RR)**2 + 4*pi*mu0*RRC*TJ*int(HJPSI dpsi)
+!                    - 8*pi**2*mu0*RRC**2*p(psi,RRC)
+!           Same expression for TTV and TTPS below.
             TT(NTG,NSG)=SQRT((2.D0*PI*BB*RR)**2 &
                        +2.D0*RMU0*RRC &
-                       *(2.D0*PI*TJ*HJPSID-RRC*PPSI &
+                       *(2.D0*PI*TJ*HJPSID-4.D0*PI**2*RRC*PPSI &
                        *EXP(RRC**2*OMGPSI**2*AMP/(2.D0*TPSI))))
             RHO(NTG,NSG)=(PPSI*AMP/TPSI) &
                         *EXP(RMM(NTG,NSG)**2*OMGPSI**2*AMP/(2.D0*TPSI))
@@ -741,9 +748,10 @@
             CALL EQJPSI(PSIPNL,HJPSID,HJPSI)
             CALL EQTPSI(PSIPNL,TPSI,DTPSI)
             CALL EQOPSI(PSIPNL,OMGPSI,DOMGPSI)
+!           T**2 as for TT in the MDLEQF=0 branch above
             TTVL=SQRT((2.D0*PI*BB*RR)**2 &
                         +2.D0*RMU0*RRC &
-                        *(2.D0*PI*TJ*HJPSID-RRC*PPSI &
+                        *(2.D0*PI*TJ*HJPSID-4.D0*PI**2*RRC*PPSI &
                         *EXP(RRC**2*OMGPSI**2*AMP/(2.D0*TPSI))))
          ELSEIF (IMDLEQF.EQ.1) THEN
             CALL EQPPSI(PSIPNL,PPSI,DPPSI)
@@ -1065,9 +1073,10 @@
             CALL EQOPSI(PSIPNL,OMGPSI,DOMGPSI)
             PPPS(NPS)=PPSI
             OMPS(NPS)=OMGPSI
+!           T**2 as for TT in EQRHSV (MDLEQF=0)
             TTPS(NPS)=SQRT((2.D0*PI*BB*RR)**2 &
                         +2.D0*RMU0*RRC &
-                        *(2.D0*PI*TJ*HJPSID-RRC*PPSI &
+                        *(2.D0*PI*TJ*HJPSID-4.D0*PI**2*RRC*PPSI &
                         *EXP(RRC**2*OMGPSI**2*AMP/(2.D0*TPSI))))
             TEPS(NPS)=TPSI/(AEE*1.D3)
          ELSEIF (IMDLEQF.EQ.1) THEN
