@@ -374,12 +374,14 @@ C      USE plfile_prof_mod
       INCLUDE 'wmcomm.inc'
 C
       CHARACTER*(80) LINE
-      SAVE NRMAXSV,NTHMAXSV,NSUMAXSV
+      LOGICAL EQLOADED
+      SAVE NRMAXSV,NTHMAXSV,NSUMAXSV,EQLOADED
       DATA NRMAXSV,NTHMAXSV,NSUMAXSV/0,0,0/
+      DATA EQLOADED/.FALSE./
 C
       IERR=0
 C
-      IF(NRMAXSV.EQ.NRMAX.AND.
+      IF(EQLOADED.AND.NRMAXSV.EQ.NRMAX.AND.
      &   NTHMAXSV.EQ.NTHMAX.AND.
      &   NSUMAXSV.EQ.NSUMAX.AND.
      &   KNAMEQ_SAVE.EQ.KNAMEQ) RETURN
@@ -399,12 +401,17 @@ C
          CALL EQLOAD(MODELG,KNAMEQ,IERR)
       ENDIF
       CALL mtx_broadcast1_integer(IERR)
-      IF(IERR.EQ.1) RETURN
+      IF(IERR.NE.0) THEN
+C        Forget the last load: the next call loads KNAMEQ again.
+         EQLOADED=.FALSE.
+         RETURN
+      ENDIF
 C
       NRMAXSV=NRMAX
       NTHMAXSV=NTHMAX
       NSUMAXSV=NSUMAX
       KNAMEQ_SAVE=KNAMEQ
+      EQLOADED=.TRUE.
 C
       IF(NRANK.EQ.0) THEN
          write(LINE,'(A,I5)') 'nrmax=',NRMAX+1

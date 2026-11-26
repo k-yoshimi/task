@@ -213,6 +213,29 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
   terminal shows that line and no longer the library's output. Where
   `fstat` gives a descriptor no identity (Windows for a pipe or a console)
   the merged layout is not recognised and fd 1 goes to stderr as usual.
+- **wrx, wm, wmx, wmseki, fp and EQ's two test programs: the routines that
+  load the equilibrium file return on every nonzero `IERR` of the load.**
+  `wr_prep` (`wrx/wrprep.f90`) printed the `IERR` of a failed `eq_load`
+  (`MODELG` 3 and 5) or `eq_read` (8) and went on: the plasma bounds came
+  from an earlier run or were zero, the `IERR` was lost in `pl_load` and
+  `dp_prep_ns` (which sets it to 0), and `wrx_run` returned `WRX_OK` with
+  NaN powers, or ended the host process in the `STOP` of `BESSJN`
+  (`lib/libbes.f90`): the ITER01 case of `python/wrxlib` with `MODELG` 3
+  and no `eqdata` did. `wr_prep` now returns the load's `IERR` and
+  `wrx_run` returns `WRX_ERR_CALC_FAILED`
+  (`python/wrxlib/tests/test_eq_load_errors.py`); the next run loads the
+  file again. `WMXRZF` (`wm/wmsetg.f`, `wmseki/wmsetg.f`) and `wmsetg_eq`
+  (`wmx/wmsetg.f90`) returned on `IERR` 1 only, and for another code went
+  on and remembered `KNAMEQ` as loaded; they return on every nonzero code
+  and forget the last load, so the next call loads the file again. (The
+  eigenvalue search of all three, `DIAMIN`, still goes on to solve after
+  a failed `WMSETG`; with a missing file it now tries the load, and
+  prints its error, at every evaluation, and with `MODEFR` 1 asks for the
+  file name each time.)
+  Under MPI, `fp_mesh` (`fp/fpprep.f90`) returned on rank 0 alone when the
+  load failed, and the other ranks waited in `fp_eq_broadcast`; rank 0 now
+  broadcasts the code first and every rank returns. `eq/pltest.f` and
+  `eq/trtest.f` go back to their prompt on any nonzero code.
 - **tot docs and `tot_mcp`: string parameters and the tool count** (#274).
   The tot Sphinx pages showed `tot.set_param_str("fp:KNAMEQ", ...)` and
   `("wr:KNAMEQ", ...)`, which tot refuses: it passes string values on for
