@@ -487,7 +487,7 @@ CONTAINS
   !   model_pnf=12: D + D -> T + p   | T + He4/2  nnfmax=4  nsmax=4 DD1 DD2
   !                 D + D -> He3 + n ! He4 + n                      DD3
   !                 D + T -> He4 + n                                DT
-  !   model_pnf=14: D + D -> T + p                nnfmax=13 nsmax=6 DD1 DD2
+  !   model_pnf=14: D + D -> T + p                nnfmax=13 nsmax=4 DD1 DD2
   !                 D + D -> He3 + n                                DD3
   !                 D + T -> He4 + n                                DT
   !                 D + He3 -> He4 + p                              DHe31 DHe32
@@ -495,7 +495,8 @@ CONTAINS
   !                 T + He3 -> He4 + p + n                          THe31 THe32
   !                 T + He3 -> He4 + D                              THe33 THe34
   !                 T + He3 -> He5 + p ! He4 + p                    THe35 THe36
-  !                 not available: no He5 species can be defined
+  !                 not available yet: dd2, dhe32, the35, the36 and the
+  !                 He3 reactant are not mapped onto these four species
       
       model_pnf=0
       
