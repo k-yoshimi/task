@@ -4,6 +4,7 @@ MODULE libbnd
 
   PRIVATE
   PUBLIC bandrd,bandcd,bandrdu,bandcdu,bandrq,bandcq
+  PUBLIC bandrd_factor,bandrd_solve
 
 CONTAINS
 !     *****************************************************
@@ -126,6 +127,148 @@ CONTAINS
  9002 IERR = 30000+I
       RETURN
       END SUBROUTINE BANDRD
+
+!----- BANDRD split in two: factor once, solve for many right-hand sides ----
+!
+!     BANDRD_FACTOR does BANDRD's operations on A only and keeps what they
+!     do to X: the pivot row of each step (IPV) and the multipliers
+!     (AM(K-I,I) = A(1,K) at step I). BANDRD_SOLVE then applies to X the
+!     same operations, in the same order, as BANDRD does. A is left in the
+!     factored form; it is read, not changed, by BANDRD_SOLVE.
+!     LM must be at least (L-1)/2.
+
+      SUBROUTINE BANDRD_FACTOR( A , N , L , LA , AM , LM , IPV , IERR )
+
+      USE task_kinds,ONLY: dp
+      IMPLICIT NONE
+      INTEGER,               INTENT(IN)    :: N, L, LA, LM
+      REAL(dp), DIMENSION(LA, N),INTENT(INOUT) :: A
+      REAL(dp), DIMENSION(LM, N),INTENT(OUT)   :: AM
+      INTEGER,  DIMENSION(N),    INTENT(OUT)   :: IPV
+      INTEGER,               INTENT(OUT)   :: IERR
+      REAL(dp)            :: ABS1, ABS2, TEMP
+      REAL(dp), PARAMETER :: EPS = 1.D-70
+      INTEGER         :: I, J, K, LH, LHM, NM, LHMK, NPMK, LPMI, IPIVOT, IP
+
+      IF( MOD(L,2) .EQ. 0 ) GO TO 9000
+      LH  = (L+1)/2
+      LHM = LH-1
+      NM  = N -1
+      IF( LM .LT. LHM ) GO TO 9001
+      AM  = 0.D0
+      IPV = 0
+
+      DO K = 1 , LHM
+         LHMK = LH-K
+         NPMK = N+1-K
+         DO I = 1 , LHMK
+            LPMI = L+1-I
+            A( 1:L-1 , K ) = A( 2:L , K )
+            A( L    , K    ) = 0.D0
+            A( LPMI , NPMK ) = 0.D0
+         ENDDO
+      ENDDO
+
+      DO I = 1 , NM
+         IPIVOT = I
+         IP     = I+1
+         ABS2   = ABS( A(1,IPIVOT) )
+         DO K = IP , LH
+            ABS1 = ABS( A(1,K) )
+            IF( ABS1 .GT. ABS2 ) THEN
+                IPIVOT = K
+                ABS2 = ABS1
+            ENDIF
+         ENDDO
+
+         IF( ABS2 .LT. EPS ) GO TO 9002
+
+         IPV( I ) = IPIVOT
+         IF( IPIVOT .NE. I ) THEN
+            DO J = 1 , L
+               TEMP            = A( J , I      )
+               A( J , I      ) = A( J , IPIVOT )
+               A( J , IPIVOT ) = TEMP
+            ENDDO
+         END IF
+
+         TEMP   = 1.D0   / A( 1 , I )
+         A( 2:L , I ) = A( 2:L , I ) * TEMP
+
+         DO K = IP , LH
+            TEMP   = A( 1 , K )
+            AM( K-I , I ) = TEMP
+            A( 1:L-1 , K ) = A( 2:L , K ) - A( 2:L , I ) * TEMP
+            A( L , K ) = 0.D0
+         ENDDO
+         IF( LH .LT. N ) LH = LH + 1
+      ENDDO
+
+      IF( ABS(A(1,N)) .LT. EPS ) THEN
+         I=N
+         GO TO 9002
+      END IF
+      IPV( N ) = N
+
+      IERR = 0
+      RETURN
+
+ 9000 IERR = 10000
+      RETURN
+ 9001 IERR = 20000
+      RETURN
+ 9002 IERR = 30000+I
+      RETURN
+      END SUBROUTINE BANDRD_FACTOR
+
+      SUBROUTINE BANDRD_SOLVE( A , X , N , L , LA , AM , LM , IPV )
+
+      USE task_kinds,ONLY: dp
+      IMPLICIT NONE
+      INTEGER,               INTENT(IN)    :: N, L, LA, LM
+      REAL(dp), DIMENSION(LA, N),INTENT(IN)    :: A
+      REAL(dp), DIMENSION(N),    INTENT(INOUT) :: X
+      REAL(dp), DIMENSION(LM, N),INTENT(IN)    :: AM
+      INTEGER,  DIMENSION(N),    INTENT(IN)    :: IPV
+      REAL(dp)        :: TEMP
+      INTEGER         :: I, J, K, LH, NM, IPIVOT, IP, JJ
+
+      LH  = (L+1)/2
+      NM  = N -1
+
+      DO I = 1 , NM
+         IPIVOT = IPV( I )
+         IP     = I+1
+         IF( IPIVOT .NE. I ) THEN
+            TEMP        = X( I      )
+            X( I      ) = X( IPIVOT )
+            X( IPIVOT ) = TEMP
+         END IF
+
+         TEMP   = 1.D0   / A( 1 , I )
+         X( I ) = X( I ) * TEMP
+
+         DO K = IP , LH
+            TEMP   = AM( K-I , I )
+            X( K ) = X( K ) - X( I ) * TEMP
+         ENDDO
+         IF( LH .LT. N ) LH = LH + 1
+      ENDDO
+
+      X( N ) = X( N ) / A( 1 , N )
+      JJ = 2
+      DO I = 1 , NM
+         K = N-I
+         TEMP = 0.D0
+         DO J = 2 , JJ
+            TEMP = A( J , K ) * X( K-1+J ) + TEMP
+         ENDDO
+         X( K ) = X( K ) - TEMP
+         IF( JJ .LT. L ) JJ = JJ + 1
+      ENDDO
+
+      RETURN
+      END SUBROUTINE BANDRD_SOLVE
 
 !----- complex version ----
 

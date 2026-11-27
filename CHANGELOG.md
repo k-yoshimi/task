@@ -98,6 +98,23 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- **EQ: the Grad-Shafranov band matrix is factored once, not in every Picard
+  iteration** (`eq/eqcalc.f90`, `lib/libbnd.f90`). `EQLOOP` assembled the band
+  matrix `Q` (`EQBAND`) and eliminated it (`BANDRD`) in every iteration,
+  although `Q` depends only on the mesh and the boundary shape, not on `PSI` or
+  the current. It now assembles `Q` at the first iteration of a solve and calls
+  `EQFACT`, which keeps the factors when `Q` equals, bit for bit, the matrix
+  it factored last and that factoring succeeded, and otherwise factors
+  `Q` (`BANDRD_FACTOR`); `EQSOLV` back-substitutes with the kept factors
+  (`BANDRD_SOLVE`) and falls back to `EQBAND` and `BANDRD` in every iteration
+  if factoring fails. `BANDRD` is unchanged and the new routines do
+  its operations in its order, so every result is the same bit for bit. The
+  first stage of ITER01 under `MODELG` 9 with EQ re-solved every 50 steps takes
+  2.5 s instead of 4.3 s (macOS, gfortran 15.2, `-O3`); a run with more Picard
+  iterations per solve gains more. The factors and a copy of `Q` stay allocated
+  for the life of the process, also after `eq_finalize` (10 MB at `NSGMAX` 128,
+  `NTGMAX` 32); each solve compares its own `Q` with the copy before using them.
+
 - **tr / fp / ti libraries, `Tot` and `tot_mcp`: a parameter set after a
   run re-preps the module, whoever set it (#253).** `tr_set_param` /
   `fp_set_param` / `ti_set_param` used to clear the module's private
