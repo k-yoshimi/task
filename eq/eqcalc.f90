@@ -16,6 +16,30 @@
 !       (IMPLICIT COMPLEX*16(C),REAL*8(A,B,D-F,H,O-Z)) and USEs the F-1
 !       MODULEs (eqcom0/1/2_mod) for COMMON symbols.
 !
+!   ************************************************
+!   **  Cached factorization of the GS band matrix **
+!   ************************************************
+!
+!     The band matrix Q depends only on the mesh and the boundary shape
+!     (EQDEFB, EQBAND), not on PSI or the current, so it is the same in
+!     every Picard iteration and, for a fixed shape, in every re-solve.
+!     EQFACT factors it once and keeps the factors; it factors again only
+!     when Q differs, bit for bit, from the matrix last factored.
+!     The cache lives as long as the process, also after the library's
+!     finalize: every solve compares its own Q with QSRC first, so it never
+!     uses factors of another matrix. NFACT and NREUSE count factorizations
+!     and reuses since the process started (diagnostics; nothing reads them).
+!
+      MODULE eqfact_mod
+      IMPLICIT NONE
+      PRIVATE
+      PUBLIC :: QSRC, QF, QAM, IQPV, NQC, LQC, LQM, FACT_OK, NFACT, NREUSE
+      REAL(8), ALLOCATABLE, SAVE :: QSRC(:,:), QF(:,:), QAM(:,:)
+      INTEGER, ALLOCATABLE, SAVE :: IQPV(:)
+      INTEGER, SAVE :: NQC=0, LQC=0, LQM=0, NFACT=0, NREUSE=0
+      LOGICAL, SAVE :: FACT_OK=.FALSE.
+      END MODULE eqfact_mod
+!
 !   **************************************
 !   **       CALCULATE EQUILIBRIUM      **
 !   **************************************
@@ -329,7 +353,10 @@
       IERR=0
 
       DO NLOOP=1,NLPMAX
-         CALL EQBAND
+         IF(NLOOP.EQ.1) THEN
+            CALL EQBAND
+            CALL EQFACT
+         ENDIF
          CALL EQRHSV(IERR)
          IF(IERR.NE.0) RETURN
          CALL EQSOLV
@@ -783,6 +810,7 @@
       SUBROUTINE EQSOLV
 
       USE libbnd
+      USE eqfact_mod
       USE plcomm
       USE eqcom0_mod
       USE eqcom1_mod
@@ -822,10 +850,15 @@
 !         WRITE(6,'(1p5E12.4)') FJT(I),(Q(J,I),J=1,4*NTGMAX-1)
 !      ENDDO
 
-      CALL BANDRD(Q,FJT,NTGMAX*NSGMAX,4*NTGMAX-1,MWM,IERR)
+      IF(FACT_OK) THEN
+         CALL BANDRD_SOLVE(QF,FJT,NQC,LQC,LQC,QAM,LQM,IQPV)
+      ELSE
+         CALL EQBAND
+         CALL BANDRD(Q,FJT,NTGMAX*NSGMAX,4*NTGMAX-1,MWM,IERR)
          IF(IERR.NE.0) THEN
             WRITE(6,*) 'XX EQSOLV: BANDRD ERROR: IERR = ',IERR
          ENDIF
+      ENDIF
 !
 !      WRITE(6,'(1p5E12.4)') (FJT(I),I=1,2*NTGMAX)
 
@@ -845,6 +878,63 @@
          DELPSI(NTG,NSG)=PSI(NTG,NSG)-PSIOLD(NTG,NSG)
       ENDDO
       ENDDO
+      RETURN
+      END
+!
+!   ************************************************
+!   **   Factor Q, or reuse the cached factors    **
+!   ************************************************
+!
+      SUBROUTINE EQFACT
+
+      USE libbnd
+      USE eqfact_mod
+      USE plcomm
+      USE eqcom0_mod
+      USE eqcom1_mod
+      USE eqcom2_mod
+      USE, INTRINSIC :: ISO_FORTRAN_ENV, ONLY: INT64
+      IMPLICIT NONE
+      INTEGER :: N, L, LM, IERR, I, J
+      LOGICAL :: SAME
+
+      N=NTGMAX*NSGMAX
+      L=4*NTGMAX-1
+      LM=(L-1)/2
+      IF(FACT_OK.AND.N.EQ.NQC.AND.L.EQ.LQC) THEN
+!        Compare the bits, not the values: +0 .EQ. -0 holds, but the two
+!        can give zeros of different sign in the solution.
+         SAME=.TRUE.
+         CMP: DO J=1,N
+            DO I=1,L
+               IF(TRANSFER(Q(I,J),1_INT64).NE. &
+                  TRANSFER(QSRC(I,J),1_INT64)) THEN
+                  SAME=.FALSE.
+                  EXIT CMP
+               ENDIF
+            ENDDO
+         ENDDO CMP
+         IF(SAME) THEN
+            NREUSE=NREUSE+1
+            RETURN
+         ENDIF
+      ENDIF
+      IF(N.NE.NQC.OR.L.NE.LQC) THEN
+         IF(ALLOCATED(QSRC)) DEALLOCATE(QSRC,QF,QAM,IQPV)
+         ALLOCATE(QSRC(L,N),QF(L,N),QAM(LM,N),IQPV(N))
+         NQC=N
+         LQC=L
+         LQM=LM
+      ENDIF
+      QSRC(1:L,1:N)=Q(1:L,1:N)
+      QF(1:L,1:N)=Q(1:L,1:N)
+      CALL BANDRD_FACTOR(QF,N,L,L,QAM,LM,IQPV,IERR)
+      IF(IERR.NE.0) THEN
+         FACT_OK=.FALSE.
+      ELSE
+         FACT_OK=.TRUE.
+      ENDIF
+      NFACT=NFACT+1
       RETURN
       END
 !
